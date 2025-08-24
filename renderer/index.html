@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Night Watch Updater</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <div class="top-bar">
+      <h1>Менеджер аддонов</h1>
+      <button id="voice-btn" class="voice-btn">🎤</button>
+    </div>
+
+    <div class="game-panel">
+      <span id="game-status">Проверка игры...</span>
+      <button id="launch-btn" disabled>Запустить игру</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="addons-header">
+      <h2>Доступные аддоны</h2>
+      <button id="logs-btn" class="logs-btn">Логи</button>
+    </div>
+
+    <div class="addons-list" id="addons-list">
+      <!-- Аддоны будут добавлены здесь динамически -->
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

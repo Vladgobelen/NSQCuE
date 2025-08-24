@@ -1,0 +1,13 @@
+*
+
+!main/
+!main/**
+!renderer/
+!renderer/**
+!assets/
+!assets/**
+!package.json
+!package-lock.json
+!README.md
+!LICENSE
+!.gitignore
