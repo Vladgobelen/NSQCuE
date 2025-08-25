@@ -1,4 +1,15 @@
-/* === ОБЩИЕ СТИЛИ === */
+:root {
+  --bg-primary: #2d2d2d;
+  --bg-secondary: #252525;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --accent: #2a82da;
+  --success: #2ecc71;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --border: #555555;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -6,300 +17,316 @@
 }
 
 body {
-  font-family: Arial, sans-serif;
-  background: #36393f;
-  color: #dcddde;
-  height: 100vh;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  /* Предотвращает появление полосы прокрутки у body */
   overflow: hidden;
 }
 
-/* === СТАТУС-БАР === */
-.status-bar {
-  padding: 6px 12px;
-  background: #202225;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-
-.status-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #747f8d;
-}
-
-.status-indicator.connecting { background: #faa61a; }
-.status-indicator.connected { background: #43b581; }
-.status-indicator.disconnected { background: #ed4245; }
-
-/* === ОСНОВНОЙ ИНТЕРФЕЙС === */
-.app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-/* === КОМПАКТНЫЙ РЕЖИМ (МОБИЛЬНЫЙ СТИЛЬ) === */
-.compact-mode {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.compact-header {
-  padding: 8px 12px;
-  display: flex;
-  align-items: center;
-  background: #40444b;
-  border-bottom: 1px solid #202225;
-}
-
-.compact-header .back-btn,
-.compact-header .chat-settings-btn {
-  font-size: 18px;
-  background: none;
-  border: none;
-  color: #fff;
-  cursor: pointer;
-}
-
-.chat-header-title {
-  flex: 1;
-  text-align: center;
-  font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 10px;
-}
-
-.compact-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.compact-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.compact-messages .message {
-  max-width: 80%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: #2f3136;
-  align-self: flex-start;
-}
-
-.compact-messages .message.own {
-  align-self: flex-end;
-  background: #4752c4;
-}
-
-.compact-input {
+.container {
+  max-width: 100%;
   padding: 10px;
-  background: #40444b;
+  height: 100vh; /* Занимаем всю высоту окна */
+  display: flex;
+  flex-direction: column; /* Элементы друг под другом */
 }
 
-.compact-input input {
-  width: 100%;
-  padding: 8px;
-  border: none;
-  border-radius: 4px;
-  background: #2f3136;
-  color: #fff;
-}
-
-.compact-controls {
+.top-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
-  background: #2f3136;
-  border-top: 1px solid #202225;
+  padding: 10px 15px;
+  background-color: #252525;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  /* Высота фиксированная, flex сам её учтёт */
+  flex-shrink: 0; /* Не сжимается */
 }
 
-/* === КНОПКИ УПРАВЛЕНИЯ === */
-.compact-mic-btn, .toggle-members-btn {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
+.top-bar h1 {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.voice-btn {
+  background-color: var(--accent);
   border: none;
-  background: #7289da;
+  border-radius: 20px;
   color: white;
-  font-size: 20px;
+  font-size: 16px;
+  width: 40px;
+  height: 40px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin: 0 6px;
-  flex-shrink: 0;
+  transition: background-color 0.2s;
 }
 
-.compact-mic-btn:hover, .toggle-members-btn:hover {
-  background: #4752c4;
+.voice-btn:hover {
+  background-color: #1e6fba;
+}
+
+.game-panel {
+  background-color: #252525;
+  border-radius: 10px;
+  padding: 10px 15px;
+  margin: 0 10px 15px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* Высота фиксированная, flex сам её учтёт */
+  flex-shrink: 0; /* Не сжимается */
+}
+
+#game-status {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+#launch-btn {
+  background-color: var(--success);
+  border: none;
+  border-radius: 5px;
+  color: white;
+  font-weight: bold;
+  padding: 8px 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  height: 36px;
+  min-width: 120px;
+}
+
+#launch-btn:hover:not(:disabled) {
+  background-color: #27ae60;
+}
+
+#launch-btn:disabled {
+  background-color: #7f8c8d;
+  cursor: not-allowed;
+}
+
+.divider {
+  height: 1px;
+  background-color: var(--border);
+  margin: 0 10px 10px 10px;
+  /* Высота фиксированная, flex сам её учтёт */
+  flex-shrink: 0; /* Не сжимается */
+}
+
+.addons-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px 5px 10px;
+  margin-bottom: 5px;
+  /* Высота фиксированная, flex сам её учтёт */
+  flex-shrink: 0; /* Не сжимается */
+}
+
+.addons-header h2 {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.logs-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logs-btn:hover {
+  background-color: #3d3d3d;
+  color: var(--text-primary);
+}
+
+#addons-list {
+  flex-grow: 1;
+  /* Позволяет скролл внутри себя, если контент не помещается */
+  overflow-y: auto;
+  /* Минимальная высота 0 важна для корректной работы flexbox с overflow */
+  min-height: 0;
+}
+
+.addon-card {
+  background-color: var(--bg-secondary);
+  border-radius: 10px;
+  margin: 0 10px 10px 10px;
+  position: relative;
+  z-index: 1;
+  /* Убираем overflow: hidden отсюда */
+  transition: background-color 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.addon-card:hover {
+  background-color: #353535;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   transform: translateY(-1px);
-  box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+  transition: transform 0.2s;
 }
 
-.compact-mic-btn:active, .toggle-members-btn:active {
-  transform: translateY(0);
+/* Новый контейнер для содержимого с overflow */
+.addon-content-wrapper {
+  padding: 12px;
+  overflow: hidden;
+  border-radius: 10px;
 }
 
-.compact-mic-btn.active {
-  background: #ed4245;
+.addon-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 2;
 }
 
-/* === ПАНЕЛЬ УЧАСТНИКОВ === */
-.members-panel {
+.addon-name {
+  font-weight: bold;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.update-label {
+  color: #8BC34A;
+  font-style: italic;
+  background-color: rgba(139, 195, 74, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.addon-description {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  z-index: 2;
+  position: relative;
+}
+
+/* --- ВИЗУАЛЬНЫЙ ПРОГРЕСС: ЗАТЕМНЕНИЕ СЛЕВА НАПРАВО --- */
+.progress-overlay {
   position: absolute;
   top: 0;
-  right: 0;
-  width: 260px;
-  height: 100%;
-  background: #2f3136;
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
-  z-index: 900;
-  display: flex;
-  flex-direction: column;
-}
-
-.members-panel.visible {
-  transform: translateX(0);
-}
-
-.members-panel-header {
-  padding: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #202225;
-}
-
-.members-panel-header h3 {
-  font-size: 16px;
-}
-
-.members-panel-header button {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: #dcddde;
-  cursor: pointer;
-}
-
-.members-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px;
-}
-
-.member-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-bottom: 1px solid #202225;
-}
-
-.member-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #7289da;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  color: white;
-}
-
-.member-name {
-  flex: 1;
-  font-size: 14px;
-}
-
-.member-status {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #747f8d;
-}
-
-.member-status.active {
-  background: #43b581;
-}
-
-/* === МОДАЛЬНОЕ ОКНО НАСТРОЕК === */
-.modal {
-  display: none;
-  position: fixed;
-  z-index: 1000;
   left: 0;
-  top: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0,0,0,0.5);
-  animation: fadeIn 0.2s ease;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.8) var(--progress), rgba(0, 0, 0, 0.8) var(--progress), transparent var(--progress), transparent 100%);
+  z-index: 1;
+  pointer-events: none;
+  opacity: 1;
+  /* Полностью убираем transition */
+  transition: opacity 0.3s ease;
 }
 
-.modal-content {
-  background-color: #2f3136;
-  margin: 10% auto;
-  padding: 20px;
-  width: 300px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  animation: slideUp 0.3s ease;
+.progress-overlay.hidden {
+  opacity: 0;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.addon-card.deleting-warning {
+  background-color: #ff4444 !important;
 }
 
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-.setting-item {
-  margin: 12px 0;
-}
-
-.setting-item label {
-  font-size: 14px;
-  display: block;
-  color: #dcddde;
-}
-
-.setting-item input[type="range"] {
-  width: 100%;
-  margin-top: 6px;
-}
-
-.modal-content button {
-  margin-top: 10px;
-  padding: 8px 12px;
-  border: none;
+.addon-card.deleting-warning .addon-content-wrapper::after {
+  content: "АДДОН БУДЕТ УДАЛЕН";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.85);
+  color: #ff4444;
+  padding: 8px 16px;
   border-radius: 4px;
-  cursor: pointer;
+  font-weight: bold;
   font-size: 14px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
 }
 
-#applySettingsBtn {
-  background: #4752c4;
-  color: white;
+/* --- Чекбокс --- */
+.addon-top > input[type="checkbox"] {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 30px;
+  height: 30px;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 5;
+  margin: 0;
 }
 
-#closeSettingsModal {
-  background: #747f8d;
-  color: white;
+.addon-top > input[type="checkbox"] + .custom-checkbox {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #555555;
+  border-radius: 3px;
+  background-color: #333333;
+  cursor: pointer;
+  z-index: 2;
+  transition: all 0.2s ease;
+}
+
+.addon-top > input[type="checkbox"]:checked + .custom-checkbox {
+  background-color: #2A82DA;
+  border-color: #2A82DA;
+}
+
+.addon-top > input[type="checkbox"]:checked + .custom-checkbox:after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.addon-top > input[type="checkbox"]:disabled + .custom-checkbox {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.addon-top > input[type="checkbox"]:hover + .custom-checkbox {
+  border-color: #777777;
+}
+
+/* --- Стили скроллбара для #addons-list --- */
+#addons-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+#addons-list::-webkit-scrollbar-track {
+  background: #2d2d2d;
+  border-radius: 4px;
+}
+
+#addons-list::-webkit-scrollbar-thumb {
+  background: #555555;
+  border-radius: 4px;
+}
+
+#addons-list::-webkit-scrollbar-thumb:hover {
+  background: #777777;
+}
+
+/* Для Firefox */
+#addons-list {
+  scrollbar-width: thin;
+  scrollbar-color: #555555 #2d2d2d;
 }
