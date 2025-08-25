@@ -457,6 +457,85 @@
         .compact-mic-btn.active {
             background: #ed4245; /* Красный, когда микрофон включен */
         }
+        /* === ДОБАВЛЕНО: Стили для модального окна настроек === */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #2f3136;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #40444b;
+            padding-bottom: 10px;
+        }
+        .modal-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: #ffffff;
+        }
+        .setting-item {
+            margin-bottom: 15px;
+        }
+        .setting-label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #b9bbbe;
+        }
+        .setting-input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #40444b;
+            background: #36393f;
+            color: #ffffff;
+        }
+        .setting-checkbox {
+            margin-right: 8px;
+        }
+        .apply-settings-btn {
+            width: 100%;
+            padding: 10px;
+            background: #5865f2;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            margin-top: 10px;
+        }
+        .apply-settings-btn:hover {
+            background: #4752c4;
+        }
+        /* === КОНЕЦ ДОБАВЛЕНИЯ === */
         /* Адаптивность */
         @media (max-width: 900px) {
             .sidebar, .members-panel {
@@ -482,6 +561,20 @@
             }
             .chat-header {
                 display: flex; /* Убедимся, что заголовок отображается в мобильной версии */
+                justify-content: space-between; /* Распределяем элементы */
+            }
+            .chat-header-title {
+                flex: 1; /* Заголовок занимает оставшееся пространство */
+                text-align: center;
+                padding: 0 10px; /* Отступы для текста */
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .chat-header-controls {
+                display: flex;
+                align-items: center;
+                flex-shrink: 0; /* Не сжимать */
             }
             /* Добавляем компактный режим для мобильных устройств */
             .compact-mode {
@@ -548,6 +641,11 @@
                 position: relative;
                 transform: none !important;
             }
+            /* === ДОБАВЛЕНО: Скрытие кнопки настроек в заголовке в десктопном режиме === */
+            .chat-settings-btn {
+                display: none;
+            }
+            /* === КОНЕЦ ДОБАВЛЕНИЯ === */
         }
         /* Улучшения для очень узких экранов */
         @media (max-width: 400px) {
@@ -597,6 +695,32 @@
                 font-size: 14px;
             }
         }
+        /* === ДОБАВЛЕНО: Стили для кнопки настроек в заголовке чата === */
+        .chat-header-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px; /* Добавлено расстояние между элементами */
+        }
+        .chat-settings-btn {
+            background: none;
+            border: none;
+            color: #b9bbbe;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 6px;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0; /* Не сжимать */
+        }
+        .chat-settings-btn:hover {
+            color: #ffffff;
+            background: #34373c;
+            border-radius: 50%;
+        }
+        /* === КОНЕЦ ДОБАВЛЕНИЯ === */
     </style>
 </head>
 <body>
@@ -606,7 +730,9 @@
             <div class="sidebar-header">
                 <button class="back-btn" id="sidebarBackBtn">←</button>
                 <div class="sidebar-title">🎙️ Voice Chat</div>
-                <button class="settings-btn">⚙️</button>
+                <!-- === ИЗМЕНЕНО: Добавлен обработчик клика для кнопки настроек === -->
+                <button class="settings-btn" id="openSettingsBtn">⚙️</button>
+                <!-- === КОНЕЦ ИЗМЕНЕНИЯ === -->
             </div>
             <div class="rooms-list">
                 <div class="room-item active" data-room="general">🔊 Общий голосовой канал</div>
@@ -627,6 +753,9 @@
             <div class="chat-header">
                 <div class="chat-header-controls">
                     <button class="back-btn" id="backBtn">←</button>
+                    <!-- === ДОБАВЛЕНО: Кнопка настроек в заголовке чата для мобильного режима === -->
+                    <button class="chat-settings-btn" id="chatOpenSettingsBtn">⚙️</button>
+                    <!-- === КОНЕЦ ДОБАВЛЕНИЯ === -->
                 </div>
                 <div class="chat-header-title" id="currentRoomTitle">
                     Общий голосовой канал
@@ -675,6 +804,35 @@
         <span class="status-indicator" id="statusIndicator"></span>
         <span class="status-text" id="statusText">Подключение к серверу...</span>
     </div>
+    <!-- === ДОБАВЛЕНО: Модальное окно настроек === -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Настройки голоса</div>
+                <span class="close" id="closeSettingsModal">&times;</span>
+            </div>
+            <div class="setting-item">
+                <label class="setting-label" for="bitrateSlider">Битрейт (кбит/с): <span id="bitrateValue">32</span></label>
+                <input type="range" min="16" max="64" value="32" class="setting-input" id="bitrateSlider">
+            </div>
+            <div class="setting-item">
+                <label class="setting-label">
+                    <input type="checkbox" class="setting-checkbox" id="dtxCheckbox"> Использовать DTX (экономия трафика)
+                </label>
+            </div>
+            <div class="setting-item">
+                <label class="setting-label">
+                    <input type="checkbox" class="setting-checkbox" id="fecCheckbox" checked> Использовать FEC (устойчивость к потерям)
+                </label>
+            </div>
+            <button class="apply-settings-btn" id="applySettingsBtn">Применить настройки</button>
+        </div>
+    </div>
+    <!-- === КОНЕЦ ДОБАВЛЕНИЯ === -->
+    <script>
+        // --- УДАЛЕНО: Обработчик для кнопки настроек в заголовке чата ---
+        // --- Теперь он находится в voice-chat.js ---
+    </script>
     <script src="./voice-chat.js"></script>
 </body>
 </html>
