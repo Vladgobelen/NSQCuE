@@ -21,11 +21,16 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
+  /* Предотвращает появление полосы прокрутки у body */
+  overflow: hidden;
 }
 
 .container {
   max-width: 100%;
   padding: 10px;
+  height: 100vh; /* Занимаем всю высоту окна */
+  display: flex;
+  flex-direction: column; /* Элементы друг под другом */
 }
 
 .top-bar {
@@ -36,7 +41,8 @@ body {
   background-color: #252525;
   border-radius: 8px;
   margin-bottom: 15px;
-  height: 50px;
+  /* Высота фиксированная, flex сам её учтёт */
+  flex-shrink: 0; /* Не сжимается */
 }
 
 .top-bar h1 {
@@ -69,6 +75,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Высота фиксированная, flex сам её учтёт */
+  flex-shrink: 0; /* Не сжимается */
 }
 
 #game-status {
@@ -102,6 +110,8 @@ body {
   height: 1px;
   background-color: var(--border);
   margin: 0 10px 10px 10px;
+  /* Высота фиксированная, flex сам её учтёт */
+  flex-shrink: 0; /* Не сжимается */
 }
 
 .addons-header {
@@ -110,6 +120,8 @@ body {
   align-items: center;
   padding: 0 10px 5px 10px;
   margin-bottom: 5px;
+  /* Высота фиксированная, flex сам её учтёт */
+  flex-shrink: 0; /* Не сжимается */
 }
 
 .addons-header h2 {
@@ -134,6 +146,14 @@ body {
   color: var(--text-primary);
 }
 
+#addons-list {
+  flex-grow: 1;
+  /* Позволяет скролл внутри себя, если контент не помещается */
+  overflow-y: auto;
+  /* Минимальная высота 0 важна для корректной работы flexbox с overflow */
+  min-height: 0;
+}
+
 .addon-card {
   background-color: var(--bg-secondary);
   border-radius: 10px;
@@ -142,10 +162,14 @@ body {
   z-index: 1;
   /* Убираем overflow: hidden отсюда */
   transition: background-color 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .addon-card:hover {
   background-color: #353535;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+  transition: transform 0.2s;
 }
 
 /* Новый контейнер для содержимого с overflow */
@@ -208,7 +232,6 @@ body {
   opacity: 0;
 }
 
-/* Новый стиль для визуального предупреждения об удалении */
 .addon-card.deleting-warning {
   background-color: #ff4444 !important;
 }
@@ -283,21 +306,7 @@ body {
   border-color: #777777;
 }
 
-.addon-card {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.addon-card:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-  transform: translateY(-1px);
-  transition: transform 0.2s;
-}
-
-#addons-list {
-  max-height: calc(100vh - 200px);
-  overflow-y: auto;
-}
-
+/* --- Стили скроллбара для #addons-list --- */
 #addons-list::-webkit-scrollbar {
   width: 8px;
 }
@@ -316,6 +325,7 @@ body {
   background: #777777;
 }
 
+/* Для Firefox */
 #addons-list {
   scrollbar-width: thin;
   scrollbar-color: #555555 #2d2d2d;

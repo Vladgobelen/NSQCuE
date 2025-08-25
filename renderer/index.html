@@ -12,24 +12,22 @@
       <h1>Менеджер аддонов</h1>
       <button id="voice-btn" class="voice-btn">🎤</button>
     </div>
-
     <div class="game-panel">
       <span id="game-status">Проверка игры...</span>
-      <button id="launch-btn" disabled>Запустить игру</button>
+      <div style="display: flex; gap: 5px;">
+        <button id="change-path-btn" class="logs-btn" style="padding: 8px 10px;">Изменить путь</button>
+        <button id="launch-btn" disabled>Запустить игру</button>
+      </div>
     </div>
-
     <div class="divider"></div>
-
     <div class="addons-header">
       <h2>Доступные аддоны</h2>
       <button id="logs-btn" class="logs-btn">Логи</button>
     </div>
-
     <div class="addons-list" id="addons-list">
       <!-- Аддоны будут добавлены здесь динамически -->
     </div>
   </div>
-
   <script src="renderer.js"></script>
 </body>
 </html>

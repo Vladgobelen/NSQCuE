@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Голосовой чат</title>
+    <script src="http://194.31.171.29:38592/mediasoup-client.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #36393f;
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+            min-width: 280px;
+        }
+        .app {
+            display: flex;
+            height: 100vh;
+            min-width: 0;
+        }
+        /* Левая панель */
+        .sidebar {
+            width: 240px;
+            min-width: 200px;
+            background: #2f3136;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+            flex-shrink: 0;
+        }
+        .sidebar-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #202225;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-width: 0;
+        }
+        .sidebar-title {
+            font-weight: bold;
+            font-size: 16px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .settings-btn {
+            background: none;
+            border: none;
+            color: #b9bbbe;
+            cursor: pointer;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .settings-btn:hover {
+            color: #ffffff;
+        }
+        .rooms-list {
+            flex: 1;
+            padding: 8px;
+            overflow-y: auto;
+            min-width: 0;
+        }
+        .room-item {
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            color: #b9bbbe;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .room-item:hover {
+            background: #34373c;
+            color: #ffffff;
+        }
+        .room-item.active {
+            background: #5865f2;
+            color: #ffffff;
+            font-weight: 500;
+        }
+        .mic-control {
+            padding: 16px;
+            border-top: 1px solid #202225;
+            min-width: 0;
+        }
+        .mic-button {
+            width: 100%;
+            padding: 10px;
+            background: #5865f2;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            min-width: 0;
+            font-size: 14px;
+        }
+        .mic-button:hover {
+            background: #4752c4;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+        }
+        .mic-button:active {
+            transform: translateY(0);
+        }
+        .mic-button.active {
+            background: #ed4245;
+        }
+        /* Основная область */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            max-width: 100%;
+        }
+        /* Область чата */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #36393f;
+            min-width: 0;
+        }
+        .chat-header {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: #40444b;
+            border-bottom: 1px solid #202225;
+            min-width: 0;
+        }
+        .chat-header-title {
+            flex: 1;
+            text-align: center;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 10px;
+        }
+        .chat-header-controls {
+            display: flex;
+            align-items: center;
+        }
+        .back-btn {
+            background: none;
+            border: none;
+            color: #b9bbbe;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 6px;
+            margin: 0 2px;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .back-btn:hover {
+            color: #ffffff;
+            background: #34373c;
+            border-radius: 50%;
+        }
+        .toggle-sidebar-btn, .toggle-members-btn {
+            background: none;
+            border: none;
+            color: #b9bbbe;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 6px;
+            margin: 0 2px;
+        }
+        .toggle-sidebar-btn:hover, .toggle-members-btn:hover {
+            color: #ffffff;
+        }
+        .messages {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .message {
+            display: flex;
+            margin-bottom: 12px;
+            animation: fadeIn 0.3s ease;
+            opacity: 0;
+            transform: translateY(10px);
+            min-width: 0;
+        }
+        .message.appeared {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            background: #5865f2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+        .message-content {
+            flex: 1;
+            background: #2f3136;
+            border-radius: 8px;
+            padding: 10px 14px;
+            max-width: 85%;
+            min-width: 0;
+        }
+        .message-header {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 4px;
+            min-width: 0;
+        }
+        .message-username {
+            font-weight: 500;
+            margin-right: 8px;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .message-time {
+            font-size: 12px;
+            color: #a3a6aa;
+            flex-shrink: 0;
+        }
+        .message-text {
+            color: #dcddde;
+            font-size: 14px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+        /* Область ввода */
+        .input-area {
+            padding: 12px;
+            background: #40444b;
+            margin: 0 12px 12px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-width: 0;
+        }
+        .input-box {
+            width: 100%;
+            background: #36393f;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+            min-width: 0;
+        }
+        .input-box:focus {
+            outline: 1px solid #00b0f4;
+            box-shadow: 0 0 0 2px rgba(0, 176, 244, 0.2);
+        }
+        .input-box::placeholder {
+            color: #72767d;
+        }
+        /* Правая панель с участниками */
+        .members-panel {
+            width: 220px;
+            min-width: 180px;
+            background: #2f3136;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+            flex-shrink: 0;
+        }
+        .members-header {
+            padding: 12px 16px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #8e9297;
+            text-transform: uppercase;
+            border-bottom: 1px solid #202225;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-width: 0;
+        }
+        .members-list {
+            flex: 1;
+            padding: 8px;
+            overflow-y: auto;
+            min-width: 0;
+        }
+        .member-item {
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            color: #ffffff;
+            font-size: 14px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+            transition: all 0.2s ease;
+            min-width: 0;
+        }
+        .member-item:hover {
+            background: #34373c;
+        }
+        .member-avatar {
+            width: 32px;
+            height: 32px;
+            background: #5865f2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .member-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .member-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3ba55d;
+            margin-left: 8px;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 6px rgba(59, 165, 93, 0.5);
+            flex-shrink: 0;
+        }
+        .member-status.muted {
+            background: #72767d;
+            box-shadow: none;
+        }
+        .member-status.active {
+            background: #3ba55d;
+        }
+        /* Статус соединения */
+        .status-bar {
+            padding: 8px 12px;
+            background: #202225;
+            font-size: 12px;
+            color: #b9bbbe;
+            border-top: 1px solid #2f3136;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3ba55d;
+            margin-right: 8px;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+        .status-indicator.connecting {
+            background: #faa61a;
+            animation: pulse 1.5s infinite;
+        }
+        .status-indicator.disconnected {
+            background: #ed4245;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        /* Анимации для кнопок */
+        .room-item {
+            position: relative;
+            overflow: hidden;
+        }
+        .room-item::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: 0.6s;
+        }
+        .room-item:hover::after {
+            left: 100%;
+        }
+        /* Эффект для новых сообщений */
+        @keyframes highlight {
+            0% { background-color: rgba(88, 101, 242, 0.1); }
+            100% { background-color: transparent; }
+        }
+        .new-message {
+            animation: highlight 2s ease;
+        }
+        .compact-mic-btn {
+            background: #5865f2;
+            border: none;
+            color: white;
+            font-size: 18px; /* Иконка микрофона */
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            margin: 0 6px; /* Отступы слева и справа */
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .compact-mic-btn:hover {
+             background: #4752c4;
+             transform: translateY(-1px);
+             box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+        }
+        .compact-mic-btn:active {
+            transform: translateY(0);
+        }
+        .compact-mic-btn.active {
+            background: #ed4245; /* Красный, когда микрофон включен */
+        }
+        /* Адаптивность */
+        @media (max-width: 900px) {
+            .sidebar, .members-panel {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                z-index: 100;
+                transform: translateX(-100%);
+            }
+            .sidebar {
+                width: 260px;
+            }
+            .sidebar.visible {
+                transform: translateX(0);
+            }
+            .members-panel {
+                right: 0;
+                transform: translateX(100%);
+                width: 260px;
+            }
+            .members-panel.visible {
+                transform: translateX(0);
+            }
+            .chat-header {
+                display: flex; /* Убедимся, что заголовок отображается в мобильной версии */
+            }
+            /* Добавляем компактный режим для мобильных устройств */
+            .compact-mode {
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+            }
+            .compact-header {
+                padding: 8px 12px;
+                display: flex;
+                align-items: center;
+                background: #40444b;
+                border-bottom: 1px solid #202225;
+            }
+            .compact-content {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            .compact-messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 12px;
+            }
+            .compact-input {
+                padding: 10px;
+                background: #40444b;
+            }
+            .compact-controls {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px;
+                background: #2f3136;
+                border-top: 1px solid #202225;
+            }
+            .compact-mic-btn {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: #5865f2;
+                border: none;
+                color: white;
+                font-size: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            }
+            .compact-mic-btn.active {
+                background: #ed4245;
+            }
+        }
+        @media (min-width: 901px) {
+            .toggle-sidebar-btn, .toggle-members-btn {
+                display: none;
+            }
+            .chat-header {
+                display: none; /* Скрываем заголовок в развернутом виде */
+            }
+            .sidebar, .members-panel {
+                position: relative;
+                transform: none !important;
+            }
+        }
+        /* Улучшения для очень узких экранов */
+        @media (max-width: 400px) {
+            .sidebar {
+                width: 220px;
+            }
+            .members-panel {
+                width: 220px;
+            }
+            .message-content {
+                max-width: 75%;
+            }
+            .input-area {
+                margin: 0 8px 8px 8px;
+                padding: 10px;
+            }
+            .message-avatar {
+                width: 32px;
+                height: 32px;
+                margin-right: 8px;
+                font-size: 12px;
+            }
+            .mic-button {
+                font-size: 12px;
+                padding: 8px;
+            }
+        }
+        @media (max-width: 320px) {
+            .sidebar {
+                width: 200px;
+            }
+            .members-panel {
+                width: 200px;
+            }
+            .message-content {
+                max-width: 70%;
+                padding: 8px 10px;
+            }
+            .message-username {
+                font-size: 13px;
+            }
+            .message-text {
+                font-size: 13px;
+            }
+            .room-item {
+                padding: 6px 10px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Левая панель -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <button class="back-btn" id="sidebarBackBtn">←</button>
+                <div class="sidebar-title">🎙️ Voice Chat</div>
+                <button class="settings-btn">⚙️</button>
+            </div>
+            <div class="rooms-list">
+                <div class="room-item active" data-room="general">🔊 Общий голосовой канал</div>
+                <div class="room-item" data-room="music">🎵 Музыкальная комната</div>
+                <div class="room-item" data-room="conference">💼 Конференция</div>
+            </div>
+            <div class="mic-control">
+                <!-- Кнопка микрофона с начальным состоянием "Подключение..." -->
+                <button id="micButton" class="mic-button" disabled>
+                    <span>📡</span>
+                    <span id="micButtonText">Подключение...</span>
+                </button>
+            </div>
+        </div>
+        <!-- Основная область -->
+        <div class="main-content">
+            <!-- Заголовок чата для мобильной версии -->
+            <div class="chat-header">
+                <div class="chat-header-controls">
+                    <button class="back-btn" id="backBtn">←</button>
+                </div>
+                <div class="chat-header-title" id="currentRoomTitle">
+                    Общий голосовой канал
+                </div>
+                <div class="chat-header-controls">
+                     <!-- --- Добавлено: Кнопка микрофона для компактного режима --->
+                     <button class="compact-mic-btn" id="compactMicBtn" style="display: none;">🎤</button>
+                     <!-- --- Конец добавления --->
+                    <button class="toggle-members-btn" id="toggleMembersBtn">👥</button>
+                </div>
+            </div>
+            <div class="chat-area">
+                <div class="messages" id="messagesContainer">
+                    <div class="message appeared">
+                        <div class="message-avatar">S</div>
+                        <div class="message-content">
+                            <div class="message-header">
+                                <div class="message-username">System</div>
+                                <div class="message-time" id="systemTime"></div>
+                            </div>
+                            <div class="message-text">Подключение к серверу...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-area">
+                    <input type="text" class="input-box" placeholder="Написать сообщение..." id="messageInput">
+                </div>
+            </div>
+        </div>
+        <!-- Правая панель с участниками -->
+        <div class="members-panel" id="membersPanel">
+            <div class="members-header">
+                Участники — <span id="membersCount">1</span>
+                <button class="settings-btn" id="closeMembersPanelBtn" style="font-size: 16px;">✕</button>
+            </div>
+            <div class="members-list" id="membersList">
+                <div class="member-item">
+                    <div class="member-avatar">Вы</div>
+                    <div class="member-name">Вы</div>
+                    <div class="member-status muted" id="selfStatus"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="status-bar">
+        <span class="status-indicator" id="statusIndicator"></span>
+        <span class="status-text" id="statusText">Подключение к серверу...</span>
+    </div>
+    <script src="./voice-chat.js"></script>
+</body>
+</html>

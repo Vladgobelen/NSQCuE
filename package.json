@@ -5,22 +5,35 @@
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "build:win64": "electron-builder --win portable --x64"
   },
   "build": {
     "appId": "com.nightwatch.updater",
     "productName": "Night Watch Updater",
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "unicode": true,
+      "warningsAsErrors": false
     }
   },
   "dependencies": {
     "axios": "^1.6.8",
-    "electron": "^29.0.0",
     "fs-extra": "^11.2.0",
     "unzipper": "^0.10.14"
   },
   "devDependencies": {
+    "electron": "^22.3.27",
     "electron-builder": "^24.13.3"
   }
 }

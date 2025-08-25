@@ -11,3 +11,4 @@
 !README.md
 !LICENSE
 !.gitignore
+!.electron-builder.config.js
