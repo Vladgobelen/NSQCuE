@@ -1,4 +1,3 @@
-// voice-chat.js
 class VoiceChatClient {
     constructor() {
         this.SERVER_URL = 'http://194.31.171.29:38592';
@@ -19,7 +18,6 @@ class VoiceChatClient {
         this.fecEnabled = true;
         this.isConnecting = false;
         window.voiceChatClient = this;
-
         // Основные элементы
         this.micButton = document.getElementById('micButton');
         this.micButtonText = document.getElementById('micButtonText');
@@ -30,14 +28,12 @@ class VoiceChatClient {
         this.roomItems = document.querySelectorAll('.room-item');
         this.currentRoomTitle = document.getElementById('currentRoomTitle');
         this.mobileMicBtn = document.getElementById('mobileMicBtn');
-
         // Панели
         this.serverSelectorPanel = document.getElementById('serverSelectorPanel');
         this.roomSelectorPanel = document.getElementById('roomSelectorPanel');
         this.membersPanel = document.getElementById('membersPanel');
         this.membersPanelDesktop = document.getElementById('membersPanelDesktop');
         this.settingsModal = document.getElementById('settingsModal');
-
         // Кнопки
         this.openServerSelectorBtn = document.getElementById('openServerSelectorBtn');
         this.openServerBtnMobile = document.getElementById('openServerBtnMobile');
@@ -50,27 +46,22 @@ class VoiceChatClient {
         this.closeMembersPanelBtn = document.getElementById('closeMembersPanelBtn');
         this.addServerBtn = document.getElementById('addServerBtn');
         this.toggleMembersBtn = document.getElementById('toggleMembersBtn');
-
         // Настройки
         this.bitrateSlider = document.getElementById('bitrateSlider');
         this.bitrateValue = document.getElementById('bitrateValue');
         this.dtxCheckbox = document.getElementById('dtxCheckbox');
         this.fecCheckbox = document.getElementById('fecCheckbox');
         this.applySettingsBtn = document.getElementById('applySettingsBtn');
-
         // Участники
         this.membersList = document.getElementById('membersList');
         this.membersCount = document.getElementById('membersCount');
         this.selfStatus = document.getElementById('selfStatus');
-
         // Десктопная панель участников
         this.membersListDesktop = document.getElementById('membersListDesktop');
         this.membersCountDesktop = document.getElementById('membersCountDesktop');
         this.selfStatusDesktop = document.getElementById('selfStatusDesktop');
-
         // Чат
         this.messagesContainer = document.getElementById('messagesContainer');
-
         // Инициализация панелей
         [this.serverSelectorPanel, this.roomSelectorPanel, this.membersPanel].forEach(panel => {
             if (panel) {
@@ -79,18 +70,15 @@ class VoiceChatClient {
             }
         });
         this.settingsModal.style.display = 'none';
-
         // Обновление времени
         this.updateSystemTime();
         setInterval(() => this.updateSystemTime(), 60000);
-
         // Обработчики событий
         this.messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 this.sendMessage();
             }
         });
-
         // Кнопки комнат
         this.roomItems.forEach(item => {
             item.addEventListener('click', () => {
@@ -103,19 +91,21 @@ class VoiceChatClient {
                 this.closePanel(this.roomSelectorPanel);
             });
         });
-
         // Мобильная кнопка микрофона
         if (this.mobileMicBtn) {
+            console.log('Мобильная кнопка микрофона найдена');
             this.mobileMicBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                console.log('Клик по мобильной кнопке микрофона');
                 if (this.isConnected && !this.isConnecting) {
                     this.toggleMicrophone();
                 } else if (!this.micButton.disabled && !this.isConnecting) {
                     this.autoConnect();
                 }
             });
+        } else {
+            console.log('Мобильная кнопка микрофона не найдена');
         }
-
         // Настройки
         [this.openSettingsBtn, this.openSettingsBtnMobile].forEach(btn => {
             btn?.addEventListener('click', () => this.openSettings());
@@ -125,13 +115,11 @@ class VoiceChatClient {
             this.bitrateValue.textContent = this.bitrateSlider.value;
         });
         this.applySettingsBtn.addEventListener('click', () => this.applySettings());
-
         window.addEventListener('click', (e) => {
             if (e.target === this.settingsModal) {
                 this.settingsModal.style.display = 'none';
             }
         });
-
         // Панель серверов
         [this.openServerSelectorBtn, this.openServerBtnMobile].forEach(btn => {
             btn?.addEventListener('click', (e) => {
@@ -140,21 +128,18 @@ class VoiceChatClient {
             });
         });
         this.closeServerPanelBtn.addEventListener('click', () => this.closePanel(this.serverSelectorPanel));
-
         // Панель комнат
         this.toggleSidebarBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.openPanel(this.roomSelectorPanel);
         });
         this.closeRoomPanelBtn.addEventListener('click', () => this.closePanel(this.roomSelectorPanel));
-
         // Панель участников (мобильная)
         this.toggleMembersBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.openPanel(this.membersPanel);
         });
         this.closeMembersPanelBtn.addEventListener('click', () => this.closePanel(this.membersPanel));
-
         // Закрытие панелей кликом вне
         document.addEventListener('click', (e) => {
             [this.serverSelectorPanel, this.roomSelectorPanel, this.membersPanel].forEach(panel => {
@@ -163,12 +148,10 @@ class VoiceChatClient {
                 }
             });
         });
-
         // Закрытие панели по клику внутри
         [this.serverSelectorPanel, this.roomSelectorPanel, this.membersPanel].forEach(panel => {
             panel?.addEventListener('click', (e) => e.stopPropagation());
         });
-
         // Добавление сервера
         this.addServerBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -182,11 +165,9 @@ class VoiceChatClient {
                 this.closePanel(this.serverSelectorPanel);
             });
         });
-
         // Подключение
         this.autoConnect();
     }
-
     getRoomName(roomId) {
         const rooms = {
             'general': 'Общий голосовой канал',
@@ -195,11 +176,9 @@ class VoiceChatClient {
         };
         return rooms[roomId] || roomId;
     }
-
     generateClientID() {
         return 'user_' + Math.random().toString(36).substr(2, 9);
     }
-
     updateStatus(message, type = 'normal') {
         this.statusText.textContent = message;
         this.statusIndicator.className = 'status-indicator';
@@ -210,12 +189,10 @@ class VoiceChatClient {
         }
         console.log('[STATUS]', message);
     }
-
     updateSystemTime() {
         const now = new Date();
         this.systemTime.textContent = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     }
-
     addMessage(username, text, time = null) {
         const now = new Date();
         const timeString = time || `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -241,7 +218,6 @@ class VoiceChatClient {
             messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
         }
     }
-
     sendMessage() {
         const message = this.messageInput.value.trim();
         if (message) {
@@ -253,10 +229,8 @@ class VoiceChatClient {
             }
         }
     }
-
     async autoConnect() {
         if (this.isConnecting) return;
-        
         this.isConnecting = true;
         this.updateStatus('Автоподключение...', 'connecting');
         this.micButtonText.textContent = 'Подключение...';
@@ -290,7 +264,9 @@ class VoiceChatClient {
                 this.toggleMicrophone();
             };
             if (this.mobileMicBtn) {
-                this.mobileMicBtn.style.color = '#b9bbbe';
+                console.log('Устанавливаем красный цвет для мобильной кнопки после подключения (неактивное состояние)');
+                this.mobileMicBtn.style.backgroundColor = '#ed4245'; // Красный фон - неактивное состояние
+                this.mobileMicBtn.style.color = '#ffffff'; // Белый текст
             }
             this.messageInput.disabled = false;
             this.startParticipantUpdates();
@@ -299,12 +275,16 @@ class VoiceChatClient {
             this.updateStatus('Ошибка: ' + error.message, 'disconnected');
             this.micButtonText.textContent = 'Ошибка подключения';
             this.micButton.disabled = false;
+            if (this.mobileMicBtn) {
+                console.log('Устанавливаем серый цвет для мобильной кнопки при ошибке подключения');
+                this.mobileMicBtn.style.backgroundColor = '#2f3136'; // Серый фон - нет подключения
+                this.mobileMicBtn.style.color = '#b9bbbe'; // Серый текст
+            }
             console.error('[AUTO CONNECT ERROR]', error);
         } finally {
             this.isConnecting = false;
         }
     }
-
     async registerClient() {
         const response = await fetch(`${this.SERVER_URL}/api/client/register`, {
             method: 'POST',
@@ -313,7 +293,6 @@ class VoiceChatClient {
         });
         return response.json();
     }
-
     startKeepAlive() {
         this.keepAliveInterval = setInterval(async () => {
             try {
@@ -323,12 +302,10 @@ class VoiceChatClient {
             }
         }, 5000);
     }
-
     async getRtpCapabilities() {
         const response = await fetch(`${this.SERVER_URL}/api/rtp-capabilities`);
         return response.json();
     }
-
     async createTransports() {
         const sendTransportData = await this.createTransport('send');
         this.sendTransport = this.device.createSendTransport({
@@ -347,7 +324,6 @@ class VoiceChatClient {
         });
         this.setupRecvTransport();
     }
-
     async createTransport(direction) {
         const response = await fetch(`${this.SERVER_URL}/api/transport/create`, {
             method: 'POST',
@@ -362,7 +338,6 @@ class VoiceChatClient {
         });
         return response.json();
     }
-
     setupSendTransport() {
         this.sendTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
             try {
@@ -403,7 +378,6 @@ class VoiceChatClient {
             }
         });
     }
-
     setupRecvTransport() {
         this.recvTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
             try {
@@ -424,18 +398,19 @@ class VoiceChatClient {
             }
         });
     }
-
     async toggleMicrophone() {
+        console.log('Toggle microphone called, isMicActive:', this.isMicActive);
         if (this.isMicActive) {
             await this.stopMicrophone();
         } else {
             await this.startMicrophone();
         }
     }
-
     async startMicrophone() {
-        if (this.isMicActive) return; // Защита от двойного вызова
-
+        if (this.isMicActive) {
+            console.log('Микрофон уже активен, пропускаем вызов startMicrophone');
+            return;
+        }
         try {
             if (!this.stream || this.stream.getAudioTracks().length === 0 || this.stream.getAudioTracks()[0].readyState === 'ended') {
                 this.updateStatus('Получение доступа к микрофону...', 'connecting');
@@ -469,7 +444,9 @@ class VoiceChatClient {
             this.updateStatus('Микрофон включен - вас слышат!', 'normal');
             this.addMessage('System', `Микрофон включен - вас слышат! (Битрейт: ${this.bitrate/1000} кбит/с, DTX: ${this.dtxEnabled ? 'вкл' : 'выкл'}, FEC: ${this.fecEnabled ? 'вкл' : 'выкл'})`);
             if (this.mobileMicBtn) {
-                this.mobileMicBtn.style.color = '#ed4245';
+                console.log('Устанавливаем зеленый цвет для мобильной кнопки при включении микрофона');
+                this.mobileMicBtn.style.backgroundColor = '#3ba55d'; // Зеленый фон - активное состояние
+                this.mobileMicBtn.style.color = '#ffffff'; // Белый текст
             }
         } catch (error) {
             this.isMicActive = false;
@@ -477,10 +454,11 @@ class VoiceChatClient {
             console.error('[MIC ERROR]', error);
         }
     }
-
     async stopMicrophone() {
-        if (!this.isMicActive) return; // Защита от двойного вызова
-
+        if (!this.isMicActive) {
+            console.log('Микрофон уже не активен, пропускаем вызов stopMicrophone');
+            return;
+        }
         if (this.audioProducer) {
             try {
                 await fetch(`${this.SERVER_URL}/api/producer/close`, {
@@ -506,10 +484,11 @@ class VoiceChatClient {
         this.updateStatus('Микрофон выключен - вы только слушаете', 'normal');
         this.addMessage('System', 'Микрофон выключен - вы только слушаете');
         if (this.mobileMicBtn) {
-            this.mobileMicBtn.style.color = '#b9bbbe';
+            console.log('Устанавливаем красный цвет для мобильной кнопки при выключении микрофона (подключен, но неактивен)');
+            this.mobileMicBtn.style.backgroundColor = '#ed4245'; // Красный фон - неактивное состояние, но подключен
+            this.mobileMicBtn.style.color = '#ffffff'; // Белый текст
         }
     }
-
     async updateParticipants() {
         try {
             const response = await fetch(`${this.SERVER_URL}/api/clients?clientID=${this.clientID}`);
@@ -524,7 +503,6 @@ class VoiceChatClient {
             console.error('[PARTICIPANTS ERROR]', error);
         }
     }
-
     updateMembersList(clients) {
         const otherClients = clients.filter(clientId => clientId !== this.clientID);
         this.membersCount.textContent = otherClients.length + 1;
@@ -549,7 +527,6 @@ class VoiceChatClient {
         this.membersList.innerHTML = membersHTML;
         this.selfStatus = document.getElementById('selfStatus');
     }
-
     updateMembersListDesktop(clients) {
         const otherClients = clients.filter(clientId => clientId !== this.clientID);
         this.membersCountDesktop.textContent = otherClients.length + 1;
@@ -574,7 +551,6 @@ class VoiceChatClient {
         this.membersListDesktop.innerHTML = membersHTML;
         this.selfStatusDesktop = document.getElementById('selfStatusDesktop');
     }
-
     async consumeClientProducers(clientId) {
         if (clientId === this.clientID) return;
         try {
@@ -589,7 +565,6 @@ class VoiceChatClient {
             console.error('[CONSUME CLIENT ERROR]', error);
         }
     }
-
     async consumeProducer(producerId, clientId) {
         if (clientId === this.clientID) return;
         try {
@@ -622,7 +597,6 @@ class VoiceChatClient {
             console.error('[CONSUME PRODUCER ERROR]', error);
         }
     }
-
     playAudio(track, clientId, producerId) {
         try {
             const mediaStream = new MediaStream([track.clone()]);
@@ -645,14 +619,12 @@ class VoiceChatClient {
             console.error('[AUDIO ERROR]', error);
         }
     }
-
     async startParticipantUpdates() {
         await this.updateParticipants();
         this.updateInterval = setInterval(async () => {
             await this.updateParticipants();
         }, 3000);
     }
-
     openSettings() {
         this.bitrateSlider.value = this.bitrate / 1000;
         this.bitrateValue.textContent = this.bitrateSlider.value;
@@ -660,7 +632,6 @@ class VoiceChatClient {
         this.fecCheckbox.checked = this.fecEnabled;
         this.settingsModal.style.display = 'block';
     }
-
     async applySettings() {
         const newBitrate = parseInt(this.bitrateSlider.value) * 1000;
         const newDtx = this.dtxCheckbox.checked;
@@ -679,18 +650,15 @@ class VoiceChatClient {
         }
         this.settingsModal.style.display = 'none';
     }
-
     async updateProducerSettings() {
         await this.stopMicrophone();
         await this.startMicrophone();
         this.addMessage('System', 'Настройки применены. Микрофон перезапущен.');
     }
-
     openPanel(panel) {
         panel.classList.add('visible');
         panel.style.display = 'flex';
     }
-
     closePanel(panel) {
         panel.classList.remove('visible');
         setTimeout(() => {
@@ -699,7 +667,6 @@ class VoiceChatClient {
             }
         }, 300);
     }
-
     destroy() {
         if (this.keepAliveInterval) clearInterval(this.keepAliveInterval);
         if (this.updateInterval) clearInterval(this.updateInterval);
@@ -715,7 +682,6 @@ class VoiceChatClient {
         }
     }
 }
-
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof mediasoupClient === 'undefined') {
         document.getElementById('statusText').textContent = 'Ошибка: mediasoup-client не загружен';
@@ -724,7 +690,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     new VoiceChatClient();
 });
-
 window.addEventListener('beforeunload', () => {
     if (window.voiceChatClient) {
         window.voiceChatClient.destroy();
