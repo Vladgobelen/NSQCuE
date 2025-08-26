@@ -40,7 +40,6 @@ class Settings {
     const gamePath = this.getGamePath();
     if (!gamePath) return false;
     
-    // Проверяем наличие Wow.exe
     return fs.existsSync(path.join(gamePath, 'Wow.exe'));
   }
 }

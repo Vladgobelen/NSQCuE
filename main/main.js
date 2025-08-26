@@ -5,11 +5,9 @@ const addonManager = require('./addonManager');
 const settings = require('./settings');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
-logger.info('Application started');
 let mainWindow;
 let checkingUpdate = false;
 
-// Функция для проверки и установки пути к игре
 async function ensureGamePath() {
   if (settings.isGamePathValid()) {
     logger.info(`Using saved game path: ${settings.getGamePath()}`);
@@ -47,7 +45,6 @@ async function ensureGamePath() {
 }
 
 function createWindow() {
-  // Добавляем разрешение на загрузку внешних скриптов
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -77,7 +74,6 @@ function createWindow() {
   });
   logger.info('Main window created');
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-  // Проверка обновлений каждые 30 сек
   setInterval(() => {
     if (!checkingUpdate) {
       addonManager.checkNSQCUpdate(mainWindow)
@@ -93,15 +89,12 @@ function createWindow() {
 app.whenReady().then(async () => {
   fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
   
-  // Проверяем и устанавливаем путь к игре
   const gamePathValid = await ensureGamePath();
   if (!gamePathValid) {
-    // Если пользователь отменил выбор, закрываем приложение
     app.quit();
     return;
   }
   
-  // Передаем путь к игре менеджеру аддонов
   addonManager.setGamePath(settings.getGamePath());
   
   createWindow();
@@ -118,7 +111,6 @@ app.on('window-all-closed', () => {
   }
 });
 
-// IPC обработчики
 ipcMain.handle('load-addons', async () => {
   try {
     return await addonManager.loadAddons();

@@ -28,13 +28,11 @@ class AddonManager {
     this.addons = {};
   }
   
-  // Устанавливаем путь к игре
   setGamePath(path) {
     gamePath = path;
     logger.info(`[ADDON_MANAGER] Game path set to: ${gamePath}`);
   }
   
-  // Получаем путь к игре
   getGamePath() {
     if (!gamePath) {
       throw new Error('Game path is not set. Call setGamePath first.');
@@ -422,7 +420,7 @@ class AddonManager {
       try {
         const contents = fs.readdirSync(targetDir);
         logger.info(`[INSTALL] ${contents.join(', ')}`);
-      } catch (e) { /* ignore */ }
+      } catch (e) { }
 
       const installedItems = fs.readdirSync(targetDir);
       const installed = installedItems.some(item => 

@@ -24,7 +24,7 @@ function log(level, message, logFile) {
     fs.appendFileSync(logFile, logMessage);
   } catch (error) {
     console.error('Failed to write to log file:', error);
-    console.log(logMessage); // Fallback to console
+    console.log(logMessage);
   }
 }
 

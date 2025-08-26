@@ -21,16 +21,15 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
-  /* Предотвращает появление полосы прокрутки у body */
   overflow: hidden;
 }
 
 .container {
   max-width: 100%;
   padding: 10px;
-  height: 100vh; /* Занимаем всю высоту окна */
+  height: 100vh;
   display: flex;
-  flex-direction: column; /* Элементы друг под другом */
+  flex-direction: column;
 }
 
 .top-bar {
@@ -41,8 +40,7 @@ body {
   background-color: #252525;
   border-radius: 8px;
   margin-bottom: 15px;
-  /* Высота фиксированная, flex сам её учтёт */
-  flex-shrink: 0; /* Не сжимается */
+  flex-shrink: 0;
 }
 
 .top-bar h1 {
@@ -75,8 +73,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* Высота фиксированная, flex сам её учтёт */
-  flex-shrink: 0; /* Не сжимается */
+  flex-shrink: 0;
 }
 
 #game-status {
@@ -110,8 +107,7 @@ body {
   height: 1px;
   background-color: var(--border);
   margin: 0 10px 10px 10px;
-  /* Высота фиксированная, flex сам её учтёт */
-  flex-shrink: 0; /* Не сжимается */
+  flex-shrink: 0;
 }
 
 .addons-header {
@@ -120,8 +116,7 @@ body {
   align-items: center;
   padding: 0 10px 5px 10px;
   margin-bottom: 5px;
-  /* Высота фиксированная, flex сам её учтёт */
-  flex-shrink: 0; /* Не сжимается */
+  flex-shrink: 0;
 }
 
 .addons-header h2 {
@@ -148,9 +143,7 @@ body {
 
 #addons-list {
   flex-grow: 1;
-  /* Позволяет скролл внутри себя, если контент не помещается */
   overflow-y: auto;
-  /* Минимальная высота 0 важна для корректной работы flexbox с overflow */
   min-height: 0;
 }
 
@@ -160,7 +153,6 @@ body {
   margin: 0 10px 10px 10px;
   position: relative;
   z-index: 1;
-  /* Убираем overflow: hidden отсюда */
   transition: background-color 0.2s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
@@ -172,7 +164,6 @@ body {
   transition: transform 0.2s;
 }
 
-/* Новый контейнер для содержимого с overflow */
 .addon-content-wrapper {
   padding: 12px;
   overflow: hidden;
@@ -213,7 +204,6 @@ body {
   position: relative;
 }
 
-/* --- ВИЗУАЛЬНЫЙ ПРОГРЕСС: ЗАТЕМНЕНИЕ СЛЕВА НАПРАВО --- */
 .progress-overlay {
   position: absolute;
   top: 0;
@@ -224,7 +214,6 @@ body {
   z-index: 1;
   pointer-events: none;
   opacity: 1;
-  /* Полностью убираем transition */
   transition: opacity 0.3s ease;
 }
 
@@ -253,7 +242,6 @@ body {
   pointer-events: none;
 }
 
-/* --- Чекбокс --- */
 .addon-top > input[type="checkbox"] {
   position: absolute;
   right: 0;
@@ -306,7 +294,6 @@ body {
   border-color: #777777;
 }
 
-/* --- Стили скроллбара для #addons-list --- */
 #addons-list::-webkit-scrollbar {
   width: 8px;
 }
@@ -325,7 +312,6 @@ body {
   background: #777777;
 }
 
-/* Для Firefox */
 #addons-list {
   scrollbar-width: thin;
   scrollbar-color: #555555 #2d2d2d;
