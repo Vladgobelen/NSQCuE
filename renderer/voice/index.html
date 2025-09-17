@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Голосовой чат</title>
+    <!-- Подключаем стили голосового чата -->
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <!-- Основной контейнер приложения -->
+    <div class="app">
+        <!-- Сайдбар (серверы и комнаты) -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <button class="close-sidebar-btn">×</button>
+            </div>
+            <div class="search-container">
+                <input type="text" id="serverSearch" class="search-input" placeholder="Поиск серверов...">
+                <button id="clearSearchBtn" class="clear-search-btn">×</button>
+            </div>
+            <div class="panel-toggle">
+                <button id="serversToggle" class="panel-toggle-btn active">Серверы</button>
+                <button id="roomsToggle" class="panel-toggle-btn">Комнаты</button>
+            </div>
+            <div class="panel-content active" id="servers-panel">
+                <div class="panel-header">
+                    <span>Серверы</span>
+                    <button class="create-server-btn">+</button>
+                </div>
+                <div class="servers-list">
+                    <!-- Серверы будут загружены сюда динамически -->
+                    <div class="no-results">Загрузка серверов...</div>
+                </div>
+            </div>
+            <div class="panel-content" id="rooms-panel">
+                <div class="panel-header">
+                    <span>Комнаты</span>
+                    <button class="create-room-btn">+</button>
+                </div>
+                <div class="rooms-list">
+                    <!-- Комнаты будут загружены сюда динамически -->
+                    <div class="no-results">Выберите сервер</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Основной контент (чат) -->
+        <div class="main-content">
+            <div class="chat-header">
+                <button class="toggle-sidebar-btn">☰</button>
+                <div class="current-room-title">Выберите комнату</div>
+                <div class="header-controls">
+                    <button class="back-btn" title="Назад к аддонам">←</button>
+                    <button class="mic-toggle-btn">🎤</button>
+                    <button class="ptt-setup-btn" title="Push-to-Talk">🎙️</button>
+                    <button class="settings-btn">⚙️</button>
+                    <button class="toggle-members-btn">👥</button>
+                </div>
+            </div>
+            <div class="chat-area">
+                <div class="messages-container">
+                    <!-- Сообщения будут отображаться здесь -->
+                    <div class="message">
+                        <div class="message-avatar">S</div>
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="message-username">System</span>
+                                <span class="message-time">now</span>
+                            </div>
+                            <div class="message-text">Initializing voice chat...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-area">
+                    <input type="text" class="message-input" placeholder="Введите сообщение...">
+                    <button class="send-btn">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Панель участников -->
+        <div class="members-panel">
+            <div class="panel-header">
+                <span>Участники</span>
+                <button class="close-panel-btn">×</button>
+            </div>
+            <div class="members-list">
+                <!-- Участники будут загружены сюда динамически -->
+            </div>
+        </div>
+
+        <!-- Кнопка микрофона (фиксированная) -->
+        <button class="mic-button">🎤</button>
+
+        <!-- Модальные окна -->
+        <div class="modal-overlay hidden">
+            <div class="modal-content">
+                <!-- Контент модалки будет вставляться сюда -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Подключаем библиотеки -->
+    <script src="./mediasoup-client.min.js"></script>
+    <script src="./socket.io.min.js"></script>
+
+    <!-- Подключаем модули голосового чата -->
+    <script type="module" src="./modules/Utils.js"></script>
+    <script type="module" src="./modules/AuthManager.js"></script>
+    <script type="module" src="./modules/InviteManager.js"></script>
+    <script type="module" src="./modules/UIManager.js"></script>
+    <script type="module" src="./modules/ServerManager.js"></script>
+    <script type="module" src="./modules/RoomManager.js"></script>
+    <script type="module" src="./modules/TextChatManager.js"></script>
+    <script type="module" src="./modules/MediaManager.js"></script>
+    <script type="module" src="./modules/MembersManager.js"></script>
+    <script type="module" src="./modules/UserPresenceManager.js"></script>
+    <script type="module" src="./modules/ChatManager.js"></script>
+    <script type="module" src="./modules/VoiceChatClient.js"></script>
+
+    <!-- Инициализация приложения -->
+    <script type="module" src="./app.js"></script>
+</body>
+</html>

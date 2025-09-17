@@ -39,8 +39,16 @@ class Settings {
   isGamePathValid() {
     const gamePath = this.getGamePath();
     if (!gamePath) return false;
-    
     return fs.existsSync(path.join(gamePath, 'Wow.exe'));
+  }
+
+  getPTTHotkey() {
+    return this.settings.pttHotkey || null;
+  }
+
+  setPTTHotkey(hotkey) {
+    this.settings.pttHotkey = hotkey;
+    this.saveSettings();
   }
 }
 

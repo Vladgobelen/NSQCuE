@@ -1,0 +1,80 @@
+<!-- renderer/voice-chat-local.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Голосовой чат</title>
+    <link rel="stylesheet" href="./voice-chat-local.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <button class="close-sidebar-btn" id="close-voice-chat-btn">✕</button>
+            </div>
+            <div class="search-container">
+                <input type="text" class="search-input" id="serverSearch" placeholder="Поиск серверов...">
+                <button class="clear-search-btn" id="clearSearchBtn">✕</button>
+            </div>
+            <div class="panel-toggle">
+                <button class="panel-toggle-btn active" id="serversToggle">Серверы</button>
+                <button class="panel-toggle-btn" id="roomsToggle">Комнаты</button>
+            </div>
+            <div class="panel-content active" id="servers-panel">
+                <div class="panel-header">
+                    <span>Серверы</span>
+                    <button class="create-server-btn" title="Создать сервер">+</button>
+                </div>
+                <div class="servers-list"></div>
+            </div>
+            <div class="panel-content" id="rooms-panel">
+                <div class="panel-header">
+                    <span>Комнаты</span>
+                    <button class="create-room-btn" title="Создать комнату">+</button>
+                </div>
+                <div class="rooms-list"></div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="chat-header">
+                <button class="toggle-sidebar-btn">☰</button>
+                <div class="current-room-title">Выберите комнату</div>
+                <div class="header-controls">
+                    <button class="toggle-members-btn">👥</button>
+                    <button class="settings-btn">⚙️</button>
+                </div>
+            </div>
+            <div class="chat-area">
+                <div class="messages-container"></div>
+                <div class="input-area">
+                    <input type="text" class="message-input" placeholder="Введите сообщение...">
+                    <button class="send-btn">Отправить</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Members Panel -->
+        <div class="members-panel">
+            <div class="panel-header">
+                <span>Участники</span>
+                <button class="close-panel-btn">✕</button>
+            </div>
+            <div class="members-list"></div>
+        </div>
+
+        <!-- Microphone Button (for desktop) -->
+        <button class="mic-button disconnected">🎤</button>
+    </div>
+
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- Mediasoup Client -->
+    <script src="https://unpkg.com/mediasoup-client@3.6.46/dist/mediasoup-client.min.js"></script>
+    <!-- Main App Script -->
+    <script src="./voice-chat-local.js"></script>
+</body>
+</html>

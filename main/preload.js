@@ -21,10 +21,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkGame: () => ipcRenderer.invoke('check-game'),
   changeGamePath: () => ipcRenderer.invoke('change-game-path'),
   goBack: () => {
-    const voiceChat = document.getElementById('voice-chat-overlay');
-    if (voiceChat) {
-      document.body.removeChild(voiceChat);
-    }
+    ipcRenderer.send('go-back');
+},
+  setPTTHotkey: (hotkey) => ipcRenderer.invoke('set-ptt-hotkey', hotkey),
+  getPTTHotkey: () => ipcRenderer.invoke('get-ptt-hotkey'),
+  onPTTPressed: (callback) => {
+    if (typeof callback !== 'function') return;
+    const handler = (event) => callback();
+    ipcRenderer.on('ptt-pressed', handler);
+    return () => ipcRenderer.off('ptt-pressed', handler);
   },
   onProgress: (callback) => {
     if (typeof callback !== 'function') return;
