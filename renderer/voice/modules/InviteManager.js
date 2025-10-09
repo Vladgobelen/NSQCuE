@@ -187,11 +187,10 @@ class InviteManager {
             await RoomManager.joinRoom(this.client, invite.targetId);
 
             UIManager.addMessage('System', `✅ Вы присоединились к комнате "${invite.targetInfo.name}" по приглашению`);
-            
+            this.client.currentRoom = invite.targetId;
             return true;
         } catch (error) {
-            console.error('Ошибка присоединения к комнате по инвайту:', error);
-            UIManager.showError(`Не удалось присоединиться к комнате: ${error.message}`);
+            //console.error('Ошибка присоединения к комнате по инвайту:', error);
             return false;
         }
     }

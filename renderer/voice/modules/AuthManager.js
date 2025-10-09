@@ -206,7 +206,6 @@ class AuthManager {
                     
                     // Если инвайт был применен, он сам позаботится о навигации
                     if (inviteApplied) {
-                        client.startSyncInterval();
                         return;
                     }
 
@@ -218,7 +217,6 @@ class AuthManager {
                             await import('./RoomManager.js').then(module => {
                                 return module.default.loadRoomsForServer(client, client.inviteServerId);
                             });
-                            client.startSyncInterval();
                             return;
                         }
                     }
@@ -227,7 +225,6 @@ class AuthManager {
                         await import('./RoomManager.js').then(module => {
                             return module.default.loadRoomsForServer(client, client.currentServerId);
                         });
-                        client.startSyncInterval();
                     }
                     if (client.currentRoom) {
                         await client.reconnectToRoom(client.currentRoom);

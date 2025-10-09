@@ -117,7 +117,7 @@ class ServerManager {
                 // Кнопка для создания инвайта
                 const inviteBtn = document.createElement('button');
                 inviteBtn.className = 'server-action-btn';
-                inviteBtn.innerHTML = '🔗';
+                //inviteBtn.innerHTML = '🔗';
                 inviteBtn.title = 'Создать приглашение';
                 inviteBtn.addEventListener('click', (e) => {
                     e.stopPropagation();

@@ -48,33 +48,49 @@ class VoiceChatClient {
         this.elements = {};
         this.debouncedSync = Utils.debounce(() => this.startConsuming(), 1000);
         this.pttHotkey = null;
+        this.pttTimeoutId = null;
         this.isPTTActive = false;
+        this.isMicInitializing = false;
         this.init();
+    }
+
+    playSound(soundName) {
+        if (typeof Audio === 'undefined') return;
+        const audio = new Audio(`./sounds/${soundName}.mp3`);
+        audio.volume = 0.6;
+        // Играем звук только если аудиоконтекст разблокирован
+        audio.play().catch(err => {
+            // Игнорируем ошибки (например, "play() failed because user didn't interact")
+            console.debug(`[Sound] Could not play ${soundName}:`, err.message);
+        });
     }
 
     async init() {
         console.log('VoiceChatClient initializing...');
         this.initElements();
         this.initEventListeners();
+        UIManager.setClient(this);
         UserPresenceManager.init(this);
         InviteManager.init(this);
-
         // Подписываемся на событие глобального PTT
-        window.electronAPI.onPTTPressed(() => {
-            this.handlePTTPressed();
-        });
-
-        // Загружаем сохраненный PTT-хоткей
-        try {
-            this.pttHotkey = await window.electronAPI.getPTTHotkey();
-            if (this.pttHotkey) {
-                console.log('Loaded PTT hotkey:', this.pttHotkey);
-            }
-        } catch (error) {
-            console.error('Error loading PTT hotkey:', error);
+        if (window.electronAPI?.onPTTPressed) {
+            window.electronAPI.onPTTPressed(() => {
+                this.handlePTTPressed();
+            });
         }
-
+        // Загружаем сохраненный PTT-хоткей
+        if (window.electronAPI?.getPTTHotkey) {
+            try {
+                this.pttHotkey = await window.electronAPI.getPTTHotkey();
+                if (this.pttHotkey) {
+                    console.log('Loaded PTT hotkey:', this.pttHotkey);
+                }
+            } catch (error) {
+                console.error('Error loading PTT hotkey:', error);
+            }
+        }
         await this.initAutoConnect();
+        this.initMessageReadObserver();
     }
 
     initElements() {
@@ -104,8 +120,7 @@ class VoiceChatClient {
         this.elements.serverSearchInput = document.querySelector('#serverSearch');
         this.elements.clearSearchBtn = document.querySelector('#clearSearchBtn');
         this.elements.backBtn = document.querySelector('.back-btn');
-        this.elements.pttSetupBtn = document.querySelector('.ptt-setup-btn'); // <-- ДОБАВЛЕНО
-
+        this.elements.pttSetupBtn = document.querySelector('.ptt-setup-btn');
         if (this.elements.clearSearchBtn) {
             this.elements.clearSearchBtn.addEventListener('click', () => {
                 ServerManager.clearSearchAndShowAllServers(this);
@@ -131,11 +146,6 @@ class VoiceChatClient {
                 }
             });
         }
-            if (this.elements.backBtn) {
-        this.elements.backBtn.addEventListener('click', () => {
-            this.goBackToMain();
-        });
-    }
         if (this.elements.sendButton) {
             this.elements.sendButton.addEventListener('click', () => {
                 this.sendMessage(this.elements.messageInput.value);
@@ -145,11 +155,17 @@ class VoiceChatClient {
         if (this.elements.toggleSidebarBtn) {
             this.elements.toggleSidebarBtn.addEventListener('click', () => {
                 this.elements.sidebar.classList.toggle('open');
+                if (this.elements.sidebar.classList.contains('open')) {
+                    this.elements.membersPanel.classList.remove('open');
+                }
             });
         }
         if (this.elements.toggleMembersBtn) {
             this.elements.toggleMembersBtn.addEventListener('click', () => {
                 this.elements.membersPanel.classList.toggle('open');
+                if (this.elements.membersPanel.classList.contains('open')) {
+                    this.elements.sidebar.classList.remove('open');
+                }
             });
         }
         if (this.elements.closePanelBtn) {
@@ -199,118 +215,152 @@ class VoiceChatClient {
                 this.searchServers(e.target.value);
             });
         }
-        // Добавляем обработчик для кнопки PTT
+        if (this.elements.backBtn) {
+            this.elements.backBtn.addEventListener('click', () => {
+                this.goBackToMain();
+            });
+        }
         if (this.elements.pttSetupBtn) {
             this.elements.pttSetupBtn.addEventListener('click', () => {
                 this.showPTTSetupModal();
             });
         }
-    }
-goBackToMain() {
-    console.log('Going back to main addon manager...');
-    if (window.electronAPI && typeof window.electronAPI.goBack === 'function') {
-        window.electronAPI.goBack();
-    } else {
-        console.error('electronAPI.goBack is not available');
-    }
-}
-    async showPTTSetupModal() {
-        const modalOverlay = document.createElement('div');
-        modalOverlay.className = 'modal-overlay';
-        modalOverlay.style.display = 'flex';
-        modalOverlay.innerHTML = `
-            <div class="modal-content">
-                <h2>Настройка Push-to-Talk</h2>
-                <p>Нажмите любую комбинацию клавиш (например, Ctrl+Shift+A)</p>
-                <input type="text" id="pttHotkeyInput" placeholder="Нажмите клавиши..." readonly style="width: 100%; padding: 10px; margin: 10px 0; text-align: center; font-size: 16px;">
-                <div class="modal-buttons">
-                    <button id="confirmPTT">Сохранить</button>
-                    <button id="cancelPTT">Отмена</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modalOverlay);
-
-        const hotkeyInput = modalOverlay.querySelector('#pttHotkeyInput');
-        let capturedKeys = [];
-
-        const keyHandler = (e) => {
-            e.preventDefault();
-            const key = this.getKeyString(e);
-            if (key && !capturedKeys.includes(key)) {
-                capturedKeys.push(key);
-                hotkeyInput.value = capturedKeys.join('+');
-            }
-        };
-
-        const keyUpHandler = (e) => {
-            document.removeEventListener('keydown', keyHandler);
-            document.removeEventListener('keyup', keyUpHandler);
-        };
-
-        document.addEventListener('keydown', keyHandler);
-        document.addEventListener('keyup', keyUpHandler, { once: true });
-
-        modalOverlay.querySelector('#confirmPTT').addEventListener('click', async () => {
-            if (capturedKeys.length > 0) {
-                const hotkeyString = capturedKeys.join('+');
-                const result = await window.electronAPI.setPTTHotkey(hotkeyString);
-                if (result.success) {
-                    this.pttHotkey = hotkeyString;
-                    UIManager.showError(`PTT успешно настроен: ${hotkeyString}`);
-                } else {
-                    UIManager.showError(`Ошибка: ${result.message}`);
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.addEventListener('click', (e) => {
+                if (!e.target.closest('.message') &&
+                    !e.target.closest('.message-input') &&
+                    !e.target.closest('.send-btn') &&
+                    !e.target.closest('.mic-toggle-btn') &&
+                    !e.target.closest('.settings-btn') &&
+                    !e.target.closest('.toggle-members-btn') &&
+                    !e.target.closest('.current-room-title') &&
+                    !e.target.closest('.toggle-sidebar-btn')) {
+                    this.elements.sidebar.classList.remove('open');
+                    this.elements.membersPanel.classList.remove('open');
                 }
+            });
+        }
+        const unlockBtn = document.getElementById('audio-unlock-btn');
+        if (unlockBtn) {
+            unlockBtn.addEventListener('click', () => {
+                const audio = new Audio();
+                audio.muted = true;
+                audio.playsInline = true;
+                audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAA=';
+                audio.play()
+                    .then(() => {
+                        console.log('✅ Аудио разблокировано!');
+                        unlockBtn.style.display = 'none';
+                    })
+                    .catch(err => {
+                        console.warn('Не удалось разблокировать аудио:', err);
+                    });
+            });
+        }
+        if (mainContent) {
+            mainContent.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                mainContent.classList.add('drag-over');
+            });
+            mainContent.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                mainContent.classList.remove('drag-over');
+            });
+            mainContent.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                mainContent.classList.remove('drag-over');
+                if (!this.currentRoom) {
+                    this.showError('Сначала войдите в комнату');
+                    return;
+                }
+                const files = e.dataTransfer.files;
+                if (files.length === 0) return;
+                const file = files[0];
+                if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                    this.showError('Поддерживаются только изображения: JPEG, PNG, WebP');
+                    return;
+                }
+                if (file.size > 5 * 1024 * 1024) {
+                    this.showError('Файл слишком большой (макс. 5 МБ)');
+                    return;
+                }
+                try {
+                    const imageUrl = await TextChatManager.uploadImage(this, this.currentRoom, file);
+                    await TextChatManager.sendMessage(this, imageUrl, 'image');
+                } catch (error) {
+                    console.error('Ошибка отправки изображения:', error);
+                    this.showError('Не удалось отправить изображение: ' + error.message);
+                }
+            });
+        }
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/jpeg,image/png,image/webp';
+        fileInput.style.display = 'none';
+        fileInput.id = 'image-upload-input';
+        document.body.appendChild(fileInput);
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!this.currentRoom) {
+                this.showError('Сначала войдите в комнату');
+                return;
             }
-            modalOverlay.remove();
-        });
-
-        modalOverlay.querySelector('#cancelPTT').addEventListener('click', () => {
-            modalOverlay.remove();
-        });
-
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) {
-                modalOverlay.remove();
+            if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                this.showError('Поддерживаются только изображения: JPEG, PNG, WebP');
+                return;
             }
+            if (file.size > 5 * 1024 * 1024) {
+                this.showError('Файл слишком большой (макс. 5 МБ)');
+                return;
+            }
+            try {
+                const imageUrl = await TextChatManager.uploadImage(this, this.currentRoom, file);
+                await TextChatManager.sendImageMessage(this, imageUrl);
+            } catch (error) {
+                console.error('Ошибка отправки изображения:', error);
+                this.showError('Не удалось отправить изображение: ' + error.message);
+            }
+            fileInput.value = '';
         });
+        const attachBtn = document.querySelector('.attach-btn');
+        if (attachBtn) {
+            attachBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+        }
     }
 
-    // Вспомогательный метод для преобразования события клавиатуры в строку
-    getKeyString(e) {
-        let key = '';
-        if (e.ctrlKey) key += 'Ctrl+';
-        if (e.altKey) key += 'Alt+';
-        if (e.shiftKey) key += 'Shift+';
-        if (e.metaKey) key += 'Command+';
-        const code = e.code.replace('Key', '').replace('Digit', '');
-        if (code && !['ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'ShiftLeft', 'ShiftRight', 'MetaLeft', 'MetaRight'].includes(e.code)) {
-            key += code;
-        }
-        return key || null;
+    initMessageReadObserver() {
+        this.unreadMessageIds = new Set();
+        this.messageObserver = new IntersectionObserver((entries) => {
+            const toMark = [];
+            entries.forEach(entry => {
+                const msgId = entry.target.dataset.messageId;
+                if (!msgId) return;
+                const readBy = JSON.parse(entry.target.dataset.readBy || '[]');
+                const isOwn = entry.target.querySelector('.message-content.own');
+                if (isOwn) return;
+                if (entry.isIntersecting && !readBy.includes(this.userId)) {
+                    toMark.push(msgId);
+                    this.unreadMessageIds.delete(msgId);
+                } else if (!entry.isIntersecting) {
+                    this.unreadMessageIds.add(msgId);
+                }
+            });
+            if (toMark.length > 0) {
+                TextChatManager.markMessagesAsRead(this, toMark);
+            }
+        }, { threshold: 0.5 });
+        window.voiceClient = this;
     }
 
-    // Добавьте метод для обработки сигнала PTT
-    async handlePTTPressed() {
-        if (!this.currentRoom) {
-            console.warn('PTT: Not in a room');
-            return;
-        }
-        if (this.isPTTActive) {
-            // Отпускаем кнопку (выключаем микрофон)
-            this.isPTTActive = false;
-            if (this.isMicActive) {
-                await this.toggleMicrophone();
-            }
-            UIManager.updatePTTButton(false);
-        } else {
-            // Нажимаем кнопку (включаем микрофон)
-            this.isPTTActive = true;
-            if (!this.isMicActive) {
-                await this.toggleMicrophone();
-            }
-            UIManager.updatePTTButton(true);
-        }
+    async sendImageMessage(imageUrl) {
+        await TextChatManager.sendImageMessage(this, imageUrl);
     }
 
     showPanel(panelName) {
@@ -351,48 +401,41 @@ goBackToMain() {
         console.log('URL params processed - server:', this.currentServerId, 'room:', this.currentRoom, 'invite:', this.inviteServerId);
     }
 
-    /**
-     * Гарантирует, что для указанного producerId существует активный потребитель.
-     * Метод идемпотентен и потокобезопасен.
-     * @param {string} producerId - ID продюсера
-     * @param {Object} producerData - Данные продюсера (опционально, для логирования)
-     * @returns {Promise<boolean>} - true, если потребитель активен или был успешно создан
-     */
     async ensureConsumer(producerId, producerData = {}) {
-        // 🔒 Атомарная проверка и установка состояния "в процессе создания"
+        console.group('🔄 VoiceChatClient.ensureConsumer - START');
+        console.log('🔹 producerId:', producerId);
+        console.log('🔹 producerData:', producerData);
         const currentState = this.consumerState.get(producerId);
-        // Если потребитель уже активен, ничего не делаем.
         if (currentState?.status === 'active') {
-            console.log(`[ConsumerManager] Consumer for ${producerId} is already active.`);
+            console.log('ℹ️ Consumer already active for:', producerId);
+            console.groupEnd();
             return true;
         }
-        // Если потребитель уже находится в процессе создания, ждем завершения (или ошибки) этого процесса.
         if (currentState?.status === 'creating') {
-            console.log(`[ConsumerManager] Consumer for ${producerId} is already being created. Skipping duplicate request.`);
+            console.log('ℹ️ Consumer already being created for:', producerId);
+            console.groupEnd();
             return false;
         }
-        // Устанавливаем состояние "в процессе создания"
         this.consumerState.set(producerId, { status: 'creating', consumer: null, lastError: null });
         try {
-            console.log(`[ConsumerManager] Starting creation for producer: ${producerId}`);
-            const consumer = await MediaManager.createConsumer(this, producerId);
-            // Успешно создано! Обновляем состояние.
+            console.log('🔄 Starting creation for producer:', producerId);
+            const consumer = await MediaManager.createConsumer(this, producerId, 3, producerData);
             this.consumerState.set(producerId, { status: 'active', consumer: consumer, lastError: null });
-            console.log(`[ConsumerManager] ✅ Consumer for ${producerId} created and activated.`);
+            console.log('✅ Consumer created and activated for:', producerId);
+            console.groupEnd();
             return true;
         } catch (error) {
-            console.error(`[ConsumerManager] ❌ Failed to create consumer for ${producerId}:`, error);
-            // Обновляем состояние с ошибкой.
+            console.error('❌ Failed to create consumer for:', producerId, error);
             this.consumerState.set(producerId, { 
                 status: 'error', 
                 consumer: null, 
                 lastError: error 
             });
-            // Если ошибка связана с тем, что это наш собственный продюсер, помечаем как "активный" (чтобы не пытаться снова).
             if (error.message.includes('consume own') || error.message.includes('own audio')) {
                 this.consumerState.set(producerId, { status: 'active', consumer: null, lastError: null });
-                console.log(`[ConsumerManager] Producer ${producerId} is own, marked as handled.`);
+                console.log('🔇 Own producer marked as handled:', producerId);
             }
+            console.groupEnd();
             return false;
         }
     }
@@ -411,7 +454,16 @@ goBackToMain() {
                     if (inviteApplied) {
                         console.log('Invite applied successfully');
                         this.clearPendingInvite();
-                        this.startSyncInterval();
+                        if (this.currentRoom && this.currentServerId) {
+                            console.log('Invite was for a room. Attempting to join room:', this.currentRoom);
+                            try {
+                                await this.joinRoom(this.currentRoom);
+                                console.log('Successfully joined room after invite application');
+                            } catch (error) {
+                                console.error('Failed to join room after invite application:', error);
+                                UIManager.showError('Не удалось присоединиться к комнате после применения инвайта');
+                            }
+                        }
                         return;
                     } else {
                         console.log('Failed to apply invite, continuing with normal flow');
@@ -432,7 +484,6 @@ goBackToMain() {
                             if (roomExists) {
                                 this.currentRoom = lastRoomId;
                                 await this.reconnectToRoom(lastRoomId);
-                                this.startSyncInterval();
                                 return;
                             }
                         }
@@ -467,7 +518,6 @@ goBackToMain() {
                     if (this.currentRoom) {
                         await this.reconnectToRoom(this.currentRoom);
                     }
-                    this.startSyncInterval();
                 } else {
                     console.log('No target server found, showing auto-connect UI');
                     this.autoConnect();
@@ -530,15 +580,14 @@ goBackToMain() {
 
     async joinRoom(roomId) {
         console.log('Joining room:', roomId);
-        if (this.currentRoom === roomId && this.isConnected) {
-            console.log('Already connected to this room, updating state');
+        if (this.currentRoom === roomId && this.isConnected && this.socket && this.socket.connected) {
+            console.log('Already connected to this room, updating consumers');
             await this.startConsuming();
             return true;
         }
         try {
             UIManager.addMessage('System', 'Подключение к комнате...');
             this.disconnectFromRoom();
-            this.setupSocketConnection();
             const res = await fetch(this.CHAT_API_URL, {
                 method: 'POST',
                 headers: { 
@@ -558,7 +607,6 @@ goBackToMain() {
             }
             const data = await res.json();
             if (!data.success) throw new Error(data.error);
-            // Добавляем проверку mediaData
             if (!data.mediaData) {
                 throw new Error('No media data received from server');
             }
@@ -570,6 +618,7 @@ goBackToMain() {
             localStorage.setItem('lastRoomId', this.currentRoom);
             this.audioProducer = null;
             await MediaManager.connect(this, roomId, data.mediaData);
+            this.setupSocketConnection();
             this.updateMicButtonState();
             if (this.socket) {
                 this.socket.emit('subscribe-to-producers', { roomId });
@@ -579,6 +628,10 @@ goBackToMain() {
             TextChatManager.joinTextRoom(this, roomId);
             await TextChatManager.loadMessages(this, roomId);
             UIManager.addMessage('System', `✅ Вы присоединились к комнате`);
+            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                const btn = document.getElementById('ios-audio-unlock');
+                if (btn) btn.style.display = 'block';
+            }
             return true;
         } catch (e) {
             console.error('Error joining room:', e);
@@ -616,33 +669,29 @@ goBackToMain() {
                 timeout: 20000
             });
             const socket = this.socket;
-
             socket.on('new-producer', async (data) => {
-                // 🔴🔴🔴 АГРЕССИВНЫЙ ДЕБАГ: Логируем ВСЁ
                 console.group('🔴🔴🔴 [DEBUG] SOCKET EVENT: new-producer');
                 console.log('🎯 [DEBUG] EVENT DATA RECEIVED:', JSON.stringify(data, null, 2));
                 console.log('🎯 [DEBUG] CLIENT STATE - clientID:', this.clientID);
-                console.log('🎯 [DEBUG] CLIENT STATE - consumerState (BEFORE):', Array.from(this.consumerState.entries()).map(([id, state]) => ({ id, status: state.status })));
-                console.log('🎯 [DEBUG] CLIENT STATE - isConnected:', this.isConnected);
-                console.log('🎯 [DEBUG] CLIENT STATE - currentRoom:', this.currentRoom);
-                console.log('🎯 [DEBUG] CHECK: Is this my own producer?', data.clientID === this.clientID);
+                console.log('🎯 [DEBUG] Window producerClientMap before:', window.producerClientMap ? Array.from(window.producerClientMap.entries()) : 'undefined');
                 console.groupEnd();
                 console.log('🎯 New producer event:', data);
-                // Проверка: не свой ли это продюсер
+                if (data.producerId && data.clientID) {
+                    if (!window.producerClientMap) window.producerClientMap = new Map();
+                    window.producerClientMap.set(data.producerId, data.clientID);
+                    console.log('💾 Saved producerId → clientID:', data.producerId, '→', data.clientID);
+                }
                 if (data.clientID !== this.clientID) {
-                    // Используем новый централизованный метод
+                    console.log('🔹 Creating consumer for external producer');
                     await this.ensureConsumer(data.producerId, data);
                 } else {
-                    console.log('🔇 [DEBUG] Ignoring own producer:', data.producerId);
-                    // Опционально: можно добавить в consumerState со статусом 'active'
+                    console.log('🔇 Ignoring own producer:', data.producerId);
                     this.consumerState.set(data.producerId, { status: 'active', consumer: null, lastError: null });
                 }
-                // 🔴🔴🔴 АГРЕССИВНЫЙ ДЕБАГ: Логируем состояние ПОСЛЕ обработки
                 console.group('🔴🔴🔴 [DEBUG] AFTER PROCESSING new-producer');
-                console.log('🎯 [DEBUG] CLIENT STATE - consumerState (AFTER):', Array.from(this.consumerState.entries()).map(([id, state]) => ({ id, status: state.status })));
+                console.log('🎯 [DEBUG] Window producerClientMap after:', window.producerClientMap ? Array.from(window.producerClientMap.entries()) : 'undefined');
                 console.groupEnd();
             });
-
             socket.on('current-producers', async (data) => {
                 console.log('🎯 Current producers event:', data);
                 if (!data || !data.producers || !Array.isArray(data.producers)) {
@@ -657,39 +706,66 @@ goBackToMain() {
                     }
                 }
             });
-
             socket.on('room-participants', (participants) => {
-                // 🔴🔴🔴 АГРЕССИВНЫЙ ДЕБАГ: Логируем сырые данные от сервера
-                console.group('🔴🔴🔴 [DEBUG] SOCKET EVENT: room-participants');
-                console.log('🎯 [DEBUG] RAW PARTICIPANTS DATA FROM SERVER:', JSON.stringify(participants, null, 2));
-                console.groupEnd();
-                console.log('Room participants received:', participants);
-                MembersManager.updateAllMembers(participants);
+                console.log('🎯 [CLIENT] Received room-participants event. Replacing entire members list.');
+                const processedParticipants = participants.map(p => {
+                    if (p.userId === this.userId) {
+                        return { ...p, isOnline: true };
+                    }  
+                    return p;
+                });
+                MembersManager.updateAllMembers(processedParticipants);
+                console.log('✅ [CLIENT] Members list fully replaced.');
+                if (!window.voiceClient) {
+                    window.voiceClient = {};
+                }
+                const me = processedParticipants.find(p => p.userId);
+                if (me) {
+                    window.voiceClient.userId = me.userId;
+                    const displayName = me.username || me.name || me.userId;
+                    if (typeof window.setLoggerDisplayName === 'function') {
+                        window.setLoggerDisplayName(displayName);
+                    }
+                }
             });
-
             socket.on('user-joined', (user) => {
                 console.log('User joined:', user);
-                // Обновляем существующего пользователя, устанавливая isOnline: true
-                MembersManager.updateMember(user.userId, { 
-                    ...user, // Копируем все данные (username и т.д.)
-                    isOnline: true // Явно устанавливаем статус онлайн
-                });
                 UIManager.addMessage('System', `Пользователь ${user.username} присоединился к комнате`);
+                this.playSound('user-join');
             });
-
-            socket.on('user-left', (data) => {
-                console.log('User left:', data);
-                // Обновляем существующего пользователя, устанавливая isOnline: false
-                MembersManager.updateMember(data.userId, { isOnline: false });
-                // Получаем имя пользователя из списка, чтобы отобразить в сообщении
+            socket.on('user-left', async (data) => {
+                console.group('🔴🔴🔴 [DEBUG] SOCKET EVENT: user-left');
+                console.log('🎯 [DEBUG] EVENT DATA RECEIVED:', JSON.stringify(data, null, 2));
+                console.groupEnd();
+                console.log('User left:', data.userId);
                 const member = MembersManager.getMember(data.userId);
+                const memberElement = document.querySelector(`.member-item[data-user-id="${data.userId}"]`);
+                if (memberElement) {
+                    const slider = memberElement.querySelector('.member-volume-slider');
+                    if (slider) {
+                        slider.style.display = 'none';
+                        slider.dataset.producerId = '';
+                        console.log('🔇 Volume slider hidden for user:', data.userId);
+                    }
+                    const statusIndicator = memberElement.querySelector('.status-indicator');
+                    if (statusIndicator) {
+                        statusIndicator.className = 'status-indicator offline';
+                        statusIndicator.title = 'Offline';
+                    }
+                    const micIndicator = memberElement.querySelector('.mic-indicator');
+                    if (micIndicator) {
+                        micIndicator.className = 'mic-indicator';
+                        micIndicator.title = 'Microphone muted';
+                    }
+                }
                 if (member) {
+                    member.isOnline = false;
                     UIManager.addMessage('System', `Пользователь ${member.username} покинул комнату`);
                 } else {
                     UIManager.addMessage('System', `Пользователь покинул комнату`);
                 }
+                this.playSound('user-leave');
             });
-
             socket.on('user-mic-state', (data) => {
                 console.log('User mic state changed:', data);
                 if (data.userId) {
@@ -702,29 +778,46 @@ goBackToMain() {
                     }
                 }
             });
-
             socket.on('new-message', (message) => {
                 console.log('New message received:', message);
                 if (message.roomId === this.currentRoom) {
-                    UIManager.addMessage(message.username, message.text, message.timestamp);
+                    UIManager.addMessage(
+                        message.username,
+                        message.text,
+                        message.timestamp,
+                        message.type || 'text',
+                        message.imageUrl,
+                        message.id,
+                        message.readBy || [],
+                        message.userId // ← обязательно передаём userId
+                    );
+                    if (message.type !== 'image' && message.userId !== this.userId) {
+                        this.playSound('message');
+                    }
                 }
             });
-
             socket.on('message-history', (data) => {
                 console.log('Message history received:', data);
                 if (data.roomId === this.currentRoom && data.messages) {
                     UIManager.clearMessages();
                     data.messages.forEach(msg => {
-                        UIManager.addMessage(msg.username, msg.text, msg.timestamp);
+                        UIManager.addMessage(
+                            msg.username,
+                            msg.text,
+                            msg.timestamp,
+                            'text',
+                            null,
+                            msg.id,
+                            msg.readBy || [],
+                            msg.userId // ← обязательно передаём userId
+                        );
                     });
                 }
             });
-
             socket.on('error', (error) => {
                 console.error('Socket error:', error);
                 UIManager.showError('Ошибка соединения: ' + (error.message || 'неизвестная ошибка'));
             });
-
             socket.on('connect', () => {
                 console.log('✅ Socket connected with ID:', socket.id);
                 UIManager.updateStatus('Подключено', 'connected');
@@ -735,7 +828,6 @@ goBackToMain() {
                     socket.emit('get-current-producers', { roomId: this.currentRoom });
                 }
             });
-
             socket.on('disconnect', (reason) => {
                 console.log('Socket disconnected:', reason);
                 UIManager.updateStatus('Отключено', 'disconnected');
@@ -766,68 +858,62 @@ goBackToMain() {
         UIManager.updateMicButton(status);
     }
 
-    async toggleMicrophone() {
-        console.log('Toggling microphone, current state:', this.isMicActive);
+    async toggleMicrophone(forceState = null) {
+        console.log('Toggling microphone, current state:', this.isMicActive, 'PTT active:', this.isPTTActive);
+        
+        // 🚫 Если пытаемся выключить микрофон, но PTT активен - блокируем
+        if (forceState === false && this.isPTTActive) {
+            console.log('[PTT] Blocking mic disable - PTT is active');
+            return;
+        }
+
         try {
             if (!this.currentRoom) {
                 UIManager.showError('Микрофон доступен только в комнатах');
                 return;
             }
-            if (this.isMicActive) {
-                // Пытаемся отключить микрофон через отключение трека
+
+            const targetState = forceState !== null ? forceState : !this.isMicActive;
+
+            if (targetState) {
+                // Включение микрофона
+                console.log('[PTT] Enabling microphone...');
+                const enabled = await MediaManager.enableMicrophone(this);
+                if (!enabled) {
+                    if (!this.sendTransport && this.mediaData) {
+                        await MediaManager.connect(this, this.currentRoom, this.mediaData);
+                    }
+                    await MediaManager.startMicrophone(this);
+                }
+                this.playSound('mic-on');
+            } else {
+                // Выключение микрофона
+                console.log('[PTT] Disabling microphone...');
                 const disabled = await MediaManager.disableMicrophone(this);
                 if (!disabled) {
-                    // Если не удалось отключить трек, полностью останавливаем микрофон
-                    await MediaManager.stopMicrophone(this, false); // false = не закрывать transport
+                    await MediaManager.stopMicrophone(this, false);
                 }
-                if (this.socket) {
-                    this.socket.emit('mic-state-change', {
-                        roomId: this.currentRoom,
-                        isActive: false,
-                        clientID: this.clientID,
-                        userId: this.userId
-                    });
-                }
-            } else {
-                try {
-                    // Пытаемся включить микрофон через включение трека
-                    const enabled = await MediaManager.enableMicrophone(this);
-                    if (!enabled) {
-                        // Если не удалось включить трек, запускаем микрофон полностью
-                        if (!this.sendTransport && this.mediaData) {
-                            await MediaManager.connect(this, this.currentRoom, this.mediaData);
-                        }
-                        await MediaManager.startMicrophone(this);
-                    }
-                    if (this.socket) {
-                        this.socket.emit('mic-state-change', {
-                            roomId: this.currentRoom,
-                            isActive: true,
-                            clientID: this.clientID,
-                            userId: this.userId
-                        });
-                        if (this.audioProducer) {
-                            this.socket.emit('new-producer-notification', {
-                                roomId: this.currentRoom,
-                                producerId: this.audioProducer.id,
-                                clientID: this.clientID,
-                                kind: 'audio'
-                            });
-                        }
-                    }
-                } catch (error) {
-                    if (error.message.includes('permission') || error.message.includes('разрешение')) {
-                        UIManager.showError('Необходимо разрешение на использование микрофона');
-                    } else {
-                        throw error;
-                    }
-                }
+                this.playSound('mic-off');
             }
+
+            // Обновляем UI и рассылаем состояние
+            UIManager.updateMemberMicState(this.userId, this.isMicActive);
+            if (this.socket) {
+                this.socket.emit('mic-state-change', {
+                    roomId: this.currentRoom,
+                    isActive: this.isMicActive,
+                    clientID: this.clientID,
+                    userId: this.userId
+                });
+            }
+
             this.updateMicButtonState();
+
         } catch (error) {
             console.error('Error toggling microphone:', error);
             UIManager.showError('Ошибка микрофона: ' + error.message);
             this.updateMicButtonState();
+            throw error; // Пробрасываем ошибку выше для обработки в PTT
         }
     }
 
@@ -851,27 +937,6 @@ goBackToMain() {
         }
     }
 
-    startSyncInterval() {
-        console.log('Starting sync interval...');
-        window.debugStartConsuming = () => this.startConsuming();
-        window.debugStartSyncInterval = () => this.startSyncInterval();
-        window.debugVoiceClient = this;
-        if (this.syncInterval) clearInterval(this.syncInterval);
-        this.syncInterval = setInterval(async () => {
-            try {
-                await ServerManager.loadServers(this);
-                if (this.currentServerId) {
-                    await RoomManager.loadRoomsForServer(this, this.currentServerId);
-                }
-                if (this.currentRoom && this.isConnected) {
-                    await this.startConsuming();
-                } 
-            } catch (error) {
-                console.error('Sync error:', error);
-            }
-        }, 5000); // Увеличен интервал до 5 секунд для снижения нагрузки
-    }
-
     async startConsuming() {
         console.log('🔄 Starting media consumption...');
         if (!this.isConnected || !this.currentRoom) {
@@ -879,7 +944,6 @@ goBackToMain() {
             return;
         }
         try {
-            // Добавляем параметр timestamp для предотвращения кэширования
             const timestamp = Date.now();
             const response = await fetch(`${this.API_SERVER_URL}/api/media/rooms/${this.currentRoom}/producers?t=${timestamp}`, {
                 headers: {
@@ -898,10 +962,8 @@ goBackToMain() {
             console.log(`📋 Found ${producers.length} producers in room ${this.currentRoom}`);
             for (const producer of producers) {
                 if (producer.clientID !== this.clientID) {
-                    // Используем новый метод
                     await this.ensureConsumer(producer.id, producer);
                 } else {
-                    // Убеждаемся, что наш собственный продюсер помечен как обработанный.
                     this.consumerState.set(producer.id, { status: 'active', consumer: null, lastError: null });
                 }
             }
@@ -946,7 +1008,6 @@ goBackToMain() {
                     try {
                         await MediaManager.startMicrophone(this);
                         this.wasMicActiveBeforeReconnect = false;
-                        // Добавляем принудительное обновление продюсеров
                         setTimeout(() => {
                             this.forceRefreshProducers();
                         }, 2000);
@@ -954,7 +1015,7 @@ goBackToMain() {
                         console.error('Failed to restart microphone after reconnect:', error);
                         UIManager.showError('Не удалось восстановить микрофон после переподключения');
                     }
-                }, 3000); // Увеличиваем задержку до 3 секунд
+                }, 3000);
             }
             return result;
         } catch (error) {
@@ -981,6 +1042,11 @@ goBackToMain() {
                     'Content-Type': 'application/json'
                 }
             });
+            document.querySelectorAll('.member-volume-slider').forEach(slider => {
+                slider.style.display = 'none';
+                slider.dataset.producerId = '';
+                console.log('🔇 Volume slider cleared on room leave:', slider);
+            });
             MembersManager.clearMembers();
             this.currentRoom = null;
             this.roomType = null;
@@ -989,7 +1055,7 @@ goBackToMain() {
             return true;
         } catch (error) {
             console.error('Error leaving room:', error);
-            UIManager.showError('Ошибка при покидании комната: ' + error.message);
+            UIManager.showError('Ошибка при покидании комнаты: ' + error.message);
             return false;
         }
     }
@@ -1024,23 +1090,22 @@ goBackToMain() {
                     'Content-Type': 'application/json'
                 }
             });
-        if (response.ok) {
-            const roomState = await response.json();
-            console.log('🏠 Room state:', roomState);
-            const ourTransport = roomState.transports.find(t => t.clientID === this.clientID && t.direction === 'recv');
-            console.log('📡 Our receive transport:', ourTransport);
-            const ourConsumers = roomState.consumers.filter(c => c.clientID === this.clientID);
-            console.log('🎧 Our consumers:', ourConsumers);
-            return roomState;
-        } else {
-            console.error('Failed to get room state:', response.status);
+            if (response.ok) {
+                const roomState = await response.json();
+                console.log('🏠 Room state:', roomState);
+                const ourTransport = roomState.transports.find(t => t.clientID === this.clientID && t.direction === 'recv');
+                console.log('📡 Our receive transport:', ourTransport);
+                const ourConsumers = roomState.consumers.filter(c => c.clientID === this.clientID);
+                console.log('🎧 Our consumers:', ourConsumers);
+                return roomState;
+            } else {
+                console.error('Failed to get room state:', response.status);
+            }
+        } catch (error) {
+            console.error('Error checking room state:', error);
         }
-    } catch (error) {
-        console.error('Error checking room state:', error);
     }
-}
 
-    // Добавляем функцию для принудительного обновления продюсеров
     async forceRefreshProducers() {
         try {
             console.log('🔄 Force refreshing producers...');
@@ -1077,9 +1142,132 @@ goBackToMain() {
             console.error('❌ Error force refreshing producers:', error);
         }
     }
+
+    // === PTT & BACK BUTTON LOGIC ===
+    goBackToMain() {
+        console.log('Going back to main addon manager...');
+        if (window.electronAPI && typeof window.electronAPI.goBack === 'function') {
+            window.electronAPI.goBack();
+        } else {
+            console.error('electronAPI.goBack is not available');
+        }
+    }
+
+    async showPTTSetupModal() {
+        const modalOverlay = document.createElement('div');
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.style.display = 'flex';
+        modalOverlay.innerHTML = `
+            <div class="modal-content">
+                <h2>Настройка Push-to-Talk</h2>
+                <p>Нажмите любую комбинацию клавиш (например, Ctrl+Shift+A)</p>
+                <input type="text" id="pttHotkeyInput" placeholder="Нажмите клавиши..." readonly style="width: 100%; padding: 10px; margin: 10px 0; text-align: center; font-size: 16px;">
+                <div class="modal-buttons">
+                    <button id="confirmPTT">Сохранить</button>
+                    <button id="cancelPTT">Отмена</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        const hotkeyInput = modalOverlay.querySelector('#pttHotkeyInput');
+        let capturedKeys = [];
+        const keyHandler = (e) => {
+            e.preventDefault();
+            const key = this.getKeyString(e);
+            if (key && !capturedKeys.includes(key)) {
+                capturedKeys.push(key);
+                hotkeyInput.value = capturedKeys.join('+');
+            }
+        };
+        const keyUpHandler = (e) => {
+            document.removeEventListener('keydown', keyHandler);
+            document.removeEventListener('keyup', keyUpHandler);
+        };
+        document.addEventListener('keydown', keyHandler);
+        document.addEventListener('keyup', keyUpHandler, { once: true });
+        modalOverlay.querySelector('#confirmPTT').addEventListener('click', async () => {
+            if (capturedKeys.length > 0) {
+                const hotkeyString = capturedKeys.join('+');
+                const result = await window.electronAPI.setPTTHotkey(hotkeyString);
+                if (result.success) {
+                    this.pttHotkey = hotkeyString;
+                    UIManager.showError(`PTT успешно настроен: ${hotkeyString}`);
+                } else {
+                    UIManager.showError(`Ошибка: ${result.message}`);
+                }
+            }
+            modalOverlay.remove();
+        });
+        modalOverlay.querySelector('#cancelPTT').addEventListener('click', () => {
+            modalOverlay.remove();
+        });
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) {
+                modalOverlay.remove();
+            }
+        });
+    }
+
+    getKeyString(e) {
+        let key = '';
+        if (e.ctrlKey) key += 'Ctrl+';
+        if (e.altKey) key += 'Alt+';
+        if (e.shiftKey) key += 'Shift+';
+        if (e.metaKey) key += 'Command+';
+        const code = e.code.replace('Key', '').replace('Digit', '');
+        if (code && !['ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'ShiftLeft', 'ShiftRight', 'MetaLeft', 'MetaRight'].includes(e.code)) {
+            key += code;
+        }
+        return key || null;
+    }
+
+    async handlePTTPressed() {
+        if (!this.currentRoom) return;
+
+        console.log('[PTT] PTT event received, current state:', {
+            isMicActive: this.isMicActive,
+            isPTTActive: this.isPTTActive,
+            pttTimeoutId: this.pttTimeoutId
+        });
+
+        // 🔄 Сбрасываем предыдущий таймер при ЛЮБОМ событии PTT
+        if (this.pttTimeoutId) {
+            clearTimeout(this.pttTimeoutId);
+            this.pttTimeoutId = null;
+        }
+
+        // 🚫 Если уже в процессе включения микрофона - игнорируем новые запросы
+        if (this.isPTTActive && !this.isMicActive) {
+            console.log('[PTT] Mic is still initializing, ignoring duplicate PTT');
+            return;
+        }
+
+        // ✅ Если микрофон выключен И PTT не активен - включаем его (первое событие при зажатии)
+        if (!this.isMicActive && !this.isPTTActive) {
+            console.log('[PTT] First press - enabling microphone');
+            this.isPTTActive = true;
+            
+            try {
+                await this.toggleMicrophone();
+            } catch (error) {
+                console.error('[PTT] Error enabling microphone:', error);
+                this.isPTTActive = false;
+                return;
+            }
+        }
+
+        // ⏰ Устанавливаем таймер, который выключит микрофон если события прекратятся
+        this.pttTimeoutId = setTimeout(async () => {
+            console.log('[PTT] No PTT events for 300ms - releasing PTT');
+            if (this.isMicActive) {
+                await this.toggleMicrophone();
+            }
+            this.isPTTActive = false;
+            this.pttTimeoutId = null;
+        }, 300);
+    }
 }
 
-// Добавляем функцию в глобальную область видимости для отладки
 window.debugForceRefresh = () => {
     if (window.debugVoiceClient) {
         window.debugVoiceClient.forceRefreshProducers();
