@@ -8,7 +8,6 @@ const logger = setupLogging();
 let mainWindow;
 let checkingUpdate = false;
 let currentPTHHotkey = null;
-
 async function ensureGamePath() {
   if (settings.isGamePathValid()) {
     logger.info(`Using saved game path: ${settings.getGamePath()}`);
@@ -38,7 +37,6 @@ async function ensureGamePath() {
   logger.info(`Game path set to: ${selectedPath}`);
   return true;
 }
-
 function registerPTTHotkey(hotkey) {
     if (currentPTHHotkey) {
         globalShortcut.unregister(currentPTHHotkey);
@@ -58,7 +56,6 @@ function registerPTTHotkey(hotkey) {
         }
     }
 }
-
 function createWindow() {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -68,8 +65,8 @@ function createWindow() {
           "default-src 'self'; " +
           "script-src 'self' 'unsafe-inline'; " +
           "style-src 'self' 'unsafe-inline'; " +
-          "img-src 'self' ; " +
-          "connect-src 'self' http://194.31.171.29:38592 https://ns.fiber-gate.ru; " +
+          "img-src 'self' https://ns.fiber-gate.ru data:; " +
+          "connect-src 'self' http://194.31.171.29:38592 https://ns.fiber-gate.ru wss://ns.fiber-gate.ru; " +
           "media-src 'self' blob:; " +
           "child-src 'self' blob:; " +
           "worker-src 'self' blob:; " +
@@ -78,7 +75,6 @@ function createWindow() {
       }
     });
   });
-
   mainWindow = new BrowserWindow({
     width: 550,
     height: 650,
@@ -91,23 +87,19 @@ function createWindow() {
     },
     icon: path.join(__dirname, '../assets/icon.png')
   });
-
   logger.info('Main window created');
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-
   setInterval(() => {
     if (!checkingUpdate) {
       addonManager.checkNSQCUpdate(mainWindow)
         .catch(err => logger.error('Error checking updates:', err));
     }
   }, 30000);
-
   mainWindow.on('closed', () => {
     logger.info('Main window closed');
     mainWindow = null;
   });
 }
-
 app.whenReady().then(async () => {
   fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
   const gamePathValid = await ensureGamePath();
@@ -117,25 +109,21 @@ app.whenReady().then(async () => {
   }
   addonManager.setGamePath(settings.getGamePath());
   createWindow();
-
   const savedHotkey = settings.getPTTHotkey();
   if (savedHotkey) {
     registerPTTHotkey(savedHotkey);
   }
-
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
 });
-
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
-
 app.on('will-quit', () => {
     if (currentPTHHotkey) {
         globalShortcut.unregister(currentPTHHotkey);
@@ -143,7 +131,6 @@ app.on('will-quit', () => {
     }
     globalShortcut.unregisterAll();
 });
-
 ipcMain.handle('load-addons', async () => {
   try {
     return await addonManager.loadAddons();
@@ -152,7 +139,6 @@ ipcMain.handle('load-addons', async () => {
     return {};
   }
 });
-
 ipcMain.handle('toggle-addon', async (event, name, install) => {
   try {
     if (!mainWindow) {
@@ -171,7 +157,6 @@ ipcMain.handle('toggle-addon', async (event, name, install) => {
     return false;
   }
 });
-
 ipcMain.handle('launch-game', async () => {
   try {
     return await addonManager.launchGame();
@@ -180,7 +165,6 @@ ipcMain.handle('launch-game', async () => {
     return false;
   }
 });
-
 ipcMain.handle('check-game', async () => {
   try {
     const gamePath = settings.getGamePath();
@@ -192,7 +176,6 @@ ipcMain.handle('check-game', async () => {
     return false;
   }
 });
-
 ipcMain.handle('change-game-path', async () => {
   const result = await dialog.showOpenDialog({
     title: 'Выберите файл Wow.exe',
@@ -215,19 +198,16 @@ ipcMain.handle('change-game-path', async () => {
   addonManager.setGamePath(selectedPath);
   return true;
 });
-
 ipcMain.on('open-logs-folder', () => {
   const logsPath = path.join(app.getPath('userData'), 'logs');
   shell.openPath(logsPath);
 });
-
 ipcMain.on('go-back', (event) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     const indexPath = `file://${__dirname}/../renderer/index.html`;
     mainWindow.loadURL(indexPath);
   }
 });
-
 ipcMain.handle('set-ptt-hotkey', async (event, hotkey) => {
     try {
         registerPTTHotkey(hotkey);
@@ -238,7 +218,6 @@ ipcMain.handle('set-ptt-hotkey', async (event, hotkey) => {
         return { success: false, message: error.message };
     }
 });
-
 ipcMain.handle('get-ptt-hotkey', async () => {
     return settings.getPTTHotkey();
 });
