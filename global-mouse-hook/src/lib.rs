@@ -3,14 +3,14 @@ use napi::{
     bindgen_prelude::*,
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex};
 use std::thread;
 
 #[napi(object)]
 pub struct MouseEvent {
     pub x: i32,
     pub y: i32,
-    pub button_code: u32,   // 1 = left, 2 = middle, 3 = right, 4/5 = scroll (но мы их игнорируем)
+    pub button_code: u32,   // 1 = left, 2 = middle, 3 = right, 4/5 = X buttons
     pub event_type: String, // "down", "up"
 }
 
@@ -27,12 +27,12 @@ pub struct KeyEvent {
 mod linux {
     use super::*;
     use x11rb::connection::Connection;
-    use x11rb::protocol::xproto::{ConnectionExt, EventMask, GrabMode};
+    use x11rb::protocol::xproto::{ConnectionExt, EventMask, GrabMode, AutoRepeatMode};
     use x11rb::protocol::Event;
 
     #[napi]
     pub fn start_global_mouse_hook(callback: ThreadsafeFunction<MouseEvent>) -> Result<()> {
-        let cb = Arc::new(Mutex::new(Some(callback)));
+        let cb = std::sync::Arc::new(Mutex::new(Some(callback)));
         thread::spawn(move || {
             if let Ok((conn, screen_num)) = x11rb::connect(None) {
                 let root = conn.setup().roots[screen_num].root;
@@ -54,7 +54,7 @@ mod linux {
                     if let Ok(event) = conn.wait_for_event() {
                         match event {
                             Event::ButtonPress(ev) => {
-                                if ev.detail == 4 || ev.detail == 5 { continue; }
+                                if ev.detail == 4 || ev.detail == 5 { continue; } // scroll
                                 let evt = MouseEvent {
                                     x: ev.event_x as i32,
                                     y: ev.event_y as i32,
@@ -62,7 +62,7 @@ mod linux {
                                     event_type: "down".to_string(),
                                 };
                                 if let Ok(g) = cb.lock() {
-                                    if let Some(f) = &*g {
+                                    if let Some(ref f) = *g {
                                         let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
                                     }
                                 }
@@ -76,7 +76,7 @@ mod linux {
                                     event_type: "up".to_string(),
                                 };
                                 if let Ok(g) = cb.lock() {
-                                    if let Some(f) = &*g {
+                                    if let Some(ref f) = *g {
                                         let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
                                     }
                                 }
@@ -92,7 +92,7 @@ mod linux {
 
     #[napi]
     pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Result<()> {
-        let cb = Arc::new(Mutex::new(Some(callback)));
+        let cb = std::sync::Arc::new(Mutex::new(Some(callback)));
         thread::spawn(move || {
             if let Ok((conn, _)) = x11rb::connect(None) {
                 let root = conn.setup().roots[0].root;
@@ -105,10 +105,10 @@ mod linux {
                 ).is_err() {
                     return;
                 }
-                // 🔥 Отключаем автоповтор
+                // Отключаем автоповтор на уровне X11
                 let _ = conn.change_keyboard_control(
                     &x11rb::protocol::xproto::ChangeKeyboardControlAux::new()
-                        .auto_repeat_mode(x11rb::protocol::xproto::AutoRepeatMode::OFF)
+                        .auto_repeat_mode(AutoRepeatMode::OFF)
                 );
                 conn.flush().ok();
                 loop {
@@ -120,7 +120,7 @@ mod linux {
                                     event_type: "down".to_string(),
                                 };
                                 if let Ok(g) = cb.lock() {
-                                    if let Some(f) = &*g {
+                                    if let Some(ref f) = *g {
                                         let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
                                     }
                                 }
@@ -131,7 +131,7 @@ mod linux {
                                     event_type: "up".to_string(),
                                 };
                                 if let Ok(g) = cb.lock() {
-                                    if let Some(f) = &*g {
+                                    if let Some(ref f) = *g {
                                         let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
                                     }
                                 }
@@ -153,14 +153,21 @@ mod linux {
 mod windows {
     use super::*;
     use std::sync::LazyLock;
+    use ::windows::Win32::Foundation::{HINSTANCE, HWND, BOOL, WPARAM, LPARAM, LRESULT};
     use ::windows::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, SetWindowsHookExW, UnhookWindowsHookEx, WH_KEYBOARD_LL, WH_MOUSE_LL,
-        WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP,
-        WM_MOUSEHWHEEL, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
-        WM_XBUTTONDOWN, WM_XBUTTONUP, HHOOK, MSLLHOOKSTRUCT, KBDLLHOOKSTRUCT,
+        CallNextHookEx, SetWindowsHookExW, UnhookWindowsHookEx,
+        GetMessageW, TranslateMessage, DispatchMessageW,
+        WH_KEYBOARD_LL, WH_MOUSE_LL,
+        WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+        WM_LBUTTONDOWN, WM_LBUTTONUP,
+        WM_RBUTTONDOWN, WM_RBUTTONUP,
+        WM_MBUTTONDOWN, WM_MBUTTONUP,
+        WM_XBUTTONDOWN, WM_XBUTTONUP,
+        WM_MOUSEWHEEL, WM_MOUSEHWHEEL,
+        HHOOK, MSLLHOOKSTRUCT, KBDLLHOOKSTRUCT, MSG,
+        KBDLLHOOKSTRUCT_FLAGS,
     };
-    use ::windows::Win32::Foundation::{HINSTANCE, BOOL, LPARAM, LRESULT, WPARAM, HWND, MSG, WPARAM, LPARAM};
-    use ::windows::Win32::UI::Input::KeyboardAndMouse::{LLKHF_REPEAT, XBUTTON1, XBUTTON2};
+    use ::windows::Win32::UI::Input::KeyboardAndMouse::{LLKHF_REPEAT, XBUTTON1};
 
     static MOUSE_CALLBACK: LazyLock<Mutex<Option<ThreadsafeFunction<MouseEvent>>>> =
         LazyLock::new(|| Mutex::new(None));
@@ -213,9 +220,9 @@ mod windows {
         if n_code >= 0 {
             let kbd = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
             let vk = kbd.vkCode;
-            // Игнорируем автоповтор (бит 7 в flags)
+            // Игнорируем автоповтор
             if (w_param.0 as u32 == WM_KEYDOWN || w_param.0 as u32 == WM_SYSKEYDOWN)
-                && (kbd.flags & LLKHF_REPEAT) != 0
+                && (kbd.flags & KBDLLHOOKSTRUCT_FLAGS(LLKHF_REPEAT as u32)) != KBDLLHOOKSTRUCT_FLAGS(0)
             {
                 return CallNextHookEx(None, n_code, w_param, l_param);
             }
@@ -243,16 +250,21 @@ mod windows {
             *g = Some(callback);
         }
         unsafe {
-            let hook: HHOOK = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), HINSTANCE(0), 0).unwrap();
+            let hook: HHOOK = SetWindowsHookExW(
+                WH_MOUSE_LL,
+                Some(mouse_proc),
+                Some(HINSTANCE(std::ptr::null_mut())),
+                0,
+            ).unwrap();
             thread::spawn(move || {
                 let mut msg: MSG = std::mem::zeroed();
                 loop {
-                    let ret = ::windows::Win32::UI::WindowsAndMessaging::GetMessageW(&mut msg, HWND(0), 0, 0);
+                    let ret = GetMessageW(&mut msg, None, 0, 0);
                     if ret.0 == 0 || ret.0 == -1 {
                         break;
                     }
-                    ::windows::Win32::UI::WindowsAndMessaging::TranslateMessage(&msg);
-                    ::windows::Win32::UI::WindowsAndMessaging::DispatchMessageW(&msg);
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
                 }
                 UnhookWindowsHookEx(hook);
             });
@@ -266,16 +278,21 @@ mod windows {
             *g = Some(callback);
         }
         unsafe {
-            let hook: HHOOK = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), HINSTANCE(0), 0).unwrap();
+            let hook: HHOOK = SetWindowsHookExW(
+                WH_KEYBOARD_LL,
+                Some(keyboard_proc),
+                Some(HINSTANCE(std::ptr::null_mut())),
+                0,
+            ).unwrap();
             thread::spawn(move || {
                 let mut msg: MSG = std::mem::zeroed();
                 loop {
-                    let ret = ::windows::Win32::UI::WindowsAndMessaging::GetMessageW(&mut msg, HWND(0), 0, 0);
+                    let ret = GetMessageW(&mut msg, None, 0, 0);
                     if ret.0 == 0 || ret.0 == -1 {
                         break;
                     }
-                    ::windows::Win32::UI::WindowsAndMessaging::TranslateMessage(&msg);
-                    ::windows::Win32::UI::WindowsAndMessaging::DispatchMessageW(&msg);
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
                 }
                 UnhookWindowsHookEx(hook);
             });
@@ -313,7 +330,7 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Res
 
 #[napi]
 pub fn stop_global_mouse_hook() -> Result<()> {
-    // TODO: реализовать остановку хуков
+    // TODO: реализовать остановку хуков через канал или флаг
     Ok(())
 }
 
