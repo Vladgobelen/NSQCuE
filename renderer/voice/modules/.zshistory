@@ -1,0 +1,112 @@
+cargo --build --release
+cargo --build release
+ls modules
+scp -P 33333 ./* dersu@194.31.171.29:~/mediasoup-prod/modules/
+grep -r "new-producer" .
+grep -r "notify-new-producer" .
+grep -ri "producer" .
+grep -r --include="*.js" "new-producer" .
+grep -rn "new-producer" .
+git push
+git add .\
+
+git commit -m "Ѓ�абоу�ее без списка у�зеров"
+git push git@github.com:Vladgobelen/NSVSjs.git
+git config --global core.pager less
+git branch
+git branch --show-current
+git remote -v
+git branch -vv
+git push -u origin main
+git log --oneline -1
+git checkout -B main
+git push --force origin main
+git reflog
+git commit -m "Ѓ�абоу�ее без списка у�зеров (у�иналу�нау� версиу�)"
+git add --all
+git rm -r --cached .
+git add .
+git status
+git commit -m "Финалу�нау� версиу�  � прину�дителу�ну�й коммит"
+git push origin main
+mpv start
+ls main
+ls renderer
+npm install mediasoup-client --save
+npm install iohook --save
+git tag -d v1.0.0
+git tag
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push origin v1.0.0
+git tag -a v1.0.1 -m "Release version 1.0.1"
+git push origin v1.0.1
+git tag -a v1.0.2 -m "Release version 1.0.2"
+git push origin v1.0.2
+npm run build:win64
+scp -P 33333 ./* dersu@194.31.171.29:~/mediasoup-prod/public/modules/
+cd..
+cd ..
+file mr.mp4
+ffmpeg -i mr.mp4 -vf "scale=1280:720:flags=lanczos" -c:v libx264 -crf 23 -preset slow -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -c:a aac -b:a 128k -movflags +faststart output_720p.mp4
+ffmpeg -i mr.mp4 -vf "scale=1280:720:flags=lanczos" -c:v libx264 -crf 23 -preset slow -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -c:a aac -b:a 128k -movflags +faststart mr720.mp4
+ffmpeg -i mr.mp4 -vf "scale=1280:720:flags=lanczos" -c:v libx264 -crf 20 -preset slow -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -c:a copy -movflags +faststart mr720.mp4
+cargo build --release
+audio-delay 2.0
+mpv audio-delay 2.0
+mpv video-sync=audio 02.avi
+mpv audio-delay 2.0 02.avi
+mpv --audio-delay 2.0 02.avi
+mpv --audio-delay=3.0 "02.avi"
+mpv --audio-delay=4.0 "02.avi"
+ffmpeg -i "02.avi" -c copy -fflags +genpts "02_fixed.avi"
+mpv --audio-delay=2.0 "02.avi"
+mpv --audio-delay=-2.0 "02.avi"
+ffmpeg -i "02.avi" -c copy -fflags +genpts -avoid_negative_ts make_zero "02_fixed.avi"
+ffmpeg -i "02.avi" -itsoffset 2.0 -i "02.avi" -map 0:v -map 1:a -c copy -avoid_negative_ts make_zero "02_fixed.avi"
+ffmpeg -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 -t 2 -acodec libmp3lame -b:a 128k silence.mp3
+ffmpeg -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 -t 4 -acodec libmp3lame -b:a 128k silence.mp3
+ffmpeg -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 -t 5 -acodec libmp3lame -b:a 128k silence.mp3
+ffmpeg -i "silence.mp3" -i "02.avi" -filter_complex "[0:a][1:a]concat=n=2:v=0:a=1[a]" -map "[a]" -map 1:v -c:v copy -c:a libmp3lame -b:a 128k "02_fixed.avi"
+ffmpeg -i "silence.mp3" -i "09.avi" -filter_complex "[0:a][1:a]concat=n=2:v=0:a=1[a]" -map "[a]" -map 1:v -c:v copy -c:a libmp3lame -b:a 128k "09_fixed.avi"
+scp -P 33333 -r . dersu@194.31.171.29:~/mediasoup-prod/modules/
+scp -P 33333 -r . dersu@194.31.171.29:~/mediasoup-prod/public/modules/
+grep -r "participants" --include="*.js" .
+grep -r "producerId\|clientID\|new-producer" --include="*.js" --include="*.ts" .
+grep -c '",' /home/diver/Games/wc/CircleL/WTF/Account/VLADGOBELEN/SavedVariables/NSQS_chat_log.lua
+grep -o '"Guus [^"]*"' /home/diver/Games/wc/CircleL/WTF/Account/VLADGOBELEN/SavedVariables/NSQS_chat_log.lua | wc -l
+grep -o '"Zogtar [^"]*"' /home/diver/Games/wc/CircleL/WTF/Account/VLADGOBELEN/SavedVariables/NSQS_chat_log.lua | wc -l
+grep '"Zogtar ' NSQS_chat_log.lua
+cd ~/Ѓ�крипту�/tgb/NStgb
+/python/bin/python mdf2iso NFSC.mdf
+python mdf2iso NFSC.mdf
+file NFSC.mdf
+env MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEDEBUG=-all WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/wine setup
+env MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEDEBUG=-all WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/wine nfsc_patch1.3_russian.exe
+env MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEDEBUG=-all WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/wine nfsc.exe
+ffmpeg -i skllz.mp4 -vf "scale=1280:720:flags=lanczos" -c:v libx264 -crf 23 -preset slow -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -c:a copy -movflags +faststart skllz720.mp4
+file Space\ Rangers\ 2\ -\ Reload\ +\ Space\ Rangers\ \[RUS\].nrg
+MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEDEBUG=-all WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/wine Autorun.exe
+MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEDEBUG=-all WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/wine Rangers.exe
+MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEDEBUG=-all WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/winecfg
+MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEDEBUG=-all WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/wine dxwnd.exe
+MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEDEBUG=-all WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/wine SR1_172_MultiLang_HD_Patch.exe
+MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/wine Rangers.exe
+wine Rangers.exe
+sh winetools -cfg
+sh winetools
+sh winetricks
+winetricks
+WINEPREFIX=/home/diver/Ѓ�агру�зки/9/SpaceRangersHD-AWarApart-wine/SpaceRangersHD/prefix winetricks
+MESA_LOADER_DRIVER_OVERRIDE=iris DXVK_HUD=fps,info WINEPREFIX=/home/diver/WP7RS/PF STAGING_SHARED_MEMORY=1 DXVK_STATE_CACHE=1 STAGING_WRITECOPY=1 /home/diver/WP7RS/bin/wine Autorun.exe
+scp -P 33333 -r . dersu@194.31.171.29:~/mediasoup-prod/sounds/
+scp -P 33333 -r . dersu@194.31.171.29:~/mediasoup-prod/public/sounds/
+ls
+file Need\ for\ Speed\ -\ Porsche\ Unleashed\ \(USA\)\ \(Rerelease\)\ \(20020819\).bin
+iat --iso --input=Need\ for\ Speed\ -\ Porsche\ Unleashed\ \(USA\)\ \(Rerelease\)\ \(20020819\).bin --output=nfspu.iso
+su
+winecfg
+sh updateConfigs.sh
+ffmpeg -i Discord_User_Leave_Sound.ogg user-leave.mp3
+scp -P 33333 ./* dersu@194.31.171.29:~/mediasoup-prod/public/sounds
+sh download.sh
+npm start

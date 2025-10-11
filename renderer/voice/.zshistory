@@ -1,0 +1,3 @@
+npm build:win64
+npm run build:win64
+npm start
