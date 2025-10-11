@@ -1,18 +1,22 @@
-
 [package]
-authors = ["LongYinan <lynweklm@gmail.com>"]
-edition = "2021"
 name = "global_mouse_hook"
 version = "0.1.0"
+edition = "2021"
+authors = ["Vladgobelen <Vladgobelen@gmail.com>"]
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-evdev = "0.13.2"
-napi = "3.0.0"
+napi = { version = "3.0.0", features = ["thread-safe-callback"] }
 napi-derive = "3.0.0"
-x11rb = "0.13.2"
+evdev = "0.13.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+] }
 
 [build-dependencies]
 napi-build = "2"
@@ -20,9 +24,3 @@ napi-build = "2"
 [profile.release]
 lto = true
 strip = "symbols"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62.2", features = [
-  "Win32_Foundation",
-  "Win32_UI_WindowsAndMessaging",
-] }

@@ -21,7 +21,7 @@ pub struct KeyEvent {
 }
 
 // ========================
-// WINDOWS — оставляем как есть
+// WINDOWS
 // ========================
 #[cfg(target_os = "windows")]
 mod platform {
@@ -124,7 +124,7 @@ mod platform {
                     if ret.0 == 0 || ret.0 == -1 {
                         break;
                     }
-                    TranslateMessage(&msg);
+                    let _ = TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
             });
@@ -152,7 +152,7 @@ mod platform {
                     if ret.0 == 0 || ret.0 == -1 {
                         break;
                     }
-                    TranslateMessage(&msg);
+                    let _ = TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
             });
@@ -162,14 +162,13 @@ mod platform {
 }
 
 // ========================
-// LINUX — ЧТЕНИЕ ИЗ /dev/input/event*
+// LINUX — исправлено под evdev 0.13
 // ========================
 #[cfg(target_os = "linux")]
 mod platform {
     use super::*;
-    use evdev::{Device, InputEventKind, Key};
+    use evdev::{Device, InputEvent, KeyCode};
     use std::fs::File;
-    use std::os::fd::AsRawFd;
     use std::path::Path;
 
     #[napi]
@@ -182,79 +181,83 @@ mod platform {
         start_input_monitor(callback, false)
     }
 
-    fn start_input_monitor<T>(
-        callback: ThreadsafeFunction<T>,
+    fn start_input_monitor(
+        callback: ThreadsafeFunction<MouseEvent>,
         is_mouse: bool,
-    ) -> Result<()>
-    where
-        T: Send + 'static,
-    {
+    ) -> Result<()> {
         thread::spawn(move || {
-            // Сканируем все /dev/input/event*
-            for entry in std::fs::read_dir("/dev/input").unwrap() {
-                let entry = entry.unwrap();
-                let path = entry.path();
-                if !path.file_name().unwrap().to_str().unwrap().starts_with("event") {
-                    continue;
-                }
-
-                if let Ok(file) = File::open(&path) {
-                    if let Ok(mut device) = Device::new_from_file(file) {
-                        let name = device.name().unwrap_or("unknown");
-                        let caps = device.capabilities();
-
-                        // Определяем тип устройства
-                        let has_keys = caps.keys().map_or(false, |keys| !keys.is_empty());
-                        let has_rel = caps.relative_axes().map_or(false, |axes| !axes.is_empty());
-                        let has_buttons = caps.buttons().map_or(false, |btns| !btns.is_empty());
-
-                        let is_keyboard = has_keys && !has_rel;
-                        let is_mouse = (has_rel || has_buttons) && !is_keyboard;
-
-                        if (is_mouse && !is_mouse_device(&device)) || (is_keyboard && is_mouse) {
+            if let Ok(entries) = std::fs::read_dir("/dev/input") {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        if !path.file_name().unwrap().to_str().unwrap().starts_with("event") {
                             continue;
                         }
 
-                        if (is_mouse && is_mouse) || (!is_mouse && is_keyboard) {
-                            let cb = Arc::new(Mutex::new(Some(callback.clone())));
-                            std::thread::spawn(move || {
-                                for event in device.fetch_events().flatten() {
-                                    if event.kind() == InputEventKind::Key {
-                                        if let Some(key) = event.key() {
-                                            let code = key.0 as u32;
-                                            let pressed = event.value() == 1;
-                                            let event_type = if pressed { "down" } else { "up" };
+                        if let Ok(file) = File::open(&path) {
+                            if let Ok(device) = Device::open(&path) {
+                                let name = device.name().unwrap_or("unknown");
+                                let is_keyboard = device.supported_keys().map_or(false, |keys| {
+                                    keys.contains(KeyCode::KEY_A)
+                                });
+                                let is_mouse = device
+                                    .supported_relative_axes()
+                                    .map_or(false, |axes| !axes.is_empty())
+                                    || device
+                                        .supported_buttons()
+                                        .map_or(false, |btns| !btns.is_empty());
 
-                                            if is_mouse {
-                                                // Преобразуем evdev коды в 1..5
-                                                if let Some(button_code) = evdev_key_to_mouse_button(code) {
-                                                    let evt = MouseEvent {
-                                                        x: 0,
-                                                        y: 0,
-                                                        button_code,
-                                                        event_type: event_type.to_string(),
-                                                    };
-                                                    if let Ok(g) = cb.lock() {
-                                                        if let Some(ref f) = *g {
-                                                            let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
+                                if (is_mouse && !is_mouse_device(&device)) || (is_keyboard && is_mouse) {
+                                    continue;
+                                }
+
+                                if (is_mouse && is_mouse) || (!is_mouse && is_keyboard) {
+                                    let cb = Arc::new(Mutex::new(Some(callback.clone())));
+                                    std::thread::spawn(move || {
+                                        for event in device.into_event_stream().unwrap() {
+                                            if let Ok(event) = event {
+                                                if let InputEvent::Key(key_event) = event {
+                                                    let code = key_event.key().0 as u32;
+                                                    let pressed = key_event.value() == 1;
+                                                    let event_type = if pressed { "down" } else { "up" };
+
+                                                    if is_mouse {
+                                                        if let Some(button_code) = evdev_key_to_mouse_button(code) {
+                                                            let evt = MouseEvent {
+                                                                x: 0,
+                                                                y: 0,
+                                                                button_code,
+                                                                event_type: event_type.to_string(),
+                                                            };
+                                                            if let Ok(g) = cb.lock() {
+                                                                if let Some(ref f) = *g {
+                                                                    let _ = f.call(
+                                                                        Ok(evt),
+                                                                        ThreadsafeFunctionCallMode::NonBlocking,
+                                                                    );
+                                                                }
+                                                            }
                                                         }
-                                                    }
-                                                }
-                                            } else {
-                                                let evt = KeyEvent {
-                                                    code,
-                                                    event_type: event_type.to_string(),
-                                                };
-                                                if let Ok(g) = cb.lock() {
-                                                    if let Some(ref f) = *g {
-                                                        let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
+                                                    } else {
+                                                        let evt = KeyEvent {
+                                                            code,
+                                                            event_type: event_type.to_string(),
+                                                        };
+                                                        if let Ok(g) = cb.lock() {
+                                                            if let Some(ref f) = *g {
+                                                                let _ = f.call(
+                                                                    Ok(evt),
+                                                                    ThreadsafeFunctionCallMode::NonBlocking,
+                                                                );
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
-                                    }
+                                    });
                                 }
-                            });
+                            }
                         }
                     }
                 }
@@ -264,10 +267,12 @@ mod platform {
     }
 
     fn is_mouse_device(device: &Device) -> bool {
-        let caps = device.capabilities();
-        let has_rel = caps.relative_axes().map_or(false, |axes| !axes.is_empty());
-        let has_buttons = caps.buttons().map_or(false, |btns| !btns.is_empty());
-        has_rel || has_buttons
+        device
+            .supported_relative_axes()
+            .map_or(false, |axes| !axes.is_empty())
+            || device
+                .supported_buttons()
+                .map_or(false, |btns| !btns.is_empty())
     }
 
     fn evdev_key_to_mouse_button(code: u32) -> Option<u32> {
