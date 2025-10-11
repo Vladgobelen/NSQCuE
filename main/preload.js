@@ -1,5 +1,5 @@
+// preload.js
 const { contextBridge, ipcRenderer } = require('electron');
-
 function loadExternalScript(url) {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
@@ -9,10 +9,6 @@ function loadExternalScript(url) {
     document.head.appendChild(script);
   });
 }
-
-ipcRenderer.on('progress', (event, ...args) => {
-});
-
 contextBridge.exposeInMainWorld('electronAPI', {
   loadAddons: () => ipcRenderer.invoke('load-addons'),
   toggleAddon: (name, install) => ipcRenderer.invoke('toggle-addon', name, install),
@@ -22,12 +18,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   changeGamePath: () => ipcRenderer.invoke('change-game-path'),
   goBack: () => {
     ipcRenderer.send('go-back');
-},
+  },
   setPTTHotkey: (hotkey) => ipcRenderer.invoke('set-ptt-hotkey', hotkey),
   getPTTHotkey: () => ipcRenderer.invoke('get-ptt-hotkey'),
   onPTTPressed: (callback) => {
     if (typeof callback !== 'function') return;
-    const handler = (event) => callback();
+    const handler = (event, isDown) => {
+      // 🔥 КРИТИЧЕСКИ ВАЖНО: передаём isDown (true/false)
+      callback(isDown);
+    };
     ipcRenderer.on('ptt-pressed', handler);
     return () => ipcRenderer.off('ptt-pressed', handler);
   },

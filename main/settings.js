@@ -1,3 +1,4 @@
+// settings.js
 const { app } = require('electron');
 const fs = require('fs-extra');
 const path = require('path');
@@ -42,12 +43,13 @@ class Settings {
     return fs.existsSync(path.join(gamePath, 'Wow.exe'));
   }
 
-  getPTTHotkey() {
-    return this.settings.pttHotkey || null;
+  // === НОВЫЕ МЕТОДЫ ДЛЯ PTT ===
+  getPTTHotkeyCodes() {
+    return this.settings.pttHotkeyCodes || null;
   }
 
-  setPTTHotkey(hotkey) {
-    this.settings.pttHotkey = hotkey;
+  setPTTHotkeyCodes(codes) {
+    this.settings.pttHotkeyCodes = codes;
     this.saveSettings();
   }
 }

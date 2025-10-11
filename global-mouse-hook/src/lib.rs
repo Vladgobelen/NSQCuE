@@ -10,162 +10,25 @@ use std::thread;
 pub struct MouseEvent {
     pub x: i32,
     pub y: i32,
-    pub button_code: u32,   // 1 = left, 2 = middle, 3 = right, 4/5 = X buttons
+    pub button_code: u32,   // 1 = left, 2 = right, 3 = middle, 4/5 = side
     pub event_type: String, // "down", "up"
 }
 
 #[napi(object)]
 pub struct KeyEvent {
-    pub code: u32,          // keycode (Linux) или virtual key (Windows)
+    pub code: u32,          // Linux: evdev code, Windows: VK
     pub event_type: String, // "down", "up"
 }
 
 // ========================
-// LINUX (X11)
-// ========================
-#[cfg(target_os = "linux")]
-mod linux {
-    use super::*;
-    use x11rb::connection::Connection;
-    use x11rb::protocol::xproto::{ConnectionExt, EventMask, GrabMode, AutoRepeatMode};
-    use x11rb::protocol::Event;
-
-    #[napi]
-    pub fn start_global_mouse_hook(callback: ThreadsafeFunction<MouseEvent>) -> Result<()> {
-        let cb = Arc::new(Mutex::new(Some(callback)));
-        thread::spawn(move || {
-            if let Ok((conn, screen_num)) = x11rb::connect(None) {
-                let root = conn.setup().roots[screen_num].root;
-                if conn.grab_button(
-                    false,
-                    root,
-                    EventMask::BUTTON_PRESS | EventMask::BUTTON_RELEASE,
-                    GrabMode::ASYNC,
-                    GrabMode::ASYNC,
-                    root,
-                    0u32,
-                    0u8.into(),
-                    0u16.into(),
-                ).is_err() {
-                    return;
-                }
-                conn.flush().ok();
-                loop {
-                    if let Ok(event) = conn.wait_for_event() {
-                        match event {
-                            Event::ButtonPress(ev) => {
-                                if ev.detail == 4 || ev.detail == 5 { continue; }
-                                let evt = MouseEvent {
-                                    x: ev.event_x as i32,
-                                    y: ev.event_y as i32,
-                                    button_code: ev.detail as u32,
-                                    event_type: "down".to_string(),
-                                };
-                                if let Ok(g) = cb.lock() {
-                                    if let Some(ref f) = *g {
-                                        let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
-                                    }
-                                }
-                            }
-                            Event::ButtonRelease(ev) => {
-                                if ev.detail == 4 || ev.detail == 5 { continue; }
-                                let evt = MouseEvent {
-                                    x: ev.event_x as i32,
-                                    y: ev.event_y as i32,
-                                    button_code: ev.detail as u32,
-                                    event_type: "up".to_string(),
-                                };
-                                if let Ok(g) = cb.lock() {
-                                    if let Some(ref f) = *g {
-                                        let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        });
-        Ok(())
-    }
-
-    #[napi]
-    pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Result<()> {
-        let cb = Arc::new(Mutex::new(Some(callback)));
-        thread::spawn(move || {
-            if let Ok((conn, _)) = x11rb::connect(None) {
-                let root = conn.setup().roots[0].root;
-                if conn.grab_keyboard(
-                    false,
-                    root,
-                    x11rb::protocol::xproto::Time::CURRENT_TIME,
-                    GrabMode::ASYNC,
-                    GrabMode::ASYNC,
-                ).is_err() {
-                    return;
-                }
-                let _ = conn.change_keyboard_control(
-                    &x11rb::protocol::xproto::ChangeKeyboardControlAux::new()
-                        .auto_repeat_mode(AutoRepeatMode::OFF)
-                );
-                conn.flush().ok();
-                loop {
-                    if let Ok(event) = conn.wait_for_event() {
-                        match event {
-                            Event::KeyPress(ev) => {
-                                let evt = KeyEvent {
-                                    code: ev.detail as u32,
-                                    event_type: "down".to_string(),
-                                };
-                                if let Ok(g) = cb.lock() {
-                                    if let Some(ref f) = *g {
-                                        let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
-                                    }
-                                }
-                            }
-                            Event::KeyRelease(ev) => {
-                                let evt = KeyEvent {
-                                    code: ev.detail as u32,
-                                    event_type: "up".to_string(),
-                                };
-                                if let Ok(g) = cb.lock() {
-                                    if let Some(ref f) = *g {
-                                        let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        });
-        Ok(())
-    }
-}
-
-// ========================
-// WINDOWS
+// WINDOWS — оставляем как есть
 // ========================
 #[cfg(target_os = "windows")]
-mod windows {
+mod platform {
     use super::*;
     use std::sync::LazyLock;
-    use ::windows::Win32::Foundation::{HINSTANCE, WPARAM, LPARAM, LRESULT};
-    use ::windows::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, SetWindowsHookExW,
-        WH_KEYBOARD_LL, WH_MOUSE_LL,
-        WM_KEYDOWN, WM_SYSKEYDOWN,
-        WM_LBUTTONDOWN, WM_LBUTTONUP,
-        WM_RBUTTONDOWN, WM_RBUTTONUP,
-        WM_MBUTTONDOWN, WM_MBUTTONUP,
-        WM_XBUTTONDOWN, WM_XBUTTONUP,
-        WM_MOUSEWHEEL, WM_MOUSEHWHEEL,
-        MSLLHOOKSTRUCT, KBDLLHOOKSTRUCT, MSG,
-        GetMessageW, TranslateMessage, DispatchMessageW,
-        KBDLLHOOKSTRUCT_FLAGS,
-    };
+    use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::*;
 
     static MOUSE_CALLBACK: LazyLock<Mutex<Option<ThreadsafeFunction<MouseEvent>>>> =
         LazyLock::new(|| Mutex::new(None));
@@ -188,9 +51,7 @@ mod windows {
                 WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
                     return CallNextHookEx(None, n_code, w_param, l_param);
                 }
-                _ => {
-                    return CallNextHookEx(None, n_code, w_param, l_param);
-                }
+                _ => return CallNextHookEx(None, n_code, w_param, l_param),
             };
             let event_type = if w_param.0 as u32 == WM_LBUTTONDOWN
                 || w_param.0 as u32 == WM_RBUTTONDOWN
@@ -249,12 +110,13 @@ mod windows {
             *g = Some(callback);
         }
         unsafe {
-            let _hook = SetWindowsHookExW(
+            SetWindowsHookExW(
                 WH_MOUSE_LL,
                 Some(mouse_proc),
                 Some(HINSTANCE(std::ptr::null_mut())),
                 0,
-            ).unwrap();
+            )
+            .unwrap();
             thread::spawn(|| {
                 let mut msg: MSG = std::mem::zeroed();
                 loop {
@@ -276,12 +138,13 @@ mod windows {
             *g = Some(callback);
         }
         unsafe {
-            let _hook = SetWindowsHookExW(
+            SetWindowsHookExW(
                 WH_KEYBOARD_LL,
                 Some(keyboard_proc),
                 Some(HINSTANCE(std::ptr::null_mut())),
                 0,
-            ).unwrap();
+            )
+            .unwrap();
             thread::spawn(|| {
                 let mut msg: MSG = std::mem::zeroed();
                 loop {
@@ -299,30 +162,137 @@ mod windows {
 }
 
 // ========================
-// EXPORTS
+// LINUX — ЧТЕНИЕ ИЗ /dev/input/event*
 // ========================
 #[cfg(target_os = "linux")]
+mod platform {
+    use super::*;
+    use evdev::{Device, InputEventKind, Key};
+    use std::fs::File;
+    use std::os::fd::AsRawFd;
+    use std::path::Path;
+
+    #[napi]
+    pub fn start_global_mouse_hook(callback: ThreadsafeFunction<MouseEvent>) -> Result<()> {
+        start_input_monitor(callback, true)
+    }
+
+    #[napi]
+    pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Result<()> {
+        start_input_monitor(callback, false)
+    }
+
+    fn start_input_monitor<T>(
+        callback: ThreadsafeFunction<T>,
+        is_mouse: bool,
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        thread::spawn(move || {
+            // Сканируем все /dev/input/event*
+            for entry in std::fs::read_dir("/dev/input").unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if !path.file_name().unwrap().to_str().unwrap().starts_with("event") {
+                    continue;
+                }
+
+                if let Ok(file) = File::open(&path) {
+                    if let Ok(mut device) = Device::new_from_file(file) {
+                        let name = device.name().unwrap_or("unknown");
+                        let caps = device.capabilities();
+
+                        // Определяем тип устройства
+                        let has_keys = caps.keys().map_or(false, |keys| !keys.is_empty());
+                        let has_rel = caps.relative_axes().map_or(false, |axes| !axes.is_empty());
+                        let has_buttons = caps.buttons().map_or(false, |btns| !btns.is_empty());
+
+                        let is_keyboard = has_keys && !has_rel;
+                        let is_mouse = (has_rel || has_buttons) && !is_keyboard;
+
+                        if (is_mouse && !is_mouse_device(&device)) || (is_keyboard && is_mouse) {
+                            continue;
+                        }
+
+                        if (is_mouse && is_mouse) || (!is_mouse && is_keyboard) {
+                            let cb = Arc::new(Mutex::new(Some(callback.clone())));
+                            std::thread::spawn(move || {
+                                for event in device.fetch_events().flatten() {
+                                    if event.kind() == InputEventKind::Key {
+                                        if let Some(key) = event.key() {
+                                            let code = key.0 as u32;
+                                            let pressed = event.value() == 1;
+                                            let event_type = if pressed { "down" } else { "up" };
+
+                                            if is_mouse {
+                                                // Преобразуем evdev коды в 1..5
+                                                if let Some(button_code) = evdev_key_to_mouse_button(code) {
+                                                    let evt = MouseEvent {
+                                                        x: 0,
+                                                        y: 0,
+                                                        button_code,
+                                                        event_type: event_type.to_string(),
+                                                    };
+                                                    if let Ok(g) = cb.lock() {
+                                                        if let Some(ref f) = *g {
+                                                            let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                let evt = KeyEvent {
+                                                    code,
+                                                    event_type: event_type.to_string(),
+                                                };
+                                                if let Ok(g) = cb.lock() {
+                                                    if let Some(ref f) = *g {
+                                                        let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+        });
+        Ok(())
+    }
+
+    fn is_mouse_device(device: &Device) -> bool {
+        let caps = device.capabilities();
+        let has_rel = caps.relative_axes().map_or(false, |axes| !axes.is_empty());
+        let has_buttons = caps.buttons().map_or(false, |btns| !btns.is_empty());
+        has_rel || has_buttons
+    }
+
+    fn evdev_key_to_mouse_button(code: u32) -> Option<u32> {
+        match code {
+            272 => Some(1), // BTN_LEFT
+            273 => Some(2), // BTN_RIGHT
+            274 => Some(3), // BTN_MIDDLE
+            275 => Some(4), // BTN_SIDE
+            276 => Some(5), // BTN_EXTRA
+            _ => None,
+        }
+    }
+}
+
+// ========================
+// EXPORTS
+// ========================
 #[napi]
 pub fn start_global_mouse_hook(callback: ThreadsafeFunction<MouseEvent>) -> Result<()> {
-    linux::start_global_mouse_hook(callback)
+    platform::start_global_mouse_hook(callback)
 }
 
-#[cfg(target_os = "windows")]
-#[napi]
-pub fn start_global_mouse_hook(callback: ThreadsafeFunction<MouseEvent>) -> Result<()> {
-    windows::start_global_mouse_hook(callback)
-}
-
-#[cfg(target_os = "linux")]
 #[napi]
 pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Result<()> {
-    linux::start_global_keyboard_hook(callback)
-}
-
-#[cfg(target_os = "windows")]
-#[napi]
-pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Result<()> {
-    windows::start_global_keyboard_hook(callback)
+    platform::start_global_keyboard_hook(callback)
 }
 
 #[napi]

@@ -9,6 +9,7 @@ version = "0.1.0"
 crate-type = ["cdylib"]
 
 [dependencies]
+evdev = "0.13.2"
 napi = "3.0.0"
 napi-derive = "3.0.0"
 x11rb = "0.13.2"

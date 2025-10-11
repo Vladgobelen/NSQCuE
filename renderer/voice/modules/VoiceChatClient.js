@@ -1153,60 +1153,92 @@ class VoiceChatClient {
         }
     }
 
-    async showPTTSetupModal() {
-        const modalOverlay = document.createElement('div');
-        modalOverlay.className = 'modal-overlay';
-        modalOverlay.style.display = 'flex';
-        modalOverlay.innerHTML = `
-            <div class="modal-content">
-                <h2>Настройка Push-to-Talk</h2>
-                <p>Нажмите любую комбинацию клавиш (например, Ctrl+Shift+A)</p>
-                <input type="text" id="pttHotkeyInput" placeholder="Нажмите клавиши..." readonly style="width: 100%; padding: 10px; margin: 10px 0; text-align: center; font-size: 16px;">
-                <div class="modal-buttons">
-                    <button id="confirmPTT">Сохранить</button>
-                    <button id="cancelPTT">Отмена</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modalOverlay);
-        const hotkeyInput = modalOverlay.querySelector('#pttHotkeyInput');
-        let capturedKeys = [];
-        const keyHandler = (e) => {
-            e.preventDefault();
-            const key = this.getKeyString(e);
-            if (key && !capturedKeys.includes(key)) {
-                capturedKeys.push(key);
-                hotkeyInput.value = capturedKeys.join('+');
-            }
-        };
-        const keyUpHandler = (e) => {
-            document.removeEventListener('keydown', keyHandler);
-            document.removeEventListener('keyup', keyUpHandler);
-        };
-        document.addEventListener('keydown', keyHandler);
-        document.addEventListener('keyup', keyUpHandler, { once: true });
-        modalOverlay.querySelector('#confirmPTT').addEventListener('click', async () => {
-            if (capturedKeys.length > 0) {
-                const hotkeyString = capturedKeys.join('+');
-                const result = await window.electronAPI.setPTTHotkey(hotkeyString);
-                if (result.success) {
-                    this.pttHotkey = hotkeyString;
-                    UIManager.showError(`PTT успешно настроен: ${hotkeyString}`);
-                } else {
-                    UIManager.showError(`Ошибка: ${result.message}`);
-                }
-            }
-            modalOverlay.remove();
-        });
-        modalOverlay.querySelector('#cancelPTT').addEventListener('click', () => {
-            modalOverlay.remove();
-        });
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) {
-                modalOverlay.remove();
-            }
-        });
+async showPTTSetupModal() {
+  const modalOverlay = document.createElement('div');
+  modalOverlay.className = 'modal-overlay';
+  modalOverlay.style.display = 'flex';
+  modalOverlay.innerHTML = `
+    <div class="modal-content">
+      <h2>Настройка Push-to-Talk</h2>
+      <p>Нажмите нужную клавишу или кнопку мыши. Поддерживается только ОДНА клавиша или ОДНА кнопка мыши.</p>
+      <div id="pttCaptureArea" style="
+        width: 100%;
+        height: 80px;
+        border: 2px dashed #666;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 10px 0;
+        font-size: 16px;
+        color: #888;
+        cursor: pointer;
+      ">
+        Нажмите клавишу или кнопку мыши...
+      </div>
+      <div id="capturedKeys" style="
+        min-height: 24px;
+        text-align: center;
+        font-family: monospace;
+        margin: 8px 0;
+        color: #000;
+      "></div>
+      <div class="modal-buttons">
+        <button id="confirmPTT">Сохранить</button>
+        <button id="cancelPTT">Отмена</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modalOverlay);
+
+  const captureArea = modalOverlay.querySelector('#pttCaptureArea');
+  const capturedKeysEl = modalOverlay.querySelector('#capturedKeys');
+  let capturedCode = null;
+
+  const keyDownHandler = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Получаем физический scancode (не e.code!)
+    // Но в браузере мы не можем получить настоящий scancode → временно запрещаем настройку через UI
+    capturedKeysEl.textContent = '⚠️ Настройка PTT через UI отключена. Используйте клавиши в settings.json.';
+    capturedCode = null;
+  };
+
+  const mouseDownHandler = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    capturedKeysEl.textContent = '⚠️ Настройка PTT через UI отключена. Используйте клавиши в settings.json.';
+    capturedCode = null;
+  };
+
+  captureArea.addEventListener('keydown', keyDownHandler, true);
+  captureArea.addEventListener('mousedown', mouseDownHandler, true);
+  captureArea.focus();
+
+  const cleanup = () => {
+    captureArea.removeEventListener('keydown', keyDownHandler, true);
+    captureArea.removeEventListener('mousedown', mouseDownHandler, true);
+  };
+
+  modalOverlay.querySelector('#confirmPTT').addEventListener('click', async () => {
+    // Временно: не даём сохранять через UI
+    UIManager.showError('Настройка PTT через интерфейс отключена. Отредактируйте settings.json вручную.');
+    cleanup();
+    modalOverlay.remove();
+  });
+
+  modalOverlay.querySelector('#cancelPTT').addEventListener('click', () => {
+    cleanup();
+    modalOverlay.remove();
+  });
+
+  modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) {
+      cleanup();
+      modalOverlay.remove();
     }
+  });
+}
 
     getKeyString(e) {
         let key = '';
@@ -1221,51 +1253,26 @@ class VoiceChatClient {
         return key || null;
     }
 
-    async handlePTTPressed() {
-        if (!this.currentRoom) return;
-
-        console.log('[PTT] PTT event received, current state:', {
-            isMicActive: this.isMicActive,
-            isPTTActive: this.isPTTActive,
-            pttTimeoutId: this.pttTimeoutId
-        });
-
-        // 🔄 Сбрасываем предыдущий таймер при ЛЮБОМ событии PTT
-        if (this.pttTimeoutId) {
-            clearTimeout(this.pttTimeoutId);
-            this.pttTimeoutId = null;
-        }
-
-        // 🚫 Если уже в процессе включения микрофона - игнорируем новые запросы
-        if (this.isPTTActive && !this.isMicActive) {
-            console.log('[PTT] Mic is still initializing, ignoring duplicate PTT');
-            return;
-        }
-
-        // ✅ Если микрофон выключен И PTT не активен - включаем его (первое событие при зажатии)
-        if (!this.isMicActive && !this.isPTTActive) {
-            console.log('[PTT] First press - enabling microphone');
-            this.isPTTActive = true;
-            
-            try {
-                await this.toggleMicrophone();
-            } catch (error) {
-                console.error('[PTT] Error enabling microphone:', error);
-                this.isPTTActive = false;
-                return;
-            }
-        }
-
-        // ⏰ Устанавливаем таймер, который выключит микрофон если события прекратятся
-        this.pttTimeoutId = setTimeout(async () => {
-            console.log('[PTT] No PTT events for 300ms - releasing PTT');
-            if (this.isMicActive) {
-                await this.toggleMicrophone();
-            }
-            this.isPTTActive = false;
-            this.pttTimeoutId = null;
-        }, 300);
+    async handlePTTPressed(isDown) {
+  if (!this.currentRoom) return;
+  if (isDown) {
+    if (!this.isMicActive) {
+      try {
+        await this.toggleMicrophone(true);
+      } catch (e) {
+        console.error('[PTT] Mic enable failed:', e);
+      }
     }
+  } else {
+    if (this.isMicActive) {
+      try {
+        await this.toggleMicrophone(false);
+      } catch (e) {
+        console.error('[PTT] Mic disable failed:', e);
+      }
+    }
+  }
+}
 }
 
 window.debugForceRefresh = () => {
