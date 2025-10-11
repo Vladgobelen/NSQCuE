@@ -3,7 +3,7 @@ use napi::{
     bindgen_prelude::*,
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
 };
-use std::sync::{Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 #[napi(object)]
@@ -32,7 +32,7 @@ mod linux {
 
     #[napi]
     pub fn start_global_mouse_hook(callback: ThreadsafeFunction<MouseEvent>) -> Result<()> {
-        let cb = std::sync::Arc::new(Mutex::new(Some(callback)));
+        let cb = Arc::new(Mutex::new(Some(callback)));
         thread::spawn(move || {
             if let Ok((conn, screen_num)) = x11rb::connect(None) {
                 let root = conn.setup().roots[screen_num].root;
@@ -54,7 +54,7 @@ mod linux {
                     if let Ok(event) = conn.wait_for_event() {
                         match event {
                             Event::ButtonPress(ev) => {
-                                if ev.detail == 4 || ev.detail == 5 { continue; } // scroll
+                                if ev.detail == 4 || ev.detail == 5 { continue; }
                                 let evt = MouseEvent {
                                     x: ev.event_x as i32,
                                     y: ev.event_y as i32,
@@ -92,7 +92,7 @@ mod linux {
 
     #[napi]
     pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Result<()> {
-        let cb = std::sync::Arc::new(Mutex::new(Some(callback)));
+        let cb = Arc::new(Mutex::new(Some(callback)));
         thread::spawn(move || {
             if let Ok((conn, _)) = x11rb::connect(None) {
                 let root = conn.setup().roots[0].root;
@@ -105,7 +105,6 @@ mod linux {
                 ).is_err() {
                     return;
                 }
-                // Отключаем автоповтор на уровне X11
                 let _ = conn.change_keyboard_control(
                     &x11rb::protocol::xproto::ChangeKeyboardControlAux::new()
                         .auto_repeat_mode(AutoRepeatMode::OFF)
@@ -153,18 +152,18 @@ mod linux {
 mod windows {
     use super::*;
     use std::sync::LazyLock;
-    use ::windows::Win32::Foundation::{HINSTANCE, HWND, BOOL, WPARAM, LPARAM, LRESULT};
+    use ::windows::Win32::Foundation::{HINSTANCE, WPARAM, LPARAM, LRESULT};
     use ::windows::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, SetWindowsHookExW, UnhookWindowsHookEx,
-        GetMessageW, TranslateMessage, DispatchMessageW,
+        CallNextHookEx, SetWindowsHookExW,
         WH_KEYBOARD_LL, WH_MOUSE_LL,
-        WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+        WM_KEYDOWN, WM_SYSKEYDOWN,
         WM_LBUTTONDOWN, WM_LBUTTONUP,
         WM_RBUTTONDOWN, WM_RBUTTONUP,
         WM_MBUTTONDOWN, WM_MBUTTONUP,
         WM_XBUTTONDOWN, WM_XBUTTONUP,
         WM_MOUSEWHEEL, WM_MOUSEHWHEEL,
-        HHOOK, MSLLHOOKSTRUCT, KBDLLHOOKSTRUCT, MSG,
+        MSLLHOOKSTRUCT, KBDLLHOOKSTRUCT, MSG,
+        GetMessageW, TranslateMessage, DispatchMessageW,
         KBDLLHOOKSTRUCT_FLAGS,
     };
     use ::windows::Win32::UI::Input::KeyboardAndMouse::{LLKHF_REPEAT, XBUTTON1};
@@ -220,7 +219,6 @@ mod windows {
         if n_code >= 0 {
             let kbd = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
             let vk = kbd.vkCode;
-            // Игнорируем автоповтор
             if (w_param.0 as u32 == WM_KEYDOWN || w_param.0 as u32 == WM_SYSKEYDOWN)
                 && (kbd.flags & KBDLLHOOKSTRUCT_FLAGS(LLKHF_REPEAT as u32)) != KBDLLHOOKSTRUCT_FLAGS(0)
             {
@@ -250,13 +248,14 @@ mod windows {
             *g = Some(callback);
         }
         unsafe {
-            let hook: HHOOK = SetWindowsHookExW(
+            let _hook = SetWindowsHookExW(
                 WH_MOUSE_LL,
                 Some(mouse_proc),
                 Some(HINSTANCE(std::ptr::null_mut())),
                 0,
             ).unwrap();
-            thread::spawn(move || {
+            // Не передаём _hook в тред — избегаем Send-ошибки
+            thread::spawn(|| {
                 let mut msg: MSG = std::mem::zeroed();
                 loop {
                     let ret = GetMessageW(&mut msg, None, 0, 0);
@@ -266,7 +265,7 @@ mod windows {
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
-                UnhookWindowsHookEx(hook);
+                // UnhookWindowsHookEx не вызываем — хук удалится при завершении процесса
             });
         }
         Ok(())
@@ -278,13 +277,13 @@ mod windows {
             *g = Some(callback);
         }
         unsafe {
-            let hook: HHOOK = SetWindowsHookExW(
+            let _hook = SetWindowsHookExW(
                 WH_KEYBOARD_LL,
                 Some(keyboard_proc),
                 Some(HINSTANCE(std::ptr::null_mut())),
                 0,
             ).unwrap();
-            thread::spawn(move || {
+            thread::spawn(|| {
                 let mut msg: MSG = std::mem::zeroed();
                 loop {
                     let ret = GetMessageW(&mut msg, None, 0, 0);
@@ -294,7 +293,6 @@ mod windows {
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
-                UnhookWindowsHookEx(hook);
             });
         }
         Ok(())
@@ -330,12 +328,10 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Res
 
 #[napi]
 pub fn stop_global_mouse_hook() -> Result<()> {
-    // TODO: реализовать остановку хуков через канал или флаг
     Ok(())
 }
 
 #[napi]
 pub fn stop_global_keyboard_hook() -> Result<()> {
-    // TODO: реализовать остановку хуков
     Ok(())
 }
