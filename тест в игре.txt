@@ -1,0 +1,15 @@
+Чтобы дополнить свою системную замутку: !заметка текст_заметки
+---
+Установщик аддонов:
+---
+WIN8/10/11: https://github.com/Vladgobelen/NSQCuR/releases/download/v1.0.0/NSQCuR.exe
+
+WIN7+: https://github.com/Vladgobelen/NSQCuP/releases/download/v1.0.1/NSQCuP.exe
+---
+1) Скинуть его в папку с игрой
+2) Запустить
+3) Поставить первые четыре галочки (Fonts опционально)
+4) дождаться загрузки
+5) Запустить игру
+---
+ТГ: https://t.me/AnkMorporkInfo
