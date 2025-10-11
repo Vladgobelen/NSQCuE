@@ -164,14 +164,15 @@ mod windows {
         WM_MOUSEWHEEL, WM_MOUSEHWHEEL,
         MSLLHOOKSTRUCT, KBDLLHOOKSTRUCT, MSG,
         GetMessageW, TranslateMessage, DispatchMessageW,
-        KBDLLHOOKSTRUCT_FLAGS,
     };
-    use ::windows::Win32::UI::Input::KeyboardAndMouse::{LLKHF_REPEAT, XBUTTON1};
 
     static MOUSE_CALLBACK: LazyLock<Mutex<Option<ThreadsafeFunction<MouseEvent>>>> =
         LazyLock::new(|| Mutex::new(None));
     static KEYBOARD_CALLBACK: LazyLock<Mutex<Option<ThreadsafeFunction<KeyEvent>>>> =
         LazyLock::new(|| Mutex::new(None));
+
+    const XBUTTON1: u16 = 0x0001;
+    const LLKHF_REPEAT: u32 = 0x4000;
 
     unsafe extern "system" fn mouse_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
         if n_code >= 0 {
@@ -182,7 +183,7 @@ mod windows {
                 WM_RBUTTONDOWN | WM_RBUTTONUP => 2,
                 WM_MBUTTONDOWN | WM_MBUTTONUP => 3,
                 WM_XBUTTONDOWN | WM_XBUTTONUP => {
-                    if detail == XBUTTON1 as u16 { 4 } else { 5 }
+                    if detail == XBUTTON1 { 4 } else { 5 }
                 }
                 WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
                     return CallNextHookEx(None, n_code, w_param, l_param);
@@ -220,7 +221,7 @@ mod windows {
             let kbd = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
             let vk = kbd.vkCode;
             if (w_param.0 as u32 == WM_KEYDOWN || w_param.0 as u32 == WM_SYSKEYDOWN)
-                && (kbd.flags & KBDLLHOOKSTRUCT_FLAGS(LLKHF_REPEAT as u32)) != KBDLLHOOKSTRUCT_FLAGS(0)
+                && (kbd.flags & LLKHF_REPEAT != 0)
             {
                 return CallNextHookEx(None, n_code, w_param, l_param);
             }
@@ -254,7 +255,6 @@ mod windows {
                 Some(HINSTANCE(std::ptr::null_mut())),
                 0,
             ).unwrap();
-            // Не передаём _hook в тред — избегаем Send-ошибки
             thread::spawn(|| {
                 let mut msg: MSG = std::mem::zeroed();
                 loop {
@@ -265,7 +265,6 @@ mod windows {
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
-                // UnhookWindowsHookEx не вызываем — хук удалится при завершении процесса
             });
         }
         Ok(())
