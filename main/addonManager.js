@@ -41,20 +41,37 @@ class AddonManager {
   }
 
   async loadAddonsConfig() {
-    try {
-      const response = await axios.get('https://raw.githubusercontent.com/Vladgobelen/NSQCu/main/addons.json', {
-        headers: { 'User-Agent': 'NightWatchUpdater' },
-        timeout: 10000
-      });
-      return response.data;
-    } catch (error) {
-      logger.error('Error loading addons config:', error.message);
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('Таймаут при загрузке конфигурации. Проверьте подключение к интернету.');
-      }
-      throw new Error('Failed to load addons configuration');
+  try {
+    logger.info('[LOAD_CONFIG] Attempting to fetch addons.json from GitHub...');
+    const response = await axios.get('https://raw.githubusercontent.com/Vladgobelen/NSQCu/main/addons.json', {
+      headers: { 'User-Agent': 'NightWatchUpdater' },
+      timeout: 10000
+    });
+    logger.info(`[LOAD_CONFIG] Successfully fetched config. Status: ${response.status}`);
+    return response.data;
+  } catch (error) {
+    // Логируем ВЕСЬ объект ошибки для максимальной детализации
+    logger.error('[LOAD_CONFIG] Full error object:', error);
+
+    // Также логируем конкретные, наиболее полезные поля
+    logger.error(`[LOAD_CONFIG] Error message: ${error.message || 'No message'}`);
+    logger.error(`[LOAD_CONFIG] Error code: ${error.code || 'No code'}`);
+    logger.error(`[LOAD_CONFIG] Error status: ${error.response?.status || 'No status'}`);
+    logger.error(`[LOAD_CONFIG] Error URL: https://raw.githubusercontent.com/Vladgobelen/NSQCu/main/addons.json`);
+
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Таймаут при загрузке конфигурации. Проверьте подключение к интернету.');
+    } else if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+      throw new Error('Не удается найти сервер. Проверьте DNS или подключение к интернету.');
+    } else if (error.response && error.response.status === 404) {
+      throw new Error('Конфигурационный файл не найден на сервере. Обратитесь к разработчику.');
+    } else if (error.response && error.response.status === 403) {
+      throw new Error('Доступ к конфигурации запрещен. Возможно, сработал брандмауэр или блокировка.');
+    } else {
+      throw new Error(`Не удалось загрузить конфигурацию аддонов. Причина: ${error.message || 'Неизвестная ошибка'}`);
     }
   }
+}
 
   async loadAddons() {
     try {

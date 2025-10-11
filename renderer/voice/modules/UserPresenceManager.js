@@ -97,20 +97,27 @@ class UserPresenceManager {
         };
     }
 
-    static checkActivity() {
-        const currentTime = Date.now();
-        const inactiveTime = currentTime - this.lastActivityTime;
+static checkActivity() {
+    const currentTime = Date.now();
+    const inactiveTime = currentTime - this.lastActivityTime;
 
-        // Если пользователь неактивен дольше таймаута
-        if (inactiveTime > this.INACTIVITY_TIMEOUT && this.isUserActive) {
-            this.setUserActive(false);
-        }
-        // Если пользователь снова активен после неактивности
-        else if (inactiveTime <= this.INACTIVITY_TIMEOUT && !this.isUserActive) {
-            this.setUserActive(true);
-        }
+    // Основное изменение: Пользователь онлайн, если он находится в комнате.
+    // Активность мыши/клавиатуры влияет только на "статус активности", но не на "онлайн/оффлайн".
+    const shouldBeOnline = this.client.currentRoom !== null;
+
+    // Обновляем статус онлайн/оффлайн на основе присутствия в комнате
+    if (shouldBeOnline !== this.isUserActive) {
+        this.setUserActive(shouldBeOnline);
     }
 
+    // Опционально: Можно также отправлять событие о "неактивности" (например, для отображения значка "неактивен"),
+    // но это не должно влиять на основной статус "онлайн".
+    // if (inactiveTime > this.INACTIVITY_TIMEOUT) {
+    //     // Отправить событие "пользователь неактивен"
+    // } else {
+    //     // Отправить событие "пользователь активен"
+    // }
+}
     static async updatePresence() {
         if (!this.client.userId || !this.client.token) return;
 

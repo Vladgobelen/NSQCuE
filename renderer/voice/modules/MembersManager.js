@@ -26,37 +26,44 @@ static updateMember(userId, updates) {
     }
 }
 
+// modules/MembersManager.js
 static addMember(memberData) {
     if (!memberData.userId) {
         console.error('Member data must contain userId');
         return;
     }
-
-    // 🔴🔴🔴 АГРЕССИВНЫЙ ДЕБАГ: Логируем ВСЕ входящие данные
     console.group('🔴🔴🔴 [DEBUG] MEMBERS MANAGER: addMember CALLED');
     console.log('🎯 [DEBUG] RAW INPUT memberData:', JSON.stringify(memberData, null, 2));
     console.groupEnd();
+
+    // 🔴🔴🔴 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ:
+    // Получаем текущего пользователя, если он уже существует.
+    const existingMember = this.members.get(memberData.userId);
+    let isCurrentlyOnline = true; // По умолчанию true для нового пользователя
+
+    if (existingMember) {
+        isCurrentlyOnline = existingMember.isOnline;
+        // 🔴🔴🔴 ДОПОЛНИТЕЛЬНАЯ ЗАЩИТА: Если это текущий пользователь, ВСЕГДА сохраняем его статус как true.
+        if (this.client && memberData.userId === this.client.userId) {
+            isCurrentlyOnline = true;
+        }
+    }
 
     const processedMemberData = {
         userId: memberData.userId,
         username: memberData.username || `User_${memberData.userId.substr(0, 8)}`,
         isMicActive: memberData.isMicActive || false,
-isOnline: memberData.isOnline !== undefined ? memberData.isOnline : (this.members.has(memberData.userId) ? this.members.get(memberData.userId).isOnline : true),
+        isOnline: memberData.isOnline !== undefined ? memberData.isOnline : isCurrentlyOnline,
         clientId: memberData.clientId || null
     };
 
-    // 🔴🔴🔴 АГРЕССИВНЫЙ ДЕБАГ: Логируем обработанные данные
     console.group('🔴🔴🔴 [DEBUG] MEMBERS MANAGER: addMember PROCESSED');
     console.log('🎯 [DEBUG] PROCESSED memberData:', JSON.stringify(processedMemberData, null, 2));
     console.groupEnd();
 
-    // Если пользователь уже существует, обновляем его данные.
-    // Если нет — добавляем нового.
     this.members.set(processedMemberData.userId, processedMemberData);
     UIManager.updateMembersList(Array.from(this.members.values()));
 }
-
-
     static removeMember(userId) {
         if (this.members.has(userId)) {
             this.members.delete(userId);
@@ -69,53 +76,65 @@ isOnline: memberData.isOnline !== undefined ? memberData.isOnline : (this.member
         UIManager.updateMembersList([]);
     }
 
-    static updateAllMembers(members) {
-        this.members.clear();
-        members.forEach(member => this.addMember(member));
-    }
+// modules/MembersManager.js
 
+static updateAllMembers(members) {
+    console.log('🎯 [MEMBERS MANAGER] updateAllMembers called. Replacing entire members list.');
+    console.log('🎯 [MEMBERS MANAGER] New members list (in order):', members.map(m => `${m.username} (${m.isOnline ? 'ONLINE' : 'OFFLINE'})`));
+    
+    // ✅ 1. Полностью очищаем внутреннюю карту
+    this.members.clear();
+    
+    // ✅ 2. Заполняем карту в ТОЧНОМ порядке, в котором пришли данные от сервера
+    members.forEach(member => {
+        this.members.set(member.userId, member);
+    });
+    
+    // ✅ 3. ГЛАВНОЕ ИЗМЕНЕНИЕ: Передаем в UI исходный массив `members`, а не Array.from(this.members.values())
+    // Это гарантирует, что порядок в UI будет ТОЧНО таким же, как на сервере.
+    UIManager.updateMembersList(members); // <-- Передаем `members`, а не `Array.from(this.members.values())`
+    
+    console.log('✅ [MEMBERS MANAGER] Members list fully replaced and rendered in correct order.');
+}
 
 static setupSocketHandlers(client) {
     if (!client.socket) return;
+
     client.socket.on('room-participants', (participants) => {
         this.updateAllMembers(participants);
     });
 
-    // --- ИЗМЕНЕННЫЙ ОБРАБОТЧИК ---
-    // Было: client.socket.on('user-joined', (user) => { this.addMember(user); });
-    // Стало:
-client.socket.on('user-joined', (user) => {
-    console.log('User joined (ONLINE):', user);
-    // Проверяем, существует ли пользователь
-    if (this.members.has(user.userId)) {
-        // Если существует, обновляем его данные и статус онлайн
-        this.updateMember(user.userId, { 
-            ...user,
-            isOnline: true 
-        });
-    } else {
-        // Если не существует, добавляем нового пользователя
-        this.addMember({
-            ...user,
-            isOnline: true // Явно устанавливаем статус онлайн для нового пользователя
-        });
-    }
-    UIManager.addMessage('System', `Пользователь ${user.username} присоединился к комнате`);
-});
-    // --- КОНЕЦ ИЗМЕНЕНИЙ ---
+    // --- ИЗМЕНЕННЫЙ ОБРАБОТЧИК user-joined ---
+    client.socket.on('user-joined', async (user) => {
+        console.log('User joined (ONLINE):', user);
+        // Проверяем, существует ли пользователь
+        if (this.members.has(user.userId)) {
+            // Если существует, обновляем его данные и статус онлайн
+            this.updateMember(user.userId, { 
+                ...user,
+                isOnline: true 
+            });
+        } else {
+            // Если не существует, добавляем нового пользователя
+            this.addMember({
+                ...user,
+                isOnline: true
+            });
+        }
+        UIManager.addMessage('System', `Пользователь ${user.username} присоединился к комнате`);
+    });
 
-client.socket.on('user-left', (data) => {
-    console.log('User left (OFFLINE):', data);
-    // Обновляем существующего пользователя, устанавливая isOnline: false
-    this.updateMember(data.userId, { isOnline: false });
-    // Получаем имя пользователя из списка, чтобы отобразить в сообщении
-    const member = this.getMember(data.userId);
-    if (member) {
-        UIManager.addMessage('System', `Пользователь ${member.username} покинул комнату`);
-    } else {
-        UIManager.addMessage('System', `Пользователь покинул комнату`);
-    }
-});
+    // --- ИСПРАВЛЕННЫЙ ОБРАБОТЧИК user-left ---
+    client.socket.on('user-left', async (data) => {
+        console.log('User left:', data);
+        // Получаем имя пользователя из списка, чтобы отобразить в сообщении
+        const member = MembersManager.getMember(data.userId);
+        if (member) {
+            UIManager.addMessage('System', `Пользователь ${member.username} покинул комнату`);
+        } else {
+            UIManager.addMessage('System', `Пользователь покинул комнату`);
+        }
+    });
 
     client.socket.on('user-mic-state', (data) => {
         if (data.userId) {
@@ -130,6 +149,8 @@ client.socket.on('user-left', (data) => {
         }
     });
 }
+
+
     static setupSSEHandlers() {
         console.log('SSE handlers for members are setup in TextChatManager');
     }

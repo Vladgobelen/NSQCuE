@@ -1,14 +1,57 @@
-*
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.yarn/
 
-!main/
-!main/**
-!renderer/
-!renderer/**
-!assets/
-!assets/**
-!package.json
-!package-lock.json
-!README.md
-!LICENSE
-!.gitignore
-!.electron-builder.config.js
+# Rust
+/target/
+**/*.node
+
+# Electron builder
+/dist/
+/out/
+/build/
+
+# Logs and temp files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+.zshistory
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Tests
+__test__/
+*.spec.*
+*.test.*
+
+# TypeScript / Build artifacts
+*.d.ts
+*.map
+tsconfig.tsbuildinfo
+
+# WASM / Workers
+wasi-worker*.mjs
+
+# Audio / Assets (если не нужны в репо)
+/renderer/voice/sounds/*.mp3
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

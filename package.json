@@ -28,6 +28,7 @@
     }
   },
   "dependencies": {
+    "@napi-rs/cli": "^3.3.0",
     "axios": "^1.6.8",
     "fs-extra": "^11.2.0",
     "mediasoup-client": "^3.16.1",

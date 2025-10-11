@@ -75,7 +75,7 @@ class RoomManager {
       UIManager.addMessage('System', `✅ Вы присоединились к комнате`);
       return true;
     } catch (error) {
-      UIManager.showError('Не удалось присоединиться к комнате: ' + error.message);
+      //UIManager.showError('Не удалось присоединиться к комнате: ' + error.message);
       throw error;
     }
   }
@@ -289,17 +289,28 @@ class RoomManager {
       
       roomElement.innerHTML = `🔊 ${room.name} ${isOwner ? '<span class="owner-badge">(Вы)</span>' : ''}`;
       
+
+
 roomElement.addEventListener('click', async (e) => {
     e.stopPropagation();
-    
-    // Если это уже текущая комната, не делаем ничего
     if (client.currentRoom === room.id) {
         return;
     }
-    
+
+    // 🔊 Разблокировка autoplay на iOS через проигрывание звука
+    try {
+        const unlockAudio = new Audio('/sounds/room-join.mp3'); // ← путь к вашему файлу
+        unlockAudio.volume = 0.5; // почти тихо, но не 0 (иначе Safari может проигнорировать)
+        await unlockAudio.play();
+        console.log('✅ Audio unlock successful on iOS');
+    } catch (err) {
+        console.warn('🔇 Audio unlock failed (likely not iOS or no user gesture):', err);
+        // На iOS без жеста play() выбросит ошибку — это нормально.
+        // Но если клик был — звук должен проиграться.
+    }
+
     try {
         await client.joinRoom(room.id);
-        
         localStorage.setItem('lastRoomId', room.id);
         localStorage.setItem('lastServerId', client.currentServerId);
     } catch (error) {
@@ -307,6 +318,7 @@ roomElement.addEventListener('click', async (e) => {
         UIManager.showError('Не удалось присоединиться к комнате: ' + error.message);
     }
 });
+
       if (isMember) {
         const actionButtons = document.createElement('div');
         actionButtons.className = 'room-actions';
@@ -334,7 +346,7 @@ roomElement.addEventListener('click', async (e) => {
         if (isOwner) {
           const inviteBtn = document.createElement('button');
           inviteBtn.className = 'room-action-btn';
-          inviteBtn.innerHTML = '🔗';
+          //inviteBtn.innerHTML = '🔗';
           inviteBtn.title = 'Создать приглашение';
           inviteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
