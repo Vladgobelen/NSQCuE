@@ -164,6 +164,7 @@ mod windows {
         WM_MOUSEWHEEL, WM_MOUSEHWHEEL,
         MSLLHOOKSTRUCT, KBDLLHOOKSTRUCT, MSG,
         GetMessageW, TranslateMessage, DispatchMessageW,
+        KBDLLHOOKSTRUCT_FLAGS,
     };
 
     static MOUSE_CALLBACK: LazyLock<Mutex<Option<ThreadsafeFunction<MouseEvent>>>> =
@@ -171,7 +172,6 @@ mod windows {
     static KEYBOARD_CALLBACK: LazyLock<Mutex<Option<ThreadsafeFunction<KeyEvent>>>> =
         LazyLock::new(|| Mutex::new(None));
 
-    const XBUTTON1: u16 = 0x0001;
     const LLKHF_REPEAT: u32 = 0x4000;
 
     unsafe extern "system" fn mouse_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
@@ -183,7 +183,7 @@ mod windows {
                 WM_RBUTTONDOWN | WM_RBUTTONUP => 2,
                 WM_MBUTTONDOWN | WM_MBUTTONUP => 3,
                 WM_XBUTTONDOWN | WM_XBUTTONUP => {
-                    if detail == XBUTTON1 { 4 } else { 5 }
+                    if detail == 0x0001 { 4 } else { 5 }
                 }
                 WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
                     return CallNextHookEx(None, n_code, w_param, l_param);
@@ -207,7 +207,7 @@ mod windows {
                 button_code,
                 event_type: event_type.to_string(),
             };
-            if let Ok(mut g) = MOUSE_CALLBACK.lock() {
+            if let Ok(g) = MOUSE_CALLBACK.lock() {
                 if let Some(ref f) = *g {
                     let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
                 }
@@ -221,7 +221,7 @@ mod windows {
             let kbd = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
             let vk = kbd.vkCode;
             if (w_param.0 as u32 == WM_KEYDOWN || w_param.0 as u32 == WM_SYSKEYDOWN)
-                && (kbd.flags & LLKHF_REPEAT != 0)
+                && (kbd.flags & KBDLLHOOKSTRUCT_FLAGS(LLKHF_REPEAT)) != KBDLLHOOKSTRUCT_FLAGS(0)
             {
                 return CallNextHookEx(None, n_code, w_param, l_param);
             }
@@ -234,7 +234,7 @@ mod windows {
                 code: vk,
                 event_type: event_type.to_string(),
             };
-            if let Ok(mut g) = KEYBOARD_CALLBACK.lock() {
+            if let Ok(g) = KEYBOARD_CALLBACK.lock() {
                 if let Some(ref f) = *g {
                     let _ = f.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
                 }
