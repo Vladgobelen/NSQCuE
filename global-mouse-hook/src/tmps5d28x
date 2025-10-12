@@ -1,0 +1,355 @@
+use napi_derive::napi;
+use napi::{
+    bindgen_prelude::*,
+    threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
+};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::collections::HashSet;
+use std::time::Duration;
+
+#[napi(object)]
+pub struct MouseEvent {
+    pub button_code: u32,
+    pub event_type: String,
+}
+
+#[napi(object)]
+pub struct KeyEvent {
+    pub code: u32,
+    pub event_type: String,
+}
+
+// ========================
+// WINDOWS IMPLEMENTATION
+// ========================
+#[cfg(target_os = "windows")]
+mod platform {
+    use super::*;
+    use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::*;
+
+    static MOUSE_CALLBACK: Mutex<Option<ThreadsafeFunction<MouseEvent>>> = Mutex::new(None);
+    static KEYBOARD_CALLBACK: Mutex<Option<ThreadsafeFunction<KeyEvent>>> = Mutex::new(None);
+    static HOOK_THREAD_RUNNING: Mutex<bool> = Mutex::new(false);
+
+    const LLKHF_REPEAT: u32 = 0x4000;
+
+    unsafe extern "system" fn mouse_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+        if n_code >= 0 {
+            let hook_struct = &*(l_param.0 as *const MSLLHOOKSTRUCT);
+            let (button_code, event_type) = match w_param.0 as u32 {
+                WM_LBUTTONDOWN => (1, "down"),
+                WM_LBUTTONUP => (1, "up"),
+                WM_RBUTTONDOWN => (2, "down"),
+                WM_RBUTTONUP => (2, "up"),
+                WM_MBUTTONDOWN => (3, "down"),
+                WM_MBUTTONUP => (3, "up"),
+                WM_XBUTTONDOWN | WM_XBUTTONUP => {
+                    let xbutton = (hook_struct.mouseData >> 16) as u16;
+                    let button = if xbutton == 1 { 4 } else { 5 };
+                    let event = if w_param.0 as u32 == WM_XBUTTONDOWN { "down" } else { "up" };
+                    (button, event)
+                }
+                _ => return CallNextHookEx(None, n_code, w_param, l_param),
+            };
+
+            let evt = MouseEvent {
+                button_code,
+                event_type: event_type.to_string(),
+            };
+
+            if let Ok(callback_guard) = MOUSE_CALLBACK.lock() {
+                if let Some(ref callback) = *callback_guard {
+                    let _ = callback.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
+                }
+            }
+        }
+        CallNextHookEx(None, n_code, w_param, l_param)
+    }
+
+    unsafe extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+        if n_code >= 0 {
+            let hook_struct = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
+            if (w_param.0 as u32 == WM_KEYDOWN || w_param.0 as u32 == WM_SYSKEYDOWN)
+                && (hook_struct.flags & KBDLLHOOKSTRUCT_FLAGS(LLKHF_REPEAT)) != KBDLLHOOKSTRUCT_FLAGS(0)
+            {
+                return CallNextHookEx(None, n_code, w_param, l_param);
+            }
+
+            let vk_code = hook_struct.vkCode;
+            let event_type = if w_param.0 as u32 == WM_KEYDOWN || w_param.0 as u32 == WM_SYSKEYDOWN {
+                "down"
+            } else {
+                "up"
+            };
+
+            let evt = KeyEvent {
+                code: vk_code,
+                event_type: event_type.to_string(),
+            };
+
+            if let Ok(callback_guard) = KEYBOARD_CALLBACK.lock() {
+                if let Some(ref callback) = *callback_guard {
+                    let _ = callback.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
+                }
+            }
+        }
+        CallNextHookEx(None, n_code, w_param, l_param)
+    }
+
+    fn start_message_loop() {
+        if *HOOK_THREAD_RUNNING.lock().unwrap() {
+            return;
+        }
+        *HOOK_THREAD_RUNNING.lock().unwrap() = true;
+        thread::spawn(|| {
+            unsafe {
+                let mut msg = std::mem::MaybeUninit::uninit();
+                loop {
+                    let result = GetMessageW(msg.as_mut_ptr(), None, 0, 0);
+                    if result.0 <= 0 {
+                        break;
+                    }
+                    let msg = msg.assume_init();
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+            }
+            *HOOK_THREAD_RUNNING.lock().unwrap() = false;
+        });
+    }
+
+    #[napi]
+    pub fn start_global_mouse_hook(callback: ThreadsafeFunction<MouseEvent>) -> Result<()> {
+        *MOUSE_CALLBACK.lock().unwrap() = Some(callback);
+        unsafe {
+            SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), Some(HINSTANCE::default()), 0)
+                .map_err(|e| Error::new(Status::GenericFailure, format!("Mouse hook failed: {}", e)))?;
+            start_message_loop();
+        }
+        Ok(())
+    }
+
+    #[napi]
+    pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Result<()> {
+        *KEYBOARD_CALLBACK.lock().unwrap() = Some(callback);
+        unsafe {
+            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), Some(HINSTANCE::default()), 0)
+                .map_err(|e| Error::new(Status::GenericFailure, format!("Keyboard hook failed: {}", e)))?;
+            start_message_loop();
+        }
+        Ok(())
+    }
+
+    #[napi]
+    pub fn stop_all_hooks() -> Result<()> {
+        *MOUSE_CALLBACK.lock().unwrap() = None;
+        *KEYBOARD_CALLBACK.lock().unwrap() = None;
+        Ok(())
+    }
+}
+
+// ========================
+// LINUX IMPLEMENTATION — FIXED
+// ========================
+#[cfg(target_os = "linux")]
+mod platform {
+    use super::*;
+    use evdev::{Device, EventType, InputEvent};
+    use std::fs::File;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    static MOUSE_CALLBACK: Mutex<Option<ThreadsafeFunction<MouseEvent>>> = Mutex::new(None);
+    static KEYBOARD_CALLBACK: Mutex<Option<ThreadsafeFunction<KeyEvent>>> = Mutex::new(None);
+    static RUNNING: AtomicBool = AtomicBool::new(false);
+    static MONITORED_DEVICES: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+
+    #[napi]
+    pub fn start_global_mouse_hook(callback: ThreadsafeFunction<MouseEvent>) -> Result<()> {
+        *MOUSE_CALLBACK.lock().unwrap() = Some(callback);
+        if !RUNNING.load(Ordering::SeqCst) {
+            RUNNING.store(true, Ordering::SeqCst);
+            start_input_monitor();
+        }
+        Ok(())
+    }
+
+    #[napi]
+    pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Result<()> {
+        *KEYBOARD_CALLBACK.lock().unwrap() = Some(callback);
+        if !RUNNING.load(Ordering::SeqCst) {
+            RUNNING.store(true, Ordering::SeqCst);
+            start_input_monitor();
+        }
+        Ok(())
+    }
+
+    fn start_input_monitor() {
+        thread::spawn(|| {
+            let mut known_devices = HashSet::new();
+
+            while RUNNING.load(Ordering::SeqCst) {
+                let mut current_devices = HashSet::new();
+
+                if let Ok(entries) = std::fs::read_dir("/dev/input") {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        let path_str = path.to_string_lossy().to_string();
+                        if !path_str.contains("event") {
+                            continue;
+                        }
+
+                        if let Ok(file) = File::open(&path) {
+                            if let Ok(device) = Device::from_fd(file.into()) {
+                                let name = device.name().unwrap_or("Unknown").to_string();
+                                let key = format!("{}|{}", name, path_str);
+
+                                let is_mouse = is_mouse_device(&device);
+                                let is_keyboard = is_keyboard_device(&device);
+
+                                if is_mouse || is_keyboard {
+                                    current_devices.insert(key.clone());
+                                    if !known_devices.contains(&key) {
+                                        known_devices.insert(key.clone());
+                                        if is_mouse {
+                                            monitor_device(device.clone(), name.clone(), true);
+                                        }
+                                        if is_keyboard {
+                                            monitor_device(device, name, false);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Optional cleanup
+                let to_remove: Vec<_> = known_devices.difference(&current_devices).cloned().collect();
+                for key in to_remove {
+                    known_devices.remove(&key);
+                }
+
+                thread::sleep(Duration::from_millis(1000));
+            }
+        });
+    }
+
+    fn monitor_device(mut device: Device, name: String, is_mouse: bool) {
+        thread::spawn(move || {
+            while RUNNING.load(Ordering::SeqCst) {
+                match device.fetch_events() {
+                    Ok(events) => {
+                        for event in events {
+                            if is_mouse {
+                                process_mouse_event(event);
+                            } else {
+                                process_keyboard_event(event);
+                            }
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+
+    fn process_mouse_event(event: InputEvent) {
+        if event.event_type() == EventType::KEY {
+            if let Some(button) = evdev_key_to_mouse_button(event.code()) {
+                let pressed = event.value() == 1;
+                let evt = MouseEvent {
+                    button_code: button,
+                    event_type: if pressed { "down".to_string() } else { "up".to_string() },
+                };
+                if let Ok(cb) = MOUSE_CALLBACK.lock() {
+                    if let Some(ref callback) = *cb {
+                        let _ = callback.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
+                    }
+                }
+            }
+        }
+    }
+
+    fn process_keyboard_event(event: InputEvent) {
+        if event.event_type() == EventType::KEY {
+            if evdev_key_to_mouse_button(event.code()).is_none() {
+                let code = event.code() as u32;
+                if (1..=255).contains(&code) {
+                    let pressed = event.value() == 1;
+                    let evt = KeyEvent {
+                        code,
+                        event_type: if pressed { "down".to_string() } else { "up".to_string() },
+                    };
+                    if let Ok(cb) = KEYBOARD_CALLBACK.lock() {
+                        if let Some(ref callback) = *cb {
+                            let _ = callback.call(Ok(evt), ThreadsafeFunctionCallMode::NonBlocking);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn is_mouse_device(device: &Device) -> bool {
+        let has_relative = device.supported_events().contains(EventType::RELATIVE);
+        let has_buttons = if let Some(keys) = device.supported_keys() {
+            keys.iter().any(|code| (0x110..=0x117).contains(&code.0))
+        } else {
+            false
+        };
+        has_relative || has_buttons
+    }
+
+    fn is_keyboard_device(device: &Device) -> bool {
+        if !device.supported_events().contains(EventType::KEY) {
+            return false;
+        }
+        if let Some(keys) = device.supported_keys() {
+            let regular_keys: usize = keys.iter()
+                .filter(|&code| code.0 >= 1 && code.0 <= 255 && !(0x110..=0x117).contains(&code.0))
+                .count();
+            regular_keys > 10
+        } else {
+            false
+        }
+    }
+
+    fn evdev_key_to_mouse_button(code: u16) -> Option<u32> {
+        match code {
+            0x110 => Some(1), // BTN_LEFT
+            0x111 => Some(2), // BTN_RIGHT
+            0x112 => Some(3), // BTN_MIDDLE
+            0x113 => Some(4), // BTN_SIDE
+            0x114 => Some(5), // BTN_EXTRA
+            _ => None,
+        }
+    }
+
+    #[napi]
+    pub fn stop_all_hooks() -> Result<()> {
+        RUNNING.store(false, Ordering::SeqCst);
+        *MOUSE_CALLBACK.lock().unwrap() = None;
+        *KEYBOARD_CALLBACK.lock().unwrap() = None;
+        Ok(())
+    }
+}
+
+// ========================
+// CROSS-PLATFORM EXPORTS
+// ========================
+#[napi]
+pub fn start_global_mouse_hook(callback: ThreadsafeFunction<MouseEvent>) -> Result<()> {
+    platform::start_global_mouse_hook(callback)
+}
+
+#[napi]
+pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<KeyEvent>) -> Result<()> {
+    platform::start_global_keyboard_hook(callback)
+}
+
+#[napi]
+pub fn stop_all_hooks() -> Result<()> {
+    platform::stop_all_hooks()
+}я

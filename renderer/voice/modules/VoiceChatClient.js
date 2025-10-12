@@ -58,9 +58,7 @@ class VoiceChatClient {
         if (typeof Audio === 'undefined') return;
         const audio = new Audio(`./sounds/${soundName}.mp3`);
         audio.volume = 0.6;
-        // Играем звук только если аудиоконтекст разблокирован
         audio.play().catch(err => {
-            // Игнорируем ошибки (например, "play() failed because user didn't interact")
             console.debug(`[Sound] Could not play ${soundName}:`, err.message);
         });
     }
@@ -72,13 +70,11 @@ class VoiceChatClient {
         UIManager.setClient(this);
         UserPresenceManager.init(this);
         InviteManager.init(this);
-        // Подписываемся на событие глобального PTT
         if (window.electronAPI?.onPTTPressed) {
-            window.electronAPI.onPTTPressed(() => {
-                this.handlePTTPressed();
+            window.electronAPI.onPTTPressed((isDown) => {
+                this.handlePTTPressed(isDown);
             });
         }
-        // Загружаем сохраненный PTT-хоткей
         if (window.electronAPI?.getPTTHotkey) {
             try {
                 this.pttHotkey = await window.electronAPI.getPTTHotkey();
@@ -789,7 +785,7 @@ class VoiceChatClient {
                         message.imageUrl,
                         message.id,
                         message.readBy || [],
-                        message.userId // ← обязательно передаём userId
+                        message.userId
                     );
                     if (message.type !== 'image' && message.userId !== this.userId) {
                         this.playSound('message');
@@ -809,7 +805,7 @@ class VoiceChatClient {
                             null,
                             msg.id,
                             msg.readBy || [],
-                            msg.userId // ← обязательно передаём userId
+                            msg.userId
                         );
                     });
                 }
@@ -860,23 +856,13 @@ class VoiceChatClient {
 
     async toggleMicrophone(forceState = null) {
         console.log('Toggling microphone, current state:', this.isMicActive, 'PTT active:', this.isPTTActive);
-        
-        // 🚫 Если пытаемся выключить микрофон, но PTT активен - блокируем
-        if (forceState === false && this.isPTTActive) {
-            console.log('[PTT] Blocking mic disable - PTT is active');
-            return;
-        }
-
         try {
             if (!this.currentRoom) {
                 UIManager.showError('Микрофон доступен только в комнатах');
                 return;
             }
-
             const targetState = forceState !== null ? forceState : !this.isMicActive;
-
             if (targetState) {
-                // Включение микрофона
                 console.log('[PTT] Enabling microphone...');
                 const enabled = await MediaManager.enableMicrophone(this);
                 if (!enabled) {
@@ -887,7 +873,6 @@ class VoiceChatClient {
                 }
                 this.playSound('mic-on');
             } else {
-                // Выключение микрофона
                 console.log('[PTT] Disabling microphone...');
                 const disabled = await MediaManager.disableMicrophone(this);
                 if (!disabled) {
@@ -895,8 +880,6 @@ class VoiceChatClient {
                 }
                 this.playSound('mic-off');
             }
-
-            // Обновляем UI и рассылаем состояние
             UIManager.updateMemberMicState(this.userId, this.isMicActive);
             if (this.socket) {
                 this.socket.emit('mic-state-change', {
@@ -906,14 +889,12 @@ class VoiceChatClient {
                     userId: this.userId
                 });
             }
-
             this.updateMicButtonState();
-
         } catch (error) {
             console.error('Error toggling microphone:', error);
             UIManager.showError('Ошибка микрофона: ' + error.message);
             this.updateMicButtonState();
-            throw error; // Пробрасываем ошибку выше для обработки в PTT
+            throw error;
         }
     }
 
@@ -1143,7 +1124,6 @@ class VoiceChatClient {
         }
     }
 
-    // === PTT & BACK BUTTON LOGIC ===
     goBackToMain() {
         console.log('Going back to main addon manager...');
         if (window.electronAPI && typeof window.electronAPI.goBack === 'function') {
@@ -1153,126 +1133,158 @@ class VoiceChatClient {
         }
     }
 
-async showPTTSetupModal() {
-  const modalOverlay = document.createElement('div');
-  modalOverlay.className = 'modal-overlay';
-  modalOverlay.style.display = 'flex';
-  modalOverlay.innerHTML = `
-    <div class="modal-content">
-      <h2>Настройка Push-to-Talk</h2>
-      <p>Нажмите нужную клавишу или кнопку мыши. Поддерживается только ОДНА клавиша или ОДНА кнопка мыши.</p>
-      <div id="pttCaptureArea" style="
-        width: 100%;
-        height: 80px;
-        border: 2px dashed #666;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 10px 0;
-        font-size: 16px;
-        color: #888;
-        cursor: pointer;
-      ">
-        Нажмите клавишу или кнопку мыши...
-      </div>
-      <div id="capturedKeys" style="
-        min-height: 24px;
-        text-align: center;
-        font-family: monospace;
-        margin: 8px 0;
-        color: #000;
-      "></div>
-      <div class="modal-buttons">
-        <button id="confirmPTT">Сохранить</button>
-        <button id="cancelPTT">Отмена</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modalOverlay);
+    async showPTTSetupModal() {
+    const existing = document.querySelector('.ptt-setup-modal');
+    if (existing) existing.remove();
 
-  const captureArea = modalOverlay.querySelector('#pttCaptureArea');
-  const capturedKeysEl = modalOverlay.querySelector('#capturedKeys');
-  let capturedCode = null;
+    const modal = document.createElement('div');
+    modal.className = 'ptt-setup-modal';
+    modal.innerHTML = `
+        <div class="ptt-setup-modal-content">
+            <h3>Настройка Push-to-Talk</h3>
+            <p>Нажмите клавиши или кнопки мыши <strong>внутри выделенной области</strong> для создания сочетания.</p>
+            <div id="ptt-capture-box" class="ptt-capture-box">
+                <span id="ptt-hint" class="ptt-hint">Нажмите любую клавишу или кнопку мыши внутри этой области...</span>
+            </div>
+            <div id="ptt-current" class="ptt-current-display"></div>
+            <div class="ptt-modal-buttons">
+                <button id="ptt-clear" class="ptt-button ptt-clear-btn">Очистить</button>
+                <button id="ptt-cancel" class="ptt-button ptt-cancel-btn">Отмена</button>
+                <button id="ptt-save" class="ptt-button ptt-save-btn" disabled>Сохранить</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 
-  const keyDownHandler = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Получаем физический scancode (не e.code!)
-    // Но в браузере мы не можем получить настоящий scancode → временно запрещаем настройку через UI
-    capturedKeysEl.textContent = '⚠️ Настройка PTT через UI отключена. Используйте клавиши в settings.json.';
-    capturedCode = null;
-  };
+    const box = modal.querySelector('#ptt-capture-box');
+    const hint = modal.querySelector('#ptt-hint');
+    const current = modal.querySelector('#ptt-current');
+    const saveBtn = modal.querySelector('#ptt-save');
+    const clearBtn = modal.querySelector('#ptt-clear');
+    const cancelBtn = modal.querySelector('#ptt-cancel');
 
-  const mouseDownHandler = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    capturedKeysEl.textContent = '⚠️ Настройка PTT через UI отключена. Используйте клавиши в settings.json.';
-    capturedCode = null;
-  };
+    let capturedCodes = new Set();
+    let isMouseInBox = false;
 
-  captureArea.addEventListener('keydown', keyDownHandler, true);
-  captureArea.addEventListener('mousedown', mouseDownHandler, true);
-  captureArea.focus();
-
-  const cleanup = () => {
-    captureArea.removeEventListener('keydown', keyDownHandler, true);
-    captureArea.removeEventListener('mousedown', mouseDownHandler, true);
-  };
-
-  modalOverlay.querySelector('#confirmPTT').addEventListener('click', async () => {
-    // Временно: не даём сохранять через UI
-    UIManager.showError('Настройка PTT через интерфейс отключена. Отредактируйте settings.json вручную.');
-    cleanup();
-    modalOverlay.remove();
-  });
-
-  modalOverlay.querySelector('#cancelPTT').addEventListener('click', () => {
-    cleanup();
-    modalOverlay.remove();
-  });
-
-  modalOverlay.addEventListener('click', (e) => {
-    if (e.target === modalOverlay) {
-      cleanup();
-      modalOverlay.remove();
-    }
-  });
-}
-
-    getKeyString(e) {
-        let key = '';
-        if (e.ctrlKey) key += 'Ctrl+';
-        if (e.altKey) key += 'Alt+';
-        if (e.shiftKey) key += 'Shift+';
-        if (e.metaKey) key += 'Command+';
-        const code = e.code.replace('Key', '').replace('Digit', '');
-        if (code && !['ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'ShiftLeft', 'ShiftRight', 'MetaLeft', 'MetaRight'].includes(e.code)) {
-            key += code;
+    // === Отслеживание положения мыши ===
+    const updateMousePosition = (e) => {
+        const rect = box.getBoundingClientRect();
+        isMouseInBox = (
+            e.clientX >= rect.left &&
+            e.clientX <= rect.right &&
+            e.clientY >= rect.top &&
+            e.clientY <= rect.bottom
+        );
+        
+        // Визуальная обратная связь
+        if (isMouseInBox) {
+            box.classList.add('active');
+        } else {
+            box.classList.remove('active');
         }
-        return key || null;
+    };
+
+    // Слушаем движение мыши по всему документу
+    document.addEventListener('mousemove', updateMousePosition);
+
+    const updateDisplay = () => {
+        if (capturedCodes.size === 0) {
+            current.textContent = '';
+            hint.textContent = 'Нажмите любую клавишу или кнопку мыши внутри этой области...';
+            saveBtn.disabled = true;
+        } else {
+            const codes = Array.from(capturedCodes).sort((a, b) => a - b);
+            current.textContent = `Сочетание: [${codes.join(', ')}]`;
+            hint.textContent = 'Продолжайте добавлять клавиши или нажмите "Сохранить"';
+            saveBtn.disabled = false;
+        }
+    };
+
+    // Запрос на начало захвата
+    try {
+        await window.electronAPI.startPTTCapture();
+    } catch (err) {
+        this.showError('Не удалось начать захват PTT: ' + err.message);
+        modal.remove();
+        return;
     }
+
+    // Подписка на обновления от main - ТЕПЕРЬ С ПРОВЕРКОЙ ПОЛОЖЕНИЯ МЫШИ
+    const handleCaptureUpdate = (codes) => {
+        // Фильтруем коды: принимаем только если мышь в области
+        if (!isMouseInBox) {
+            hint.textContent = '⚠️ Переместите мышь в область захвата...';
+            hint.style.color = '#ff6b6b';
+            return;
+        }
+        
+        capturedCodes = new Set(codes);
+        updateDisplay();
+        hint.style.color = '';
+    };
+
+    window.electronAPI.onPTTCaptureUpdate(handleCaptureUpdate);
+
+    clearBtn.onclick = () => {
+        capturedCodes.clear();
+        updateDisplay();
+        window.electronAPI.clearPTTCapture();
+    };
+
+    cancelBtn.onclick = () => {
+        window.electronAPI.stopPTTCapture();
+        window.electronAPI.offPTTCaptureUpdate(handleCaptureUpdate);
+        document.removeEventListener('mousemove', updateMousePosition);
+        modal.remove();
+    };
+
+    saveBtn.onclick = async () => {
+        try {
+            const finalCodes = Array.from(capturedCodes).sort((a, b) => a - b);
+            const result = await window.electronAPI.setPTTHotkey(finalCodes);
+            if (result.success) {
+                this.pttHotkey = finalCodes;
+                this.showMessage('System', `✅ PTT сохранён: [${finalCodes.join(', ')}]`);
+            } else {
+                this.showError('❌ Ошибка: ' + (result.message || 'неизвестно'));
+            }
+        } catch (err) {
+            console.error('PTT save error:', err);
+            this.showError('❌ Не удалось сохранить хоткей');
+        }
+        window.electronAPI.stopPTTCapture();
+        window.electronAPI.offPTTCaptureUpdate(handleCaptureUpdate);
+        document.removeEventListener('mousemove', updateMousePosition);
+        modal.remove();
+    };
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) cancelBtn.click();
+    });
+
+    updateDisplay();
+}
 
     async handlePTTPressed(isDown) {
-  if (!this.currentRoom) return;
-  if (isDown) {
-    if (!this.isMicActive) {
-      try {
-        await this.toggleMicrophone(true);
-      } catch (e) {
-        console.error('[PTT] Mic enable failed:', e);
-      }
+        if (!this.currentRoom) return;
+        if (isDown) {
+            if (!this.isMicActive) {
+                try {
+                    await this.toggleMicrophone(true);
+                } catch (e) {
+                    console.error('[PTT] Mic enable failed:', e);
+                }
+            }
+        } else {
+            if (this.isMicActive) {
+                try {
+                    await this.toggleMicrophone(false);
+                } catch (e) {
+                    console.error('[PTT] Mic disable failed:', e);
+                }
+            }
+        }
     }
-  } else {
-    if (this.isMicActive) {
-      try {
-        await this.toggleMicrophone(false);
-      } catch (e) {
-        console.error('[PTT] Mic disable failed:', e);
-      }
-    }
-  }
-}
 }
 
 window.debugForceRefresh = () => {

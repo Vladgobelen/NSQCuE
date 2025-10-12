@@ -1,0 +1,600 @@
+Результат теста:
+diver ~/sources/JS/delE1/global-mouse-hook % npm run test:debug-detailed                                              21:04:48
+
+> global-mouse-hook@1.0.0 test:debug-detailed
+> node test-debug-detailed.js
+
+🎯 Simple Input Hook Test
+=========================
+
+🚀 Starting hooks...
+
+[RUST-LINUX] 🚀 Starting global mouse hook...
+[RUST-LINUX] 🚀 Starting global keyboard hook...
+[RUST-LINUX] 🔍 Scanning for mouse devices...
+[RUST-LINUX] 🔍 Scanning for keyboard devices...
+[RUST-LINUX] 🔍 Mouse check for 'A4TECH USB Device': has_relative=true, has_mouse_buttons=true, is_mouse=true
+[RUST-LINUX] 🎯 Found mouse device: A4TECH USB Device (/dev/input/event11)
+[RUST-LINUX] 🔍 Keyboard check for 'A4TECH USB Device': has_keys=false, is_keyboard=false
+✅ Hooks started!
+👉 Click mouse buttons and press keyboard keys
+[RUST-LINUX] 🔍 Mouse check for 'A4TECH USB Device': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 📡 Starting mouse event loop for: A4TECH USB Device
+👉 Press Escape to stop
+
+[RUST-LINUX] 🔍 Keyboard check for 'A4TECH USB Device': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'A4TECH USB Device Keyboard': has_relative=true, has_mouse_buttons=false, is_mouse=true
+[RUST-LINUX] 🎯 Found mouse device: A4TECH USB Device Keyboard (/dev/input/event7)
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH HDMI/DP,pcm=8': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 📡 Starting mouse event loop for: A4TECH USB Device Keyboard
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH HDMI/DP,pcm=7': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'A4TECH USB Device Keyboard': has_keys=true, is_keyboard=true
+[RUST-LINUX] 🎯 Found keyboard device: A4TECH USB Device Keyboard (/dev/input/event7)
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH HDMI/DP,pcm=8': No KEY events supported
+[RUST-LINUX] 📡 Starting keyboard event loop for: A4TECH USB Device Keyboard
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH HDMI/DP,pcm=3': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH HDMI/DP,pcm=7': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH Headphone': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH HDMI/DP,pcm=3': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH Mic': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH Headphone': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH Mic': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH Mic': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA NVidia HDMI/DP,pcm=9': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH Mic': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA NVidia HDMI/DP,pcm=8': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA NVidia HDMI/DP,pcm=9': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA NVidia HDMI/DP,pcm=7': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA NVidia HDMI/DP,pcm=8': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA NVidia HDMI/DP,pcm=3': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA NVidia HDMI/DP,pcm=7': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HP WMI hotkeys': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA NVidia HDMI/DP,pcm=3': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'PC Speaker': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HP WMI hotkeys': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Keyboard check for 'PC Speaker': No KEY events supported
+[RUST-LINUX] 🔍 Keyboard check for 'ST LIS3LV02DL Accelerometer': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'ST LIS3LV02DL Accelerometer': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'Wireless hotkeys': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Keyboard check for 'SynPS/2 Synaptics TouchPad': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'Wireless hotkeys': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'Video Bus': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'SynPS/2 Synaptics TouchPad': has_relative=false, has_mouse_buttons=true, is_mouse=true
+[RUST-LINUX] 🎯 Found mouse device: SynPS/2 Synaptics TouchPad (/dev/input/event12)
+[RUST-LINUX] 🔍 Mouse check for 'Video Bus': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 📡 Starting mouse event loop for: SynPS/2 Synaptics TouchPad
+[RUST-LINUX] 🔍 Keyboard check for 'Video Bus': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'Video Bus': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'SEM USB Keyboard System Control': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'SEM USB Keyboard System Control': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'SEM USB Keyboard Consumer Control': has_keys=true, is_keyboard=true
+[RUST-LINUX] 🎯 Found keyboard device: SEM USB Keyboard Consumer Control (/dev/input/event5)
+[RUST-LINUX] 📡 Starting keyboard event loop for: SEM USB Keyboard Consumer Control
+[RUST-LINUX] 🔍 Keyboard check for 'SEM USB Keyboard': has_keys=true, is_keyboard=true
+[RUST-LINUX] 🎯 Found keyboard device: SEM USB Keyboard (/dev/input/event4)
+[RUST-LINUX] 🔍 Keyboard check for 'AT Translated Set 2 keyboard': has_keys=true, is_keyboard=true
+[RUST-LINUX] 🎯 Found keyboard device: AT Translated Set 2 keyboard (/dev/input/event3)
+[RUST-LINUX] 🔍 Keyboard check for 'Power Button': has_keys=false, is_keyboard=false
+[RUST-LINUX] 📡 Starting keyboard event loop for: SEM USB Keyboard
+[RUST-LINUX] 📡 Starting keyboard event loop for: AT Translated Set 2 keyboard
+[RUST-LINUX] 🔍 Mouse check for 'SEM USB Keyboard Consumer Control': has_relative=true, has_mouse_buttons=false, is_mouse=true
+[RUST-LINUX] 🎯 Found mouse device: SEM USB Keyboard Consumer Control (/dev/input/event5)
+[RUST-LINUX] 🔍 Mouse check for 'SEM USB Keyboard': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 📡 Starting mouse event loop for: SEM USB Keyboard Consumer Control
+[RUST-LINUX] 🔍 Keyboard check for 'Power Button': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'AT Translated Set 2 keyboard': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'Lid Switch': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'Power Button': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Mouse check for 'Power Button': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Mouse check for 'Lid Switch': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589825, time=SystemTime { tv_sec: 1760277891, tv_nsec: 323571000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=272, value=1, time=SystemTime { tv_sec: 1760277891, tv_nsec: 323571000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x110 to mouse button 1
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=1, pressed=true
+[RUST-LINUX] 📤 Sending mouse event to JS: button=1, action=down
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277891, tv_nsec: 323571000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+❌ NULL mouse event
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589825, time=SystemTime { tv_sec: 1760277891, tv_nsec: 637604000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=272, value=0, time=SystemTime { tv_sec: 1760277891, tv_nsec: 637604000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x110 to mouse button 1
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=1, pressed=false
+[RUST-LINUX] 📤 Sending mouse event to JS: button=1, action=up
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277891, tv_nsec: 637604000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+❌ NULL mouse event
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=MISC, code=4, value=458759, time=SystemTime { tv_sec: 1760277892, tv_nsec: 274653000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: SEM USB Keyboard)
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=KEY, code=32, value=1, time=SystemTime { tv_sec: 1760277892, tv_nsec: 274653000 }
+[RUST-LINUX] ⌨ Processing keyboard key: device=SEM USB Keyboard, code=32, pressed=true
+[RUST-LINUX] 📤 Sending keyboard event to JS: code=32, action=down
+[RUST-LINUX] ✅ Keyboard callback called successfully
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277892, tv_nsec: 274653000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: SEM USB Keyboard)
+❌ NULL key event
+d[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=MISC, code=4, value=458759, time=SystemTime { tv_sec: 1760277892, tv_nsec: 434676000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: SEM USB Keyboard)
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=KEY, code=32, value=0, time=SystemTime { tv_sec: 1760277892, tv_nsec: 434676000 }
+[RUST-LINUX] ⌨ Processing keyboard key: device=SEM USB Keyboard, code=32, pressed=false
+[RUST-LINUX] 📤 Sending keyboard event to JS: code=32, action=up
+[RUST-LINUX] ✅ Keyboard callback called successfully
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277892, tv_nsec: 434676000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: SEM USB Keyboard)
+❌ NULL key event
+[RUST-LINUX] 🔍 Keyboard check for 'A4TECH USB Device': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Keyboard check for 'A4TECH USB Device': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'A4TECH USB Device': has_relative=true, has_mouse_buttons=true, is_mouse=true
+[RUST-LINUX] 🎯 Found mouse device: A4TECH USB Device (/dev/input/event11)
+[RUST-LINUX] 📡 Starting mouse event loop for: A4TECH USB Device
+[RUST-LINUX] 🔍 Keyboard check for 'A4TECH USB Device Keyboard': has_keys=true, is_keyboard=true
+[RUST-LINUX] 🎯 Found keyboard device: A4TECH USB Device Keyboard (/dev/input/event7)
+[RUST-LINUX] 🔍 Mouse check for 'A4TECH USB Device': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH HDMI/DP,pcm=8': No KEY events supported
+[RUST-LINUX] 📡 Starting keyboard event loop for: A4TECH USB Device Keyboard
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH HDMI/DP,pcm=7': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'A4TECH USB Device Keyboard': has_relative=true, has_mouse_buttons=false, is_mouse=true
+[RUST-LINUX] 🎯 Found mouse device: A4TECH USB Device Keyboard (/dev/input/event7)
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH HDMI/DP,pcm=8': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 📡 Starting mouse event loop for: A4TECH USB Device Keyboard
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH HDMI/DP,pcm=3': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH HDMI/DP,pcm=7': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH Headphone': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH HDMI/DP,pcm=3': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH Mic': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH Headphone': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA Intel PCH Mic': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH Mic': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA NVidia HDMI/DP,pcm=9': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA Intel PCH Mic': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA NVidia HDMI/DP,pcm=8': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA NVidia HDMI/DP,pcm=9': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA NVidia HDMI/DP,pcm=7': No KEY events supported
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589826, time=SystemTime { tv_sec: 1760277892, tv_nsec: 989604000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=273, value=1, time=SystemTime { tv_sec: 1760277892, tv_nsec: 989604000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x111 to mouse button 2
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=2, pressed=true
+[RUST-LINUX] 📤 Sending mouse event to JS: button=2, action=down
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277892, tv_nsec: 989604000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589826, time=SystemTime { tv_sec: 1760277892, tv_nsec: 989604000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=273, value=1, time=SystemTime { tv_sec: 1760277892, tv_nsec: 989604000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x111 to mouse button 2
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=2, pressed=true
+[RUST-LINUX] 📤 Sending mouse event to JS: button=2, action=down
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277892, tv_nsec: 989604000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+❌ NULL mouse event
+❌ NULL mouse event
+[RUST-LINUX] 🔍 Mouse check for 'HDA NVidia HDMI/DP,pcm=8': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HDA NVidia HDMI/DP,pcm=3': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HDA NVidia HDMI/DP,pcm=7': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'HP WMI hotkeys': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'HDA NVidia HDMI/DP,pcm=3': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'PC Speaker': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'HP WMI hotkeys': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Mouse check for 'PC Speaker': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589826, time=SystemTime { tv_sec: 1760277893, tv_nsec: 135586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=273, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 135586000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x111 to mouse button 2
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=2, pressed=false
+[RUST-LINUX] 📤 Sending mouse event to JS: button=2, action=up
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589826, time=SystemTime { tv_sec: 1760277893, tv_nsec: 135586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=273, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 135586000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x111 to mouse button 2
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=2, pressed=false
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 135586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📤 Sending mouse event to JS: button=2, action=up
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 135586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+❌ NULL mouse event
+❌ NULL mouse event
+[RUST-LINUX] 🔍 Keyboard check for 'ST LIS3LV02DL Accelerometer': No KEY events supported
+[RUST-LINUX] 🔍 Mouse check for 'ST LIS3LV02DL Accelerometer': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Mouse check for 'Wireless hotkeys': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Mouse check for 'SynPS/2 Synaptics TouchPad': has_relative=false, has_mouse_buttons=true, is_mouse=true
+[RUST-LINUX] 🎯 Found mouse device: SynPS/2 Synaptics TouchPad (/dev/input/event12)
+[RUST-LINUX] 🔍 Mouse check for 'Video Bus': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 📡 Starting mouse event loop for: SynPS/2 Synaptics TouchPad
+[RUST-LINUX] 🔍 Keyboard check for 'Wireless hotkeys': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'Video Bus': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'SynPS/2 Synaptics TouchPad': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'SEM USB Keyboard System Control': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'Video Bus': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'SEM USB Keyboard Consumer Control': has_relative=true, has_mouse_buttons=false, is_mouse=true
+[RUST-LINUX] 🎯 Found mouse device: SEM USB Keyboard Consumer Control (/dev/input/event5)
+[RUST-LINUX] 🔍 Mouse check for 'SEM USB Keyboard': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 📡 Starting mouse event loop for: SEM USB Keyboard Consumer Control
+[RUST-LINUX] 🔍 Keyboard check for 'Video Bus': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'AT Translated Set 2 keyboard': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'SEM USB Keyboard System Control': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'Power Button': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'SEM USB Keyboard Consumer Control': has_keys=true, is_keyboard=true
+[RUST-LINUX] 🎯 Found keyboard device: SEM USB Keyboard Consumer Control (/dev/input/event5)
+[RUST-LINUX] 🔍 Keyboard check for 'SEM USB Keyboard': has_keys=true, is_keyboard=true
+[RUST-LINUX] 🎯 Found keyboard device: SEM USB Keyboard (/dev/input/event4)
+[RUST-LINUX] 🔍 Keyboard check for 'AT Translated Set 2 keyboard': has_keys=true, is_keyboard=true
+[RUST-LINUX] 🎯 Found keyboard device: AT Translated Set 2 keyboard (/dev/input/event3)
+[RUST-LINUX] 📡 Starting keyboard event loop for: SEM USB Keyboard
+[RUST-LINUX] 📡 Starting keyboard event loop for: SEM USB Keyboard Consumer Control
+[RUST-LINUX] 📡 Starting keyboard event loop for: AT Translated Set 2 keyboard
+[RUST-LINUX] 🔍 Keyboard check for 'Power Button': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'Power Button': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'Power Button': has_keys=false, is_keyboard=false
+[RUST-LINUX] 🔍 Mouse check for 'Lid Switch': has_relative=false, has_mouse_buttons=false, is_mouse=false
+[RUST-LINUX] 🔍 Keyboard check for 'Lid Switch': No KEY events supported
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 595589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 595589000 }
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 595589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 595589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 597589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 597589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 597589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 597589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 599589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 599589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 599589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 599589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 601596000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 601596000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 601596000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 601596000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 603590000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 603590000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 603590000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 603590000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 603590000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 603590000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 605594000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 605594000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 605594000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 605594000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 607588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 607588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 607588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 607588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 607588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 607588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 609613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 609613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 609613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 609613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 609613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 609613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 611582000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 611582000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 611582000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 611582000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 613583000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 613583000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 613583000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 613583000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 615586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 615586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 615586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 615586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 617579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 617579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 617579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 617579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 619613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 619613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 619613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 619613000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 621584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 621584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 621584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 621584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 623584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 623584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 623584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 623584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 625589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 625589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 625589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 625589000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 627602000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 627602000 }
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 627602000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 627602000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 629620000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 629620000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 629620000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 629620000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 631591000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 631591000 }
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 631591000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 631591000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 631591000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 631591000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 633585000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 633585000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 633585000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 633585000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 635581000 }
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 635581000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 635581000 }
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 635581000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 637579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 637579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 637579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 637579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 637579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 637579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 639579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 639579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 639579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 639579000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 641588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 641588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 641588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 641588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 645584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 645584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 645584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 645584000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 649593000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 649593000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 649593000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 649593000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 651598000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 651598000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 651598000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 651598000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 655587000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 655587000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 655587000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 655587000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 659593000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 659593000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 659593000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 659593000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 661581000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 661581000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 661581000 }
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=1, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 661581000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 661581000 }
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 661581000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 669583000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 669583000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 669583000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 669583000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 675588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=RELATIVE, code=0, value=-1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 675588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=RELATIVE (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 675588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 675588000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589825, time=SystemTime { tv_sec: 1760277893, tv_nsec: 749586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589825, time=SystemTime { tv_sec: 1760277893, tv_nsec: 749586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=272, value=1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 749586000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x110 to mouse button 1
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=1, pressed=true
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=272, value=1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 749586000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x110 to mouse button 1
+[RUST-LINUX] 📤 Sending mouse event to JS: button=1, action=down
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=1, pressed=true
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 749586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+[RUST-LINUX] 📤 Sending mouse event to JS: button=1, action=down
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 749586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+❌ NULL mouse event
+❌ NULL mouse event
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589825, time=SystemTime { tv_sec: 1760277893, tv_nsec: 849586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=MISC, code=4, value=589825, time=SystemTime { tv_sec: 1760277893, tv_nsec: 849586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: A4TECH USB Device)
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=272, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 849586000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x110 to mouse button 1
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=1, pressed=false
+[RUST-LINUX] 📤 Sending mouse event to JS: button=1, action=up
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 849586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+❌ NULL mouse event
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=KEY, code=272, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 849586000 }
+[RUST-LINUX] 🔄 Converted evdev code 0x110 to mouse button 1
+[RUST-LINUX] 🖱 Processing mouse button: device=A4TECH USB Device, button=1, pressed=false
+[RUST-LINUX] 📤 Sending mouse event to JS: button=1, action=up
+[RUST-LINUX] ✅ Mouse callback called successfully
+[RUST-LINUX] 📨 Raw mouse event from A4TECH USB Device: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 849586000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: A4TECH USB Device)
+❌ NULL mouse event
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=MISC, code=4, value=458976, time=SystemTime { tv_sec: 1760277893, tv_nsec: 986697000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: SEM USB Keyboard)
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=KEY, code=29, value=1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 986697000 }
+[RUST-LINUX] ⌨ Processing keyboard key: device=SEM USB Keyboard, code=29, pressed=true
+[RUST-LINUX] 📤 Sending keyboard event to JS: code=29, action=down
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=MISC, code=4, value=458976, time=SystemTime { tv_sec: 1760277893, tv_nsec: 986697000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: SEM USB Keyboard)
+[RUST-LINUX] ✅ Keyboard callback called successfully
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 986697000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: SEM USB Keyboard)
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=KEY, code=29, value=1, time=SystemTime { tv_sec: 1760277893, tv_nsec: 986697000 }
+[RUST-LINUX] ⌨ Processing keyboard key: device=SEM USB Keyboard, code=29, pressed=true
+[RUST-LINUX] 📤 Sending keyboard event to JS: code=29, action=down
+[RUST-LINUX] ✅ Keyboard callback called successfully
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277893, tv_nsec: 986697000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: SEM USB Keyboard)
+❌ NULL key event
+❌ NULL key event
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=MISC, code=4, value=458758, time=SystemTime { tv_sec: 1760277894, tv_nsec: 138667000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: SEM USB Keyboard)
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=KEY, code=46, value=1, time=SystemTime { tv_sec: 1760277894, tv_nsec: 138667000 }
+[RUST-LINUX] ⌨ Processing keyboard key: device=SEM USB Keyboard, code=46, pressed=true
+[RUST-LINUX] 📤 Sending keyboard event to JS: code=46, action=down
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=MISC, code=4, value=458758, time=SystemTime { tv_sec: 1760277894, tv_nsec: 138667000 }
+[RUST-LINUX] ✅ Keyboard callback called successfully
+[RUST-LINUX] ⏭ Ignoring non-key event: type=MISC (device: SEM USB Keyboard)
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=KEY, code=46, value=1, time=SystemTime { tv_sec: 1760277894, tv_nsec: 138667000 }
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277894, tv_nsec: 138667000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: SEM USB Keyboard)
+[RUST-LINUX] ⌨ Processing keyboard key: device=SEM USB Keyboard, code=46, pressed=true
+[RUST-LINUX] 📤 Sending keyboard event to JS: code=46, action=down
+[RUST-LINUX] ✅ Keyboard callback called successfully
+[RUST-LINUX] 📨 Raw keyboard event from SEM USB Keyboard: type=SYNCHRONIZATION, code=0, value=0, time=SystemTime { tv_sec: 1760277894, tv_nsec: 138667000 }
+[RUST-LINUX] ⏭ Ignoring non-key event: type=SYNCHRONIZATION (device: SEM USB Keyboard)
+❌ NULL key event
+❌ NULL key event
+^C
+🛑 Stopping all hooks...
+[RUST-LINUX] 🛑 Stopping all hooks...
+
+📊 Final Results:
+   Mouse events: 0
+   Keyboard events: 0

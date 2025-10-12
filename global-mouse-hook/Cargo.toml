@@ -8,20 +8,26 @@ version = "0.1.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-evdev = "0.13.2"
 napi = "3.0.0"
 napi-derive = "3.0.0"
-x11rb = "0.13.2"
 
-[build-dependencies]
-napi-build = "2"
+# Linux dependencies
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "0.13.2"
+lazy_static = "1.4.0"
 
-[profile.release]
-lto = true
-strip = "symbols"
-
+# Windows dependencies - добавлены недостающие фичи
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.62.2", features = [
-  "Win32_Foundation",
-  "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_SystemServices",
+    "Win32_System_LibraryLoader",
 ] }
+
+[build-dependencies]
+napi-build = "2.0.0"
+
+[package.metadata.napi]
+name = "global-mouse-hook"
+triples = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "x86_64-apple-darwin"]

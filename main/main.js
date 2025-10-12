@@ -7,6 +7,7 @@ const addonManager = require('./addonManager');
 const settings = require('./settings');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
+
 let mainWindow;
 let checkingUpdate = false;
 
@@ -28,20 +29,31 @@ try {
 }
 
 // === Состояние PTT ===
-let activeKeys = new Set(); // Set<number> — клавиши как есть, мышь как 1000 + button_code
+let keyStates = new Map(); // Map<number, boolean>
 let pttHotkeySet = new Set(); // Set<number>
 let pttActive = false;
 
+// === Режим захвата для настройки PTT ===
+let captureMode = false;
+let capturedCodesTemp = new Set();
+
 function loadPTTHotkeyFromSettings() {
   const raw = settings.settings.pttHotkeyCodes;
-  logger.info(`🔍 Загружаем PTT хоткей из settings.json:`, JSON.stringify(raw));
   if (Array.isArray(raw)) {
     pttHotkeySet = new Set(raw);
-    logger.info(`✅ PTT хоткей установлен: [${raw.join(', ')}]`);
+    logger.info(`🎯 PTT hotkey loaded: [${raw.join(', ')}]`);
   } else {
     pttHotkeySet = new Set();
-    logger.warn('⚠️ PTT хоткей отсутствует или повреждён в settings.json');
+    logger.warn('⚠️ PTT hotkey missing or invalid in settings.json');
   }
+}
+
+function isPTTHotkeyPressed() {
+  if (pttHotkeySet.size === 0) return false;
+  for (const code of pttHotkeySet) {
+    if (!keyStates.get(code)) return false;
+  }
+  return true;
 }
 
 async function startGlobalHooks() {
@@ -49,80 +61,85 @@ async function startGlobalHooks() {
     logger.error('❌ globalMouseHook not available — PTT will not work');
     return;
   }
-  activeKeys.clear();
+  keyStates.clear();
   loadPTTHotkeyFromSettings();
-
   try {
     // === КЛАВИАТУРА ===
-    logger.info('🔌 Starting global keyboard hook...');
     await globalMouseHook.startGlobalKeyboardHook((err, event) => {
-      if (err) {
-        logger.error('❌ Keyboard hook error:', err);
+      if (err || !Array.isArray(event) || event.length < 2) return;
+      if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents) return;
+      const [code, type] = event;
+
+      // === Режим захвата ===
+      if (captureMode) {
+        if (type === 3) { // key down
+          capturedCodesTemp.add(code);
+          mainWindow.webContents.send('ptt-capture-update', Array.from(capturedCodesTemp));
+          logger.debug(`[PTT CAPTURE] Keyboard code captured: ${code}`);
+        }
         return;
       }
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      const code = event.code;
-      const type = event.event_type;
-      logger.debug(`⌨️ Raw keyboard event: code=${code}, type=${type}`);
-      if (type === 'down') {
-        activeKeys.add(code);
-      } else if (type === 'up') {
-        activeKeys.delete(code);
+
+      const prevState = keyStates.get(code) || false;
+      let changed = false;
+      if (type === 3 && !prevState) {
+        keyStates.set(code, true);
+        changed = true;
+      } else if (type === 4 && prevState) { // key up
+        keyStates.set(code, false);
+        changed = true;
       }
-      checkPTTState(type);
+      if (changed) {
+        const now = isPTTHotkeyPressed();
+        if (pttActive !== now) {
+          pttActive = now;
+          mainWindow.webContents.send('ptt-pressed', now);
+          logger.info(now ? '🎙️ PTT ON' : '🔇 PTT OFF');
+        }
+      }
     });
 
     // === МЫШЬ ===
-    logger.info('🔌 Starting global mouse hook...');
     await globalMouseHook.startGlobalMouseHook((err, event) => {
-      if (err) {
-        logger.error('❌ Mouse hook error:', err);
+      if (err || !Array.isArray(event) || event.length < 2) return;
+      if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents) return;
+      const [button, type] = event;
+      if (button < 1 || button > 5) return;
+
+      // 🔥 ИСПРАВЛЕНИЕ: используем отрицательные коды для мыши → -1, -2, ..., -5
+      const code = -button;
+
+      // === Режим захвата ===
+      if (captureMode) {
+        if (type === 1) { // mouse down
+          capturedCodesTemp.add(code);
+          mainWindow.webContents.send('ptt-capture-update', Array.from(capturedCodesTemp));
+          logger.debug(`[PTT CAPTURE] Mouse button captured: ${button} → code ${code}`);
+        }
         return;
       }
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      // Игнорируем колёсико (модуль уже фильтрует 4/5, но на всякий)
-      if (event.button_code < 1 || event.button_code > 5) return;
-      const unifiedCode = 1000 + event.button_code; // 1001 = левая, 1002 = правая и т.д.
-      const type = event.event_type;
-      logger.debug(`🖱️ Raw mouse event: button=${event.button_code} → code=${unifiedCode}, type=${type}`);
-      if (type === 'down') {
-        activeKeys.add(unifiedCode);
-      } else if (type === 'up') {
-        activeKeys.delete(unifiedCode);
-      }
-      checkPTTState(type);
-    });
 
+      const prevState = keyStates.get(code) || false;
+      let changed = false;
+      if (type === 1 && !prevState) {
+        keyStates.set(code, true);
+        changed = true;
+      } else if (type === 2 && prevState) { // mouse up
+        keyStates.set(code, false);
+        changed = true;
+      }
+      if (changed) {
+        const now = isPTTHotkeyPressed();
+        if (pttActive !== now) {
+          pttActive = now;
+          mainWindow.webContents.send('ptt-pressed', now);
+          logger.info(now ? '🎙️ PTT ON' : '🔇 PTT OFF');
+        }
+      }
+    });
     logger.info('✅ Global hooks (keyboard + mouse) started successfully');
   } catch (e) {
     logger.error('💥 Failed to start global hooks:', e);
-  }
-}
-
-function checkPTTState(eventType) {
-  const activeArray = [...activeKeys].sort((a, b) => a - b);
-  const hotkeyArray = [...pttHotkeySet].sort((a, b) => a - b);
-  const isMatch = (
-    activeKeys.size === pttHotkeySet.size &&
-    hotkeyArray.every((k, i) => activeArray[i] === k)
-  );
-  logger.debug(`📊 Active keys: [${activeArray.join(', ')}]`);
-  logger.debug(`🎯 PTT hotkey: [${hotkeyArray.join(', ')}]`);
-  logger.debug(`matchCondition: ${isMatch}, pttActive: ${pttActive}`);
-
-  if (isMatch && eventType === 'down' && !pttActive) {
-    pttActive = true;
-    logger.info('🎙️ PTT ACTIVATED (keydown/mousedown)');
-    mainWindow.webContents.send('ptt-pressed', true);
-  } else if (eventType === 'up' && pttActive) {
-    const stillPressed = [...pttHotkeySet].some(k => activeKeys.has(k));
-    if (!stillPressed) {
-      pttActive = false;
-      logger.info('🔇 PTT DEACTIVATED (keyup/mouseup)');
-      mainWindow.webContents.send('ptt-pressed', false);
-    } else {
-      logger.debug('⏸️ PTT still active — some keys/buttons still pressed');
-    }
   }
 }
 
@@ -167,7 +184,7 @@ function createWindow() {
           "default-src 'self'; " +
           "script-src 'self' 'unsafe-inline'; " +
           "style-src 'self' 'unsafe-inline'; " +
-          "img-src 'self' https://ns.fiber-gate.ru data:; " +
+          "img-src 'self' https://ns.fiber-gate.ru ; " +
           "connect-src 'self' http://194.31.171.29:38592 https://ns.fiber-gate.ru wss://ns.fiber-gate.ru; " +
           "media-src 'self' blob:; " +
           "child-src 'self' blob:; " +
@@ -213,13 +230,11 @@ app.whenReady().then(async () => {
   }
   addonManager.setGamePath(settings.getGamePath());
   createWindow();
-  // Запускаем глобальные хуки
-// Запускаем глобальные хуки ТОЛЬКО на Windows
-if (globalMouseHook && os.platform() === 'win32') {
-  startGlobalHooks();
-} else if (globalMouseHook && os.platform() === 'linux') {
-  logger.warn('⚠️ Global PTT отключён на Linux (X11 grab блокирует систему)');
-}
+  if (globalMouseHook) {
+    startGlobalHooks();
+  } else {
+    logger.warn('⚠️ Global PTT disabled — native module not loaded');
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -232,37 +247,6 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
-
-// === MINI TEST FOR GLOBAL-MOUSE-HOOK (в development) ===
-if (globalMouseHook && process.env.NODE_ENV === 'development') {
-  setTimeout(async () => {
-    logger.info('🧪 ЗАПУСК ТЕСТА РАБОТОСПОСОБНОСТИ global-mouse-hook');
-    try {
-      await globalMouseHook.startGlobalKeyboardHook((err, event) => {
-        if (err) {
-          logger.error('🧪 ТЕСТ: ОШИБКА клавиатуры:', err);
-          return;
-        }
-        logger.info(`⌨️ [TEST] KEY: code=${event.code}, type=${event.event_type}`);
-      });
-      await globalMouseHook.startGlobalMouseHook((err, event) => {
-        if (err) {
-          logger.error('🧪 ТЕСТ: ОШИБКА мыши:', err);
-          return;
-        }
-        if (event.button_code >= 1 && event.button_code <= 5) {
-          logger.info(`🖱️ [TEST] MOUSE: button=${event.button_code}, type=${event.event_type}`);
-        }
-      });
-      logger.info('🧪 ТЕСТ: ХУКИ ЗАПУЩЕНЫ. Нажмите клавиши или кнопки мыши (10 сек).');
-      setTimeout(() => {
-        logger.info('🧪 ТЕСТ: ЗАВЕРШЁН.');
-      }, 10000);
-    } catch (e) {
-      logger.error('🧪 ТЕСТ: НЕ УДАЛОСЬ ЗАПУСТИТЬ ХУКИ:', e);
-    }
-  }, 3000);
-}
 
 // === IPC Handlers ===
 ipcMain.handle('load-addons', async () => {
@@ -350,6 +334,7 @@ ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
     }
     settings.setPTTHotkeyCodes(codes);
     pttHotkeySet = new Set(codes);
+    keyStates.clear();
     logger.info(`💾 PTT hotkey saved via IPC: [${codes.join(', ')}]`);
     return { success: true };
   } catch (error) {
@@ -360,6 +345,32 @@ ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
 
 ipcMain.handle('get-ptt-hotkey', async () => {
   const codes = settings.getPTTHotkeyCodes();
-  logger.debug(`📤 Sending PTT hotkey to renderer: [${codes ? codes.join(', ') : 'null'}]`);
   return codes;
+});
+
+// === ИСПРАВЛЕННЫЕ ОБРАБОТЧИКИ ЗАХВАТА ===
+ipcMain.handle('start-ptt-capture', async () => {
+  captureMode = true;
+  capturedCodesTemp.clear();
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('ptt-capture-update', []);
+  }
+  logger.info('🎙️ PTT capture mode: STARTED');
+  return true;
+});
+
+ipcMain.handle('stop-ptt-capture', async () => {
+  captureMode = false;
+  const codes = Array.from(capturedCodesTemp);
+  logger.info(`🎙️ PTT capture mode: STOPPED → [${codes.join(', ')}]`);
+  return codes;
+});
+
+ipcMain.handle('clear-ptt-capture', async () => {
+  capturedCodesTemp.clear();
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('ptt-capture-update', []);
+  }
+  logger.info('🧹 PTT capture cleared');
+  return true;
 });
