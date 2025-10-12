@@ -580,4 +580,6 @@ module.exports.startGlobalKeyboardHook = nativeBinding.startGlobalKeyboardHook
 module.exports.startGlobalMouseHook = nativeBinding.startGlobalMouseHook
 module.exports.startGlobalMouseHook = nativeBinding.startGlobalMouseHook
 module.exports.stopGlobalKeyboardHook = nativeBinding.stopGlobalKeyboardHook
+module.exports.stopGlobalKeyboardHook = nativeBinding.stopGlobalKeyboardHook
+module.exports.stopGlobalMouseHook = nativeBinding.stopGlobalMouseHook
 module.exports.stopGlobalMouseHook = nativeBinding.stopGlobalMouseHook
