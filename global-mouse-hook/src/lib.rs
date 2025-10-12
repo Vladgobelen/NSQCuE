@@ -5,7 +5,6 @@ use napi::{
 };
 use std::sync::Mutex;
 use std::thread;
-use std::time::Duration;
 
 #[napi(object)]
 pub struct MouseEvent {
@@ -22,7 +21,7 @@ pub struct KeyEvent {
 }
 
 // ========================
-// WINDOWS
+// WINDOWS - исправленная версия
 // ========================
 #[cfg(target_os = "windows")]
 mod platform {
@@ -32,9 +31,6 @@ mod platform {
 
     static MOUSE_CALLBACK: Mutex<Option<ThreadsafeFunction<MouseEvent>>> = Mutex::new(None);
     static KEYBOARD_CALLBACK: Mutex<Option<ThreadsafeFunction<KeyEvent>>> = Mutex::new(None);
-    
-    static MOUSE_HOOK: Mutex<Option<HHOOK>> = Mutex::new(None);
-    static KEYBOARD_HOOK: Mutex<Option<HHOOK>> = Mutex::new(None);
 
     static HOOK_THREAD_RUNNING: Mutex<bool> = Mutex::new(false);
 
@@ -137,14 +133,13 @@ mod platform {
         *MOUSE_CALLBACK.lock().unwrap() = Some(callback);
         
         unsafe {
-            let hook = SetWindowsHookExW(
+            let _hook = SetWindowsHookExW(
                 WH_MOUSE_LL,
                 Some(mouse_proc),
-                HINSTANCE::default(),
+                Some(HINSTANCE::default()), // Исправлено: обернуто в Some
                 0,
             ).map_err(|e| Error::new(Status::GenericFailure, format!("Failed to set mouse hook: {}", e)))?;
             
-            *MOUSE_HOOK.lock().unwrap() = Some(hook);
             start_message_loop();
         }
         Ok(())
@@ -155,14 +150,13 @@ mod platform {
         *KEYBOARD_CALLBACK.lock().unwrap() = Some(callback);
         
         unsafe {
-            let hook = SetWindowsHookExW(
+            let _hook = SetWindowsHookExW(
                 WH_KEYBOARD_LL,
                 Some(keyboard_proc),
-                HINSTANCE::default(),
+                Some(HINSTANCE::default()), // Исправлено: обернуто в Some
                 0,
             ).map_err(|e| Error::new(Status::GenericFailure, format!("Failed to set keyboard hook: {}", e)))?;
             
-            *KEYBOARD_HOOK.lock().unwrap() = Some(hook);
             start_message_loop();
         }
         Ok(())
@@ -170,26 +164,12 @@ mod platform {
 
     #[napi]
     pub fn stop_global_mouse_hook() -> Result<()> {
-        if let Ok(mut hook_guard) = MOUSE_HOOK.lock() {
-            if let Some(hook) = hook_guard.take() {
-                unsafe {
-                    UnhookWindowsHookEx(hook);
-                }
-            }
-        }
         *MOUSE_CALLBACK.lock().unwrap() = None;
         Ok(())
     }
 
     #[napi]
     pub fn stop_global_keyboard_hook() -> Result<()> {
-        if let Ok(mut hook_guard) = KEYBOARD_HOOK.lock() {
-            if let Some(hook) = hook_guard.take() {
-                unsafe {
-                    UnhookWindowsHookEx(hook);
-                }
-            }
-        }
         *KEYBOARD_CALLBACK.lock().unwrap() = None;
         Ok(())
     }
@@ -204,6 +184,7 @@ mod platform {
     use evdev::{Device, EventType};
     use std::fs::File;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
 
     static MOUSE_CALLBACK: Mutex<Option<ThreadsafeFunction<MouseEvent>>> = Mutex::new(None);
     static KEYBOARD_CALLBACK: Mutex<Option<ThreadsafeFunction<KeyEvent>>> = Mutex::new(None);
