@@ -1,4 +1,3 @@
-// lib.rs - исправленная версия с работающими хоткеями
 use napi_derive::napi;
 use napi::{
     bindgen_prelude::*,
@@ -17,6 +16,18 @@ const KEY_UP: u32 = 4;
 // ------------------------
 // WINDOWS РЕАЛИЗАЦИЯ 
 // ------------------------
+use std::fs::OpenOptions;
+use std::io::Write;
+
+fn debug_log(msg: &str) {
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("C:\\hook_debug.log") 
+    {
+        let _ = writeln!(file, "{}", msg);
+    }
+}
 #[cfg(target_os = "windows")]
 mod platform {
     use super::*;
