@@ -1,4 +1,4 @@
-// lib.rs - исправленная версия с совместимыми импортами
+// lib.rs - финальная исправленная версия
 use napi_derive::napi;
 use napi::{
     bindgen_prelude::*,
@@ -16,18 +16,15 @@ const KEY_UP: u32 = 4;
 
 // ------------------------
 // WINDOWS РЕАЛИЗАЦИЯ 
-// (исправленная версия с совместимыми импортами)
 // ------------------------
 #[cfg(target_os = "windows")]
 mod platform {
     use super::*;
     use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::*;
-    use windows::Win32::UI::Input::KeyboardAndMouse::{KBDLLHOOKSTRUCT, MSLLHOOKSTRUCT};
     use windows::Win32::System::Threading::GetCurrentThreadId;
 
     use std::collections::HashSet;
-    use std::ptr;
 
     lazy_static::lazy_static! {
         static ref MOUSE_CALLBACK: Mutex<Option<ThreadsafeFunction<(u32,u32)>>> = Mutex::new(None);
@@ -64,8 +61,13 @@ mod platform {
                 }
 
                 if send_event && event_type != 0 {
-                    if let Some(tsfn) = KEYBOARD_CALLBACK.lock().unwrap().as_ref() {
-                        let _ = tsfn.call(Ok((vk, event_type)), ThreadsafeFunctionCallMode::NonBlocking);
+                    if let Ok(callback_guard) = KEYBOARD_CALLBACK.lock() {
+                        if let Some(ref callback) = *callback_guard {
+                            let _ = callback.call(
+                                Ok::<(u32, u32), Error>((vk, event_type)), 
+                                ThreadsafeFunctionCallMode::NonBlocking
+                            );
+                        }
                     }
                 }
             }
@@ -98,8 +100,13 @@ mod platform {
             };
 
             if let Some(button) = maybe_button {
-                if let Some(tsfn) = MOUSE_CALLBACK.lock().unwrap().as_ref() {
-                    let _ = tsfn.call(Ok((button, event_type)), ThreadsafeFunctionCallMode::NonBlocking);
+                if let Ok(callback_guard) = MOUSE_CALLBACK.lock() {
+                    if let Some(ref callback) = *callback_guard {
+                        let _ = callback.call(
+                            Ok::<(u32, u32), Error>((button, event_type)), 
+                            ThreadsafeFunctionCallMode::NonBlocking
+                        );
+                    }
                 }
             }
         }
@@ -115,8 +122,10 @@ mod platform {
 
         let join_handle = thread::spawn(|| {
             unsafe {
-                let kb_hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(lowlevel_keyboard_proc), HINSTANCE::default(), 0).expect("Failed to set keyboard hook");
-                let ms_hook = SetWindowsHookExW(WH_MOUSE_LL, Some(lowlevel_mouse_proc), HINSTANCE::default(), 0).expect("Failed to set mouse hook");
+                let kb_hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(lowlevel_keyboard_proc), HINSTANCE::default(), 0)
+                    .expect("Failed to set keyboard hook");
+                let ms_hook = SetWindowsHookExW(WH_MOUSE_LL, Some(lowlevel_mouse_proc), HINSTANCE::default(), 0)
+                    .expect("Failed to set mouse hook");
 
                 {
                     let mut hooks = HOOKS.lock().unwrap();
@@ -212,7 +221,6 @@ mod platform {
 
 // ------------------------
 // LINUX РЕАЛИЗАЦИЯ
-// (полная версия из lib.rs с поддержкой всех кнопок)
 // ------------------------
 #[cfg(target_os = "linux")]
 mod platform {
@@ -221,9 +229,8 @@ mod platform {
     use std::fs::File;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
-    use lazy_static::lazy_static;
 
-    lazy_static! {
+    lazy_static::lazy_static! {
         static ref MOUSE_CALLBACK: Mutex<Option<ThreadsafeFunction<(u32, u32)>>> = Mutex::new(None);
         static ref KEYBOARD_CALLBACK: Mutex<Option<ThreadsafeFunction<(u32, u32)>>> = Mutex::new(None);
         static ref RUNNING: AtomicBool = AtomicBool::new(false);
@@ -232,7 +239,10 @@ mod platform {
     #[napi]
     pub fn start_global_mouse_hook(callback: ThreadsafeFunction<(u32, u32)>) -> Result<()> {
         println!("[RUST-LINUX] 🚀 Starting global mouse hook...");
-        *MOUSE_CALLBACK.lock().unwrap() = Some(callback);
+        {
+            let mut cb_guard = MOUSE_CALLBACK.lock().unwrap();
+            *cb_guard = Some(callback);
+        }
         RUNNING.store(true, Ordering::SeqCst);
         
         thread::spawn(move || {
@@ -245,7 +255,10 @@ mod platform {
     #[napi]
     pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<(u32, u32)>) -> Result<()> {
         println!("[RUST-LINUX] 🚀 Starting global keyboard hook...");
-        *KEYBOARD_CALLBACK.lock().unwrap() = Some(callback);
+        {
+            let mut cb_guard = KEYBOARD_CALLBACK.lock().unwrap();
+            *cb_guard = Some(callback);
+        }
         RUNNING.store(true, Ordering::SeqCst);
         
         thread::spawn(move || {
@@ -333,7 +346,10 @@ mod platform {
                 
                 if let Ok(callback_guard) = MOUSE_CALLBACK.lock() {
                     if let Some(ref callback) = *callback_guard {
-                        let status = callback.call(Ok((button_code, event_type)), ThreadsafeFunctionCallMode::NonBlocking);
+                        let status = callback.call(
+                            Ok::<(u32, u32), Error>((button_code, event_type)), 
+                            ThreadsafeFunctionCallMode::NonBlocking
+                        );
                         if status != Status::Ok {
                             eprintln!("[RUST-LINUX] ❌ Error calling mouse callback: {:?}", status);
                         } else {
@@ -356,7 +372,10 @@ mod platform {
                 
                 if let Ok(callback_guard) = KEYBOARD_CALLBACK.lock() {
                     if let Some(ref callback) = *callback_guard {
-                        let status = callback.call(Ok((key_code, event_type)), ThreadsafeFunctionCallMode::NonBlocking);
+                        let status = callback.call(
+                            Ok::<(u32, u32), Error>((key_code, event_type)), 
+                            ThreadsafeFunctionCallMode::NonBlocking
+                        );
                         if status != Status::Ok {
                             eprintln!("[RUST-LINUX] ❌ Error calling keyboard callback: {:?}", status);
                         } else {
@@ -416,7 +435,10 @@ mod platform {
     pub fn stop_global_mouse_hook() -> Result<()> {
         println!("[RUST-LINUX] 🛑 Stopping mouse hook...");
         RUNNING.store(false, Ordering::SeqCst);
-        *MOUSE_CALLBACK.lock().unwrap() = None;
+        {
+            let mut cb_guard = MOUSE_CALLBACK.lock().unwrap();
+            *cb_guard = None;
+        }
         Ok(())
     }
 
@@ -424,7 +446,10 @@ mod platform {
     pub fn stop_global_keyboard_hook() -> Result<()> {
         println!("[RUST-LINUX] 🛑 Stopping keyboard hook...");
         RUNNING.store(false, Ordering::SeqCst);
-        *KEYBOARD_CALLBACK.lock().unwrap() = None;
+        {
+            let mut cb_guard = KEYBOARD_CALLBACK.lock().unwrap();
+            *cb_guard = None;
+        }
         Ok(())
     }
 
@@ -432,23 +457,18 @@ mod platform {
     pub fn stop_all_hooks() -> Result<()> {
         println!("[RUST-LINUX] 🛑 Stopping all hooks...");
         RUNNING.store(false, Ordering::SeqCst);
-        *MOUSE_CALLBACK.lock().unwrap() = None;
-        *KEYBOARD_CALLBACK.lock().unwrap() = None;
+        {
+            let mut kb_guard = KEYBOARD_CALLBACK.lock().unwrap();
+            *kb_guard = None;
+            let mut ms_guard = MOUSE_CALLBACK.lock().unwrap();
+            *ms_guard = None;
+        }
         Ok(())
     }
 }
 
 // ------------------------
-// КРОССПЛАТФОРМЕННЫЙ РЕЭКСПОРТ
-// ------------------------
-#[cfg(target_os = "windows")]
-pub use platform::*;
-
-#[cfg(target_os = "linux")]
-pub use platform::*;
-
-// ------------------------
-// ОБЩИЕ ЭКСПОРТЫ ДЛЯ N-API
+// КРОССПЛАТФОРМЕННЫЕ ЭКСПОРТЫ
 // ------------------------
 #[napi]
 pub fn start_global_mouse_hook(callback: ThreadsafeFunction<(u32, u32)>) -> Result<()> {
