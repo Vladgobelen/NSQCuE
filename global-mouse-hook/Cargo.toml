@@ -1,33 +1,27 @@
 [package]
-authors = ["Vladgobelen <Vladgobelen@gmail.com>"]
-edition = "2021"
 name = "global_mouse_hook"
 version = "0.1.0"
+edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate_type = ["cdylib"]
 
 [dependencies]
-napi = "3.0.0"
-napi-derive = "3.0.0"
-
-# Linux dependencies
-[target.'cfg(target_os = "linux")'.dependencies]
-evdev = "0.13.2"
+napi = "2.0"
+napi-derive = "2.0"
 lazy_static = "1.4.0"
 
-# Windows dependencies - добавлены недостающие фичи
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62.2", features = [
+windows = { version = "0.52.0", features = [
     "Win32_Foundation",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_System_SystemServices",
+    "Win32_UI_WindowsAndMessaging", 
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Threading",
     "Win32_System_LibraryLoader",
 ] }
 
-[build-dependencies]
-napi-build = "2.0.0"
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "0.12.0"
 
-[package.metadata.napi]
-name = "global-mouse-hook"
-triples = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "x86_64-apple-darwin"]
+[build-dependencies]
+napi-build = "1.0"

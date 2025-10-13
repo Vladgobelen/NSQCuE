@@ -1,47 +1,34 @@
-// lib.rs - объединённая версия с улучшенной Windows реализацией и полной Linux реализацией
-// ----------------------------------------------------------------------------
-// Windows: взята из lib_fix2.rs с добавлением боковых кнопок мыши (4,5)
-// Linux: взята из lib.rs с полной поддержкой кнопок и улучшенным обнаружением устройств
-// ----------------------------------------------------------------------------
-
+// lib.rs - исправленная версия с совместимыми импортами
 use napi_derive::napi;
 use napi::{
     bindgen_prelude::*,
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
 };
 
-use std::sync::{Mutex, Arc};
+use std::sync::Mutex;
 use std::thread;
 
 // Простые числовые коды для передачи в JS
-const MOUSE_DOWN: u32 = 1;  // Событие нажатия кнопки мыши
-const MOUSE_UP: u32 = 2;    // Событие отпускания кнопки мыши
-const KEY_DOWN: u32 = 3;    // Событие нажатия клавиши клавиатуры
-const KEY_UP: u32 = 4;      // Событие отпускания клавиши клавиатуры
+const MOUSE_DOWN: u32 = 1;
+const MOUSE_UP: u32 = 2;
+const KEY_DOWN: u32 = 3;
+const KEY_UP: u32 = 4;
 
 // ------------------------
 // WINDOWS РЕАЛИЗАЦИЯ 
-// (на основе lib_fix2.rs с добавлением боковых кнопок мыши)
+// (исправленная версия с совместимыми импортами)
 // ------------------------
 #[cfg(target_os = "windows")]
 mod platform {
     use super::*;
-    use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM, BOOL};
-    use windows::Win32::UI::WindowsAndMessaging::{
-        SetWindowsHookExW, UnhookWindowsHookEx, CallNextHookEx, GetMessageW, TranslateMessage,
-        DispatchMessageW, PostThreadMessageW, GetCurrentThreadId,
-        HHOOK, MSG, WH_KEYBOARD_LL, WH_MOUSE_LL, WM_QUIT, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN,
-        WM_SYSKEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MBUTTONDOWN,
-        WM_MBUTTONUP, WM_XBUTTONDOWN, WM_XBUTTONUP,
-    };
+    use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::*;
     use windows::Win32::UI::Input::KeyboardAndMouse::{KBDLLHOOKSTRUCT, MSLLHOOKSTRUCT};
+    use windows::Win32::System::Threading::GetCurrentThreadId;
 
-    use std::sync::{MutexGuard};
     use std::collections::HashSet;
     use std::ptr;
-    use std::time::Duration;
 
-    // Статические переменные, защищённые Mutex
     lazy_static::lazy_static! {
         static ref MOUSE_CALLBACK: Mutex<Option<ThreadsafeFunction<(u32,u32)>>> = Mutex::new(None);
         static ref KEYBOARD_CALLBACK: Mutex<Option<ThreadsafeFunction<(u32,u32)>>> = Mutex::new(None);
@@ -83,7 +70,7 @@ mod platform {
                 }
             }
         }
-        CallNextHookEx(HHOOK(0), n_code, w_param, l_param)
+        CallNextHookEx(HHOOK::default(), n_code, w_param, l_param)
     }
 
     // Low-level процедура перехвата событий мыши Windows (с поддержкой боковых кнопок)
@@ -116,7 +103,7 @@ mod platform {
                 }
             }
         }
-        CallNextHookEx(HHOOK(0), n_code, w_param, l_param)
+        CallNextHookEx(HHOOK::default(), n_code, w_param, l_param)
     }
 
     // Создает и запускает поток с циклом сообщений Windows
@@ -128,8 +115,8 @@ mod platform {
 
         let join_handle = thread::spawn(|| {
             unsafe {
-                let kb_hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(lowlevel_keyboard_proc), HINSTANCE(0), 0);
-                let ms_hook = SetWindowsHookExW(WH_MOUSE_LL, Some(lowlevel_mouse_proc), HINSTANCE(0), 0);
+                let kb_hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(lowlevel_keyboard_proc), HINSTANCE::default(), 0).expect("Failed to set keyboard hook");
+                let ms_hook = SetWindowsHookExW(WH_MOUSE_LL, Some(lowlevel_mouse_proc), HINSTANCE::default(), 0).expect("Failed to set mouse hook");
 
                 {
                     let mut hooks = HOOKS.lock().unwrap();
@@ -225,7 +212,7 @@ mod platform {
 
 // ------------------------
 // LINUX РЕАЛИЗАЦИЯ
-// (полная версия из lib.rs с поддержкой всех кнопок и улучшенным обнаружением устройств)
+// (полная версия из lib.rs с поддержкой всех кнопок)
 // ------------------------
 #[cfg(target_os = "linux")]
 mod platform {
