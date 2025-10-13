@@ -1,4 +1,4 @@
-// lib.rs - финальная исправленная версия
+// lib.rs - исправленная версия с работающими хоткеями
 use napi_derive::napi;
 use napi::{
     bindgen_prelude::*,
@@ -25,6 +25,7 @@ mod platform {
     use windows::Win32::System::Threading::GetCurrentThreadId;
 
     use std::collections::HashSet;
+    use std::ptr;
 
     lazy_static::lazy_static! {
         static ref MOUSE_CALLBACK: Mutex<Option<ThreadsafeFunction<(u32,u32)>>> = Mutex::new(None);
@@ -38,37 +39,29 @@ mod platform {
     // Low-level процедура перехвата клавиатурных событий Windows
     unsafe extern "system" fn lowlevel_keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
         if n_code >= 0 {
-            let kb = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
-            let vk = kb.vkCode as u32;
-            let is_down = matches!(w_param.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN);
-            let is_up = matches!(w_param.0 as u32, WM_KEYUP | WM_SYSKEYUP);
-
-            if is_down || is_up {
-                let mut pressed = PRESSED_KEYS.lock().unwrap();
-                let mut send_event = true;
-                let mut event_type = 0u32;
-
-                if is_down {
-                    if pressed.contains(&vk) {
-                        send_event = false;
-                    } else {
-                        pressed.insert(vk);
-                        event_type = KEY_DOWN;
+            let hook_struct = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
+            let vk_code = hook_struct.vkCode as u32;
+            
+            let event_type = match w_param.0 as u32 {
+                WM_KEYDOWN | WM_SYSKEYDOWN => {
+                    // Проверяем, не является ли это повторным нажатием
+                    let is_repeat = (hook_struct.flags.0 & 0x01) != 0; // LLKHF_REPEAT
+                    if is_repeat {
+                        // Пропускаем autorepeat события
+                        return CallNextHookEx(HHOOK::default(), n_code, w_param, l_param);
                     }
-                } else if is_up {
-                    pressed.remove(&vk);
-                    event_type = KEY_UP;
-                }
+                    KEY_DOWN
+                },
+                WM_KEYUP | WM_SYSKEYUP => KEY_UP,
+                _ => return CallNextHookEx(HHOOK::default(), n_code, w_param, l_param),
+            };
 
-                if send_event && event_type != 0 {
-                    if let Ok(callback_guard) = KEYBOARD_CALLBACK.lock() {
-                        if let Some(ref callback) = *callback_guard {
-                            let _ = callback.call(
-                                Ok::<(u32, u32), Error>((vk, event_type)), 
-                                ThreadsafeFunctionCallMode::NonBlocking
-                            );
-                        }
-                    }
+            if let Ok(callback_guard) = KEYBOARD_CALLBACK.lock() {
+                if let Some(ref callback) = *callback_guard {
+                    let _ = callback.call(
+                        Ok::<(u32, u32), Error>((vk_code, event_type)), 
+                        ThreadsafeFunctionCallMode::NonBlocking
+                    );
                 }
             }
         }
@@ -78,35 +71,34 @@ mod platform {
     // Low-level процедура перехвата событий мыши Windows (с поддержкой боковых кнопок)
     unsafe extern "system" fn lowlevel_mouse_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
         if n_code >= 0 {
-            let ms = &*(l_param.0 as *const MSLLHOOKSTRUCT);
-            let w = w_param.0 as u32;
+            let hook_struct = &*(l_param.0 as *const MSLLHOOKSTRUCT);
             
-            // Обработка всех кнопок мыши включая боковые (4,5)
-            let (maybe_button, event_type) = match w {
-                WM_LBUTTONDOWN => (Some(1u32), MOUSE_DOWN),
-                WM_LBUTTONUP => (Some(1u32), MOUSE_UP),
-                WM_RBUTTONDOWN => (Some(2u32), MOUSE_DOWN),
-                WM_RBUTTONUP => (Some(2u32), MOUSE_UP),
-                WM_MBUTTONDOWN => (Some(3u32), MOUSE_DOWN),
-                WM_MBUTTONUP => (Some(3u32), MOUSE_UP),
-                WM_XBUTTONDOWN | WM_XBUTTONUP => {
-                    // Извлекаем информацию о боковой кнопке из mouseData
-                    let xbutton = (ms.mouseData >> 16) as u16;
+            let (button_code, event_type) = match w_param.0 as u32 {
+                WM_LBUTTONDOWN => (1, MOUSE_DOWN),
+                WM_LBUTTONUP => (1, MOUSE_UP),
+                WM_RBUTTONDOWN => (2, MOUSE_DOWN),
+                WM_RBUTTONUP => (2, MOUSE_UP),
+                WM_MBUTTONDOWN => (3, MOUSE_DOWN),
+                WM_MBUTTONUP => (3, MOUSE_UP),
+                WM_XBUTTONDOWN => {
+                    let xbutton = (hook_struct.mouseData >> 16) as u16;
                     let button = if xbutton == 1 { 4 } else { 5 };
-                    let event = if w == WM_XBUTTONDOWN { MOUSE_DOWN } else { MOUSE_UP };
-                    (Some(button), event)
-                }
-                _ => (None, 0u32),
+                    (button, MOUSE_DOWN)
+                },
+                WM_XBUTTONUP => {
+                    let xbutton = (hook_struct.mouseData >> 16) as u16;
+                    let button = if xbutton == 1 { 4 } else { 5 };
+                    (button, MOUSE_UP)
+                },
+                _ => return CallNextHookEx(HHOOK::default(), n_code, w_param, l_param),
             };
 
-            if let Some(button) = maybe_button {
-                if let Ok(callback_guard) = MOUSE_CALLBACK.lock() {
-                    if let Some(ref callback) = *callback_guard {
-                        let _ = callback.call(
-                            Ok::<(u32, u32), Error>((button, event_type)), 
-                            ThreadsafeFunctionCallMode::NonBlocking
-                        );
-                    }
+            if let Ok(callback_guard) = MOUSE_CALLBACK.lock() {
+                if let Some(ref callback) = *callback_guard {
+                    let _ = callback.call(
+                        Ok::<(u32, u32), Error>((button_code, event_type)), 
+                        ThreadsafeFunctionCallMode::NonBlocking
+                    );
                 }
             }
         }
@@ -114,73 +106,110 @@ mod platform {
     }
 
     // Создает и запускает поток с циклом сообщений Windows
-    fn ensure_hook_thread() {
+    fn ensure_hook_thread() -> Result<()> {
         let mut handle_lock = HOOK_THREAD_HANDLE.lock().unwrap();
         if handle_lock.is_some() {
-            return;
+            return Ok(());
         }
 
         let join_handle = thread::spawn(|| {
             unsafe {
-                let kb_hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(lowlevel_keyboard_proc), HINSTANCE::default(), 0)
-                    .expect("Failed to set keyboard hook");
-                let ms_hook = SetWindowsHookExW(WH_MOUSE_LL, Some(lowlevel_mouse_proc), HINSTANCE::default(), 0)
-                    .expect("Failed to set mouse hook");
+                // Устанавливаем low-level хук клавиатуры
+                let kb_hook = SetWindowsHookExW(
+                    WH_KEYBOARD_LL, 
+                    Some(lowlevel_keyboard_proc), 
+                    HINSTANCE::default(), 
+                    0
+                );
+                
+                // Устанавливаем low-level хук мыши
+                let ms_hook = SetWindowsHookExW(
+                    WH_MOUSE_LL, 
+                    Some(lowlevel_mouse_proc), 
+                    HINSTANCE::default(), 
+                    0
+                );
 
+                if kb_hook.is_err() || ms_hook.is_err() {
+                    eprintln!("Failed to set Windows hooks");
+                    return;
+                }
+
+                let kb_hook = kb_hook.unwrap();
+                let ms_hook = ms_hook.unwrap();
+
+                // Сохраняем дескрипторы хуков
                 {
                     let mut hooks = HOOKS.lock().unwrap();
                     *hooks = Some((ms_hook, kb_hook));
                 }
 
+                // Сохраняем ID потока
                 let tid = GetCurrentThreadId();
                 {
                     let mut id_lock = HOOK_THREAD_ID.lock().unwrap();
                     *id_lock = Some(tid);
                 }
 
+                println!("Windows hooks installed successfully, thread ID: {}", tid);
+
+                // Запускаем цикл сообщений
                 let mut msg = MSG::default();
-                while GetMessageW(&mut msg, None, 0, 0).into() {
+                loop {
+                    let result = GetMessageW(&mut msg, None, 0, 0);
+                    if result.0 <= 0 {
+                        break;
+                    }
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
 
+                println!("Windows message loop ended");
+
+                // Снимаем хуки при завершении
                 let mut hooks = HOOKS.lock().unwrap();
                 if let Some((ms, kb)) = *hooks {
                     let _ = UnhookWindowsHookEx(ms);
                     let _ = UnhookWindowsHookEx(kb);
+                    println!("Windows hooks uninstalled");
                 }
                 *hooks = None;
 
+                // Очищаем ID потока
                 let mut id_lock = HOOK_THREAD_ID.lock().unwrap();
                 *id_lock = None;
             }
         });
 
         *handle_lock = Some(join_handle);
+        Ok(())
     }
 
     #[napi]
     pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<(u32,u32)>) -> Result<()> {
+        println!("Starting global keyboard hook on Windows");
         {
             let mut cb_lock = KEYBOARD_CALLBACK.lock().unwrap();
             *cb_lock = Some(callback);
         }
-        ensure_hook_thread();
+        ensure_hook_thread()?;
         Ok(())
     }
 
     #[napi]
     pub fn start_global_mouse_hook(callback: ThreadsafeFunction<(u32,u32)>) -> Result<()> {
+        println!("Starting global mouse hook on Windows");
         {
             let mut cb_lock = MOUSE_CALLBACK.lock().unwrap();
             *cb_lock = Some(callback);
         }
-        ensure_hook_thread();
+        ensure_hook_thread()?;
         Ok(())
     }
 
     #[napi]
     pub fn stop_global_keyboard_hook() -> Result<()> {
+        println!("Stopping global keyboard hook on Windows");
         {
             let mut cb_lock = KEYBOARD_CALLBACK.lock().unwrap();
             *cb_lock = None;
@@ -190,6 +219,7 @@ mod platform {
 
     #[napi]
     pub fn stop_global_mouse_hook() -> Result<()> {
+        println!("Stopping global mouse hook on Windows");
         {
             let mut cb_lock = MOUSE_CALLBACK.lock().unwrap();
             *cb_lock = None;
@@ -199,6 +229,7 @@ mod platform {
 
     #[napi]
     pub fn stop_all_hooks() -> Result<()> {
+        println!("Stopping all hooks on Windows");
         if let Some(tid) = *HOOK_THREAD_ID.lock().unwrap() {
             unsafe {
                 let _ = PostThreadMessageW(tid, WM_QUIT, WPARAM(0), LPARAM(0));
@@ -342,8 +373,6 @@ mod platform {
             if let Some(button_code) = evdev_key_to_mouse_button(event.code()) {
                 let event_type = if event.value() == 1 { MOUSE_DOWN } else { MOUSE_UP };
                 
-                println!("[RUST-LINUX] 🖱 Sending mouse event: button={}, type={}", button_code, event_type);
-                
                 if let Ok(callback_guard) = MOUSE_CALLBACK.lock() {
                     if let Some(ref callback) = *callback_guard {
                         let status = callback.call(
@@ -352,8 +381,6 @@ mod platform {
                         );
                         if status != Status::Ok {
                             eprintln!("[RUST-LINUX] ❌ Error calling mouse callback: {:?}", status);
-                        } else {
-                            println!("[RUST-LINUX] ✅ Mouse event sent successfully");
                         }
                     }
                 }
@@ -368,8 +395,6 @@ mod platform {
                 let event_type = if event.value() == 1 { KEY_DOWN } else { KEY_UP };
                 let key_code = event.code() as u32;
                 
-                println!("[RUST-LINUX] ⌨ Sending keyboard event: code={}, type={}", key_code, event_type);
-                
                 if let Ok(callback_guard) = KEYBOARD_CALLBACK.lock() {
                     if let Some(ref callback) = *callback_guard {
                         let status = callback.call(
@@ -378,8 +403,6 @@ mod platform {
                         );
                         if status != Status::Ok {
                             eprintln!("[RUST-LINUX] ❌ Error calling keyboard callback: {:?}", status);
-                        } else {
-                            println!("[RUST-LINUX] ✅ Keyboard event sent successfully");
                         }
                     }
                 }
