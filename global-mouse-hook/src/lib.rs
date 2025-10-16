@@ -19,20 +19,18 @@ const KEY_UP: u32 = 4;
 #[cfg(target_os = "windows")]
 mod platform {
     use super::*;
-    use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM, BOOL};
+    use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::*;
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Threading::GetCurrentThreadId;
 
-    use std::ptr;
     use std::mem::MaybeUninit;
 
-    // Колбеки, хранимые глобально для доступа из hook-процедур:
-    // MOUSE_CALLBACK и KEYBOARD_CALLBACK — это ThreadsafeFunction, предоставляемые из JS/Node.
+    // Глобальные переменные-колбеки для передачи событий в JS через ThreadsafeFunction.
     static MOUSE_CALLBACK: Mutex<Option<ThreadsafeFunction<(u32, u32)>>> = Mutex::new(None);
     static KEYBOARD_CALLBACK: Mutex<Option<ThreadsafeFunction<(u32, u32)>>> = Mutex::new(None);
 
-    // Хендлы хуков и id потоков, чтобы можно было корректно остановить хуки:
+    // Хендлы и флаги потоков, чтобы корректно снимать хуки и посылать WM_QUIT
     static MOUSE_HHOOK: Mutex<Option<HHOOK>> = Mutex::new(None);
     static KEY_HHOOK: Mutex<Option<HHOOK>> = Mutex::new(None);
     static MOUSE_THREAD_ID: Mutex<Option<u32>> = Mutex::new(None);
@@ -40,19 +38,12 @@ mod platform {
     static MOUSE_THREAD_RUNNING: Mutex<bool> = Mutex::new(false);
     static KEY_THREAD_RUNNING: Mutex<bool> = Mutex::new(false);
 
-    // ======================================================================
-    // Обработчики низкоуровневых хуков (LL). Они должны быть короткими и
-    // безопасно вызывать ThreadsafeFunction (через Mutex).
-    // ======================================================================
-
-    // Обработчик мыши (low-level)
+    // -----------------------
+    // Обработчик мыши (LL)
+    // -----------------------
     unsafe extern "system" fn mouse_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
-        // n_code < 0 нужно просто передать дальше
         if n_code >= 0 {
-            // l_param у WH_MOUSE_LL указывает на структуру MSLLHOOKSTRUCT
             let hook_struct = &*(l_param.0 as *const MSLLHOOKSTRUCT);
-
-            // Определяем кнопку и тип события по w_param
             let msg = w_param.0 as u32;
             let (button_code, event_type) = match msg {
                 WM_LBUTTONDOWN => (1u32, MOUSE_DOWN),
@@ -62,39 +53,33 @@ mod platform {
                 WM_MBUTTONDOWN => (3u32, MOUSE_DOWN),
                 WM_MBUTTONUP => (3u32, MOUSE_UP),
                 WM_XBUTTONDOWN | WM_XBUTTONUP => {
-                    // В старом коде было смешение типов. Здесь аккуратно берём старшее слово mouseData.
+                    // Старшее слово mouseData содержит информацию о боковых кнопках
                     let mouse_data: u32 = hook_struct.mouseData;
                     let xbutton = ((mouse_data >> 16) & 0xffff) as u16;
                     let button = if xbutton == 1 { 4u32 } else { 5u32 };
                     let event = if msg == WM_XBUTTONDOWN { MOUSE_DOWN } else { MOUSE_UP };
                     (button, event)
                 }
-                _ => {
-                    // Не интересующее нас сообщение — пропускаем дальше
-                    return CallNextHookEx(HHOOK::default(), n_code, w_param, l_param);
-                }
+                _ => return CallNextHookEx(HHOOK::default(), n_code, w_param, l_param),
             };
 
-            // Вызываем JS-колбек если он установлен
             if let Ok(callback_guard) = MOUSE_CALLBACK.lock() {
                 if let Some(ref callback) = *callback_guard {
-                    // Неблокирующий вызов — если очередь занята, событие проигнорируется
+                    // Неблокирующий вызов, чтобы не тормозить хук
                     let _ = callback.call(Ok((button_code, event_type)), ThreadsafeFunctionCallMode::NonBlocking);
                 }
             }
         }
-
-        // Передаём дальше
         CallNextHookEx(HHOOK::default(), n_code, w_param, l_param)
     }
 
-    // Обработчик клавиатуры (low-level)
+    // -----------------------
+    // Обработчик клавиатуры (LL)
+    // -----------------------
     unsafe extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
         if n_code >= 0 {
             let hook_struct = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
             let vk_code = hook_struct.vkCode as u32;
-
-            // Простой выбор: KEY_DOWN для WM_KEYDOWN/WM_SYSKEYDOWN, иначе KEY_UP
             let msg = w_param.0 as u32;
             let event_type = if msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN {
                 KEY_DOWN
@@ -102,70 +87,53 @@ mod platform {
                 KEY_UP
             };
 
-            // Вызываем JS-колбек если он установлен
             if let Ok(callback_guard) = KEYBOARD_CALLBACK.lock() {
                 if let Some(ref callback) = *callback_guard {
                     let _ = callback.call(Ok((vk_code, event_type)), ThreadsafeFunctionCallMode::NonBlocking);
                 }
             }
         }
-
         CallNextHookEx(HHOOK::default(), n_code, w_param, l_param)
     }
 
     // ======================================================================
-    // Вспомогательные функции для запуска/останова хуков в отдельных потоках
+    // Запуск хука мыши в отдельном потоке с собственным циклом сообщений.
+    // Очень важно — цикл сообщений должен работать в том же потоке, где стоит SetWindowsHookEx.
     // ======================================================================
-
-    // Запускает поток и устанавливает WH_MOUSE_LL в этом потоке. Возвращает Ok(()) сразу,
-    // реальная установка хуков происходит внутри потока. Логирование производится в потоке.
     #[napi]
     pub fn start_global_mouse_hook(callback: ThreadsafeFunction<(u32, u32)>) -> Result<()> {
-        // Сохраняем колбек в глобальную переменную
         *MOUSE_CALLBACK.lock().unwrap() = Some(callback);
 
-        // Если поток уже запущен — ничего не делаем
         if *MOUSE_THREAD_RUNNING.lock().unwrap() {
-            // Уже запущено
+            // Уже запущен — ничего не делаем
             return Ok(());
         }
-
         *MOUSE_THREAD_RUNNING.lock().unwrap() = true;
 
-        // Создаём поток, внутри которого:
-        // 1) получаем module handle
-        // 2) вызываем SetWindowsHookExW(WH_MOUSE_LL, ...)
-        // 3) запускаем цикл сообщений GetMessage -> Translate/Dispatch
         thread::spawn(|| {
             unsafe {
-                // Получаем id текущего потока и сохраняем его, чтобы можно было послать WM_QUIT
+                // Сохраняем id потока
                 let tid = GetCurrentThreadId();
                 {
                     let mut guard = MOUSE_THREAD_ID.lock().unwrap();
                     *guard = Some(tid);
                 }
 
-                // Пытаемся получить handle модуля (если возможно)
-                let hmodule = GetModuleHandleW(None).unwrap_or(HINSTANCE::default());
+                // Получаем handle модуля: используем unwrap_or_default() чтобы не создавать конфликт типов
+                let hmodule = GetModuleHandleW(None).unwrap_or_default();
 
-                // Устанавливаем хук
                 match SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), hmodule, 0) {
                     Ok(hhook) => {
-                        // Сохраняем HHOOK
-                        {
-                            let mut hh = MOUSE_HHOOK.lock().unwrap();
-                            *hh = Some(hhook);
-                        }
-                        // Логируем на русском
+                        *MOUSE_HHOOK.lock().unwrap() = Some(hhook);
                         println!("[RUST-WINDOWS] 🖱 Глобальный хук мыши установлен в потоке {}.", tid);
                     }
                     Err(e) => {
                         eprintln!("[RUST-WINDOWS] ❌ Не удалось установить хук мыши: {:?}", e);
-                        // Даже при ошибке, оставляем поток для корректного завершения через stop
+                        // Продолжаем цикл сообщений, чтобы корректно завершить поток через stop
                     }
                 }
 
-                // Цикл сообщений — обязателен для корректной работы хуков
+                // Цикл сообщений (обязательно)
                 let mut msg = MaybeUninit::<MSG>::uninit();
                 while GetMessageW(msg.as_mut_ptr(), None, 0, 0).0 > 0 {
                     let msg = msg.assume_init();
@@ -173,13 +141,12 @@ mod platform {
                     DispatchMessageW(&msg);
                 }
 
-                // При выходе — снимаем хук, если он есть
+                // При выходе — снимаем хук если установлен
                 if let Some(hhook) = MOUSE_HHOOK.lock().unwrap().take() {
                     let _ = UnhookWindowsHookEx(hhook);
                     println!("[RUST-WINDOWS] 📴 Хук мыши снят (поток {}).", tid);
                 }
 
-                // Помечаем поток как остановленный
                 *MOUSE_THREAD_RUNNING.lock().unwrap() = false;
                 *MOUSE_THREAD_ID.lock().unwrap() = None;
             }
@@ -188,7 +155,9 @@ mod platform {
         Ok(())
     }
 
-    // Запускает поток и устанавливает WH_KEYBOARD_LL в этом потоке.
+    // ======================================================================
+    // Запуск хука клавиатуры в отдельном потоке
+    // ======================================================================
     #[napi]
     pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<(u32, u32)>) -> Result<()> {
         *KEYBOARD_CALLBACK.lock().unwrap() = Some(callback);
@@ -196,7 +165,6 @@ mod platform {
         if *KEY_THREAD_RUNNING.lock().unwrap() {
             return Ok(());
         }
-
         *KEY_THREAD_RUNNING.lock().unwrap() = true;
 
         thread::spawn(|| {
@@ -207,14 +175,11 @@ mod platform {
                     *guard = Some(tid);
                 }
 
-                let hmodule = GetModuleHandleW(None).unwrap_or(HINSTANCE::default());
+                let hmodule = GetModuleHandleW(None).unwrap_or_default();
 
                 match SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), hmodule, 0) {
                     Ok(hhook) => {
-                        {
-                            let mut hh = KEY_HHOOK.lock().unwrap();
-                            *hh = Some(hhook);
-                        }
+                        *KEY_HHOOK.lock().unwrap() = Some(hhook);
                         println!("[RUST-WINDOWS] ⌨ Глобальный хук клавиатуры установлен в потоке {}.", tid);
                     }
                     Err(e) => {
@@ -242,16 +207,16 @@ mod platform {
         Ok(())
     }
 
-    // Остановить хук мыши: удаляем колбек и посылаем WM_QUIT в поток, где висит цикл сообщений.
+    // ======================================================================
+    // Остановщики — удаляют колбеки и шлют WM_QUIT в поток с циклом сообщений
+    // ======================================================================
     #[napi]
     pub fn stop_global_mouse_hook() -> Result<()> {
-        // Убираем колбек
         *MOUSE_CALLBACK.lock().unwrap() = None;
 
-        // Если поток запущен — посылаем WM_QUIT в его цикл сообщений
         if let Some(tid) = *MOUSE_THREAD_ID.lock().unwrap() {
             unsafe {
-                // PostThreadMessageW возвращает BOOL; игнорируем результат — возможно поток уже завершил
+                // Посылаем WM_QUIT потоку — цикл сообщений завершится
                 let _ = PostThreadMessageW(tid, WM_QUIT, WPARAM(0), LPARAM(0));
             }
             println!("[RUST-WINDOWS] 🚧 Запрошена остановка хука мыши (послан WM_QUIT потоку {}).", tid);
@@ -260,7 +225,6 @@ mod platform {
         Ok(())
     }
 
-    // Остановить хук клавиатуры аналогично
     #[napi]
     pub fn stop_global_keyboard_hook() -> Result<()> {
         *KEYBOARD_CALLBACK.lock().unwrap() = None;
@@ -275,7 +239,6 @@ mod platform {
         Ok(())
     }
 
-    // Остановить все хуки
     #[napi]
     pub fn stop_all_hooks() -> Result<()> {
         *MOUSE_CALLBACK.lock().unwrap() = None;
@@ -297,7 +260,7 @@ mod platform {
 // ========================
 // LINUX IMPLEMENTATION - USING SIMPLE TYPES
 // ========================
-// <- Линуксовый модуль оставил без изменений, как вы просили ->
+// Линуксовую часть оставил без изменений, как вы просили.
 #[cfg(target_os = "linux")]
 mod platform {
     use super::*;
