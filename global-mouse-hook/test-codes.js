@@ -1,4 +1,5 @@
-const { startGlobalMouseHook, stopGlobalMouseHook, startGlobalKeyboardHook, stopGlobalKeyboardHook } = require('./index');
+const { startGlobalMouseHook, stopGlobalMouseHook, startGlobalKeyboardHook,
+stopGlobalKeyboardHook } = require('./index');
 
 console.log('🎯 Testing Mouse/Keyboard Hook - Code Display Only');
 console.log('=================================================');

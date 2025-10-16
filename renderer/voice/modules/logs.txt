@@ -1,0 +1,585 @@
+Oct 13 16:13:00 nightwatch NSVS[3714618]: 2025-10-13T16:13:00.485Z 🧊 Transport 17ecde1b-437e-4896-87ba-5d5f12bf9d03 ICE state: completed
+Oct 13 16:13:00 nightwatch NSVS[3714618]: 2025-10-13T16:13:00.485Z 🧊 Transport 17ecde1b-437e-4896-87ba-5d5f12bf9d03 ICE state changed to: completed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.122Z
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 📊 === MEDIA SERVER STATISTICS ===
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.122Z 🏠 Active rooms: 4
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.122Z 👥 Active clients: 3
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.122Z
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 📋 Room srv_68e645d6-room-10f77096 (Общий):
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.122Z    🔊 Producers: 0
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.123Z    🎧 Consumers: 0
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.123Z    🚚 Transports: 0
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.123Z
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 📋 Room srv_68e645d6-room-cae7505e (Рейды):
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.123Z    🔊 Producers: 0
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.123Z    🎧 Consumers: 0
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.123Z    🚚 Transports: 0
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.123Z
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 📋 Room srv_68e645d6-room-1bbdc1fe (Эвенты):
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.123Z    🔊 Producers: 2
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.124Z    🎧 Consumers: 4
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.124Z    🚚 Transports: 6
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.124Z    🔗 client_a7ezh28y8 -> client_0vr4rrl4a (audio)
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.124Z    🔗 client_0vr4rrl4a -> client_a7ezh28y8 (audio)
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.124Z    🔗 client_a7ezh28y8 -> client_0sncprkpk (audio)
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.124Z    🔗 client_0vr4rrl4a -> client_0sncprkpk (audio)
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.124Z
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 📋 Room srv_68e645d6-room-270605d8 (Информация):
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.124Z    🔊 Producers: 0
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.125Z    🎧 Consumers: 0
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.125Z    🚚 Transports: 0
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.125Z =================================
+Oct 13 16:13:01 nightwatch NSVS[3714618]: 2025-10-13T16:13:01.145Z 🔍 Performing health checks...
+
+
+
+
+
+
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.690Z REQUEST: POST /api/media/transport/connect
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.711Z 🔌 [TRANSPORT CONNECT] Request for transport: e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.711Z 🔒 Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 current DTLS state: new
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.711Z 🔌 Connecting transport: e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.712Z mediasoup:WebRtcTransport connect()
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.712Z mediasoup:Channel request() [method:WEBRTCTRANSPORT_CONNECT]
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.713Z mediasoup:Channel request succeeded [method:WEBRTCTRANSPORT_CONNECT, id:748]
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.713Z ✅ Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 connected successfully
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.861Z 🧊 Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 ICE state: connected
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.861Z 🧊 Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 ICE state changed to: connected
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.861Z 🔒 Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 DTLS state: connecting
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.861Z 🔒 Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 DTLS state changed to: connecting
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.873Z REQUEST: POST /api/media/produce
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.892Z 🎙 [PRODUCE] Request: [object Object]
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.892Z mediasoup:Transport produce()
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.894Z mediasoup:Channel request() [method:TRANSPORT_PRODUCE]
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.894Z mediasoup:Channel request succeeded [method:TRANSPORT_PRODUCE, id:749]
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.895Z mediasoup:Producer constructor()
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.895Z 📢 [NOTIFY] Notifying room srv_68e645d6-room-1bbdc1fe about new producer: ea81f647-ceda-4e7a-a76a-f6f58e41cc18
+Oct 13 16:13:05 nightwatch NSVS[3714618]: 2025-10-13T16:13:05.895Z ✅ [PRODUCE] Producer created: ea81f647-ceda-4e7a-a76a-f6f58e41cc18 for client: client_0sncprkpk
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.190Z 🔒 Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 DTLS state: connected
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.190Z 🔒 Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 DTLS state changed to: connected
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.257Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.259Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.261Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.263Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.264Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.278Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.279Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.280Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.281Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.282Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.284Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.293Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.294Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.296Z REQUEST: POST /api/media/consume
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.311Z 🎧 [CONSUME] Request received: {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:   "producerId": "ea81f647-ceda-4e7a-a76a-f6f58e41cc18",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:   "rtpCapabilities": {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:     "codecs": [
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "kind": "audio",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "mimeType": "audio/opus",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredPayloadType": 100,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "clockRate": 48000,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "channels": 2,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "parameters": {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:           "maxplaybackrate": 48000,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:           "stereo": 1,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:           "useinbandfec": 1
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         },
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "rtcpFeedback": []
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       }
+Oct 13 16:13:06 nightwatch NSVS[3714618]:     ],
+Oct 13 16:13:06 nightwatch NSVS[3714618]:     "headerExtensions": [
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "kind": "video",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "uri": "urn:ietf:params:rtp-hdrext:sdes:mid",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredId": 1,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredEncrypt": false,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "direction": "sendrecv"
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       },
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "kind": "video",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "uri": "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredId": 4,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredEncrypt": false,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "direction": "sendrecv"
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       },
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "kind": "video",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "uri": "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredId": 5,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredEncrypt": false,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "direction": "sendrecv"
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       },
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "kind": "audio",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "uri": "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredId": 10,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredEncrypt": false,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "direction": "sendrecv"
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       },
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "kind": "video",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "uri": "urn:ietf:params:rtp-hdrext:toffset",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredId": 12,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredEncrypt": false,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "direction": "sendrecv"
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       },
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       {
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "kind": "video",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "uri": "http://www.webrtc.org/experiments/rtp-hdrext/playout-delay",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredId": 14,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "preferredEncrypt": false,
+Oct 13 16:13:06 nightwatch NSVS[3714618]:         "direction": "sendrecv"
+Oct 13 16:13:06 nightwatch NSVS[3714618]:       }
+Oct 13 16:13:06 nightwatch NSVS[3714618]:     ]
+Oct 13 16:13:06 nightwatch NSVS[3714618]:   },
+Oct 13 16:13:06 nightwatch NSVS[3714618]:   "transportId": "86739a51-1164-4627-bcda-c9ca9c182588",
+Oct 13 16:13:06 nightwatch NSVS[3714618]:   "clientId": "client_0vr4rrl4a"
+Oct 13 16:13:06 nightwatch NSVS[3714618]: }
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.311Z 🎧 [CONSUME] Client client_0vr4rrl4a wants to consume from client_0sncprkpk
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.313Z 🎧 [CONSUME] Creating consumer for producer: ea81f647-ceda-4e7a-a76a-f6f58e41cc18
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.313Z 🎧 [CONSUME] Creating new consumer...
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.314Z mediasoup:Transport consume()
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.317Z mediasoup:Channel request() [method:TRANSPORT_CONSUME]
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.317Z mediasoup:Channel request succeeded [method:TRANSPORT_CONSUME, id:750]
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.317Z mediasoup:Consumer constructor()
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.318Z ✅ [CONSUME] Consumer created: 6bf6d04c-6bdb-4ad4-994c-3ad3f0a9f209
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.318Z ✅ [CONSUME] Consumer created: 6bf6d04c-6bdb-4ad4-994c-3ad3f0a9f209 (client_0vr4rrl4a <- client_0sncprkpk)
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.318Z mediasoup:Consumer resume()
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.318Z mediasoup:Channel request() [method:CONSUMER_RESUME]
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.318Z mediasoup:Channel request succeeded [method:CONSUMER_RESUME, id:751]
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.319Z ✅ Consumer resumed: 6bf6d04c-6bdb-4ad4-994c-3ad3f0a9f209
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.319Z ✅ [CONSUME] Success, returning consumer details
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.352Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.367Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.369Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.371Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.374Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.380Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.381Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.382Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.383Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.534Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.544Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.642Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.644Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.647Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.649Z REQUEST: POST /api/client-logs
+Oct 13 16:13:06 nightwatch NSVS[3714618]: 2025-10-13T16:13:06.651Z REQUEST: POST /api/client-logs
+Oct 13 16:13:07 nightwatch NSVS[3714618]: 2025-10-13T16:13:07.099Z 🧊 Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 ICE state: completed
+Oct 13 16:13:07 nightwatch NSVS[3714618]: 2025-10-13T16:13:07.099Z 🧊 Transport e7dcd0d0-1edd-4a08-8e2f-a05dec7f32f2 ICE state changed to: completed
+Oct 13 16:13:08 nightwatch NSVS[3714618]: 2025-10-13T16:13:08.257Z REQUEST: POST /api/media/health
+Oct 13 16:13:08 nightwatch NSVS[3714618]: 2025-10-13T16:13:08.730Z REQUEST: POST /api/media/health
+Oct 13 16:13:09 nightwatch NSVS[3714618]: 2025-10-13T16:13:09.208Z 🧊 Transport 90ae8659-f322-40ec-8d9f-4a3b55061722 ICE state: disconnected
+Oct 13 16:13:09 nightwatch NSVS[3714618]: 2025-10-13T16:13:09.209Z 🧊 Transport 90ae8659-f322-40ec-8d9f-4a3b55061722 ICE state changed to: disconnected
+Oct 13 16:13:10 nightwatch NSVS[3714618]: 2025-10-13T16:13:10.864Z 🧊 Transport 93511d29-5969-4c5f-9271-bc0a7c2e1c14 ICE state: disconnected
+Oct 13 16:13:10 nightwatch NSVS[3714618]: 2025-10-13T16:13:10.864Z 🧊 Transport 93511d29-5969-4c5f-9271-bc0a7c2e1c14 ICE state changed to: disconnected
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.332Z REQUEST: POST /api/client-logs
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.338Z REQUEST: POST /api/client-logs
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.340Z REQUEST: POST /api/client-logs
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.342Z REQUEST: POST /api/client-logs
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.343Z REQUEST: POST /api/client-logs
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.345Z REQUEST: POST /api/client-logs
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.346Z REQUEST: POST /api/client-logs
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.347Z REQUEST: POST /api/client-logs
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.349Z REQUEST: POST /api/client-logs
+Oct 13 16:13:14 nightwatch NSVS[3714618]: 2025-10-13T16:13:14.350Z REQUEST: POST /api/client-logs
+
+
+[2025-10-13T13:40:53.681Z] [log] ✅ Socket connected with ID: 0pDmSBWwKdmqWVx3AAA5
+[2025-10-13T13:40:53.682Z] [log] Rejoining room after socket reconnect: srv_68e645d6-room-1bbdc1fe
+[2025-10-13T13:40:58.821Z] [log] 🎯 [CLIENT] Received room-participants event. Replacing entire members list.
+[2025-10-13T13:40:58.821Z] [log] 🎯 [MEMBERS MANAGER] updateAllMembers called. Replacing entire members list.
+[2025-10-13T13:40:58.821Z] [log] 🎯 [MEMBERS MANAGER] New members list (in order): 1111 (ONLINE),Шеф (ONLINE),Баламут (OFFLINE),Высшая (OFFLINE),Enhaize (ONLINE),Амстрад (OFFLINE),Amstrad (OFFLINE),Maxoca (OFFLINE),Киткун (OFFLINE)
+[2025-10-13T13:40:58.821Z] [log] 🔹 Members received: 9
+[2025-10-13T13:40:58.821Z] [log] 🔹 Members data: [object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]
+[2025-10-13T13:40:58.822Z] [log] ✅ Members list updated. Now syncing sliders...
+[2025-10-13T13:40:58.823Z] [log] ✅ [MEMBERS MANAGER] Members list fully replaced and rendered in correct order.
+[2025-10-13T13:40:58.823Z] [log] ✅ [CLIENT] Members list fully replaced.
+[2025-10-13T13:40:58.827Z] [log] 🎯 [CLIENT] Received room-participants event. Replacing entire members list.
+[2025-10-13T13:40:58.827Z] [log] 🎯 [MEMBERS MANAGER] updateAllMembers called. Replacing entire members list.
+[2025-10-13T13:40:58.827Z] [log] 🎯 [MEMBERS MANAGER] New members list (in order): 1111 (ONLINE),Шеф (ONLINE),Баламут (OFFLINE),Высшая (OFFLINE),Enhaize (ONLINE),Амстрад (OFFLINE),Amstrad (OFFLINE),Maxoca (OFFLINE),Киткун (OFFLINE)
+[2025-10-13T13:40:58.827Z] [log] 🔹 Members received: 9
+[2025-10-13T13:40:58.827Z] [log] 🔹 Members data: [object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]
+[2025-10-13T13:40:58.828Z] [log] ✅ Members list updated. Now syncing sliders...
+[2025-10-13T13:40:58.829Z] [log] ✅ [MEMBERS MANAGER] Members list fully replaced and rendered in correct order.
+[2025-10-13T13:40:58.829Z] [log] ✅ [CLIENT] Members list fully replaced.
+[2025-10-13T13:41:04.547Z] [log] Toggling microphone, current state: false
+[2025-10-13T13:41:04.549Z] [log] Enabling microphone for client: client_cwgm1c495
+[2025-10-13T13:41:04.549Z] [log] No audio producer or track found, starting microphone...
+[2025-10-13T13:41:04.550Z] [log] Starting microphone for client: client_cwgm1c495
+[2025-10-13T13:41:04.562Z] [log] VolumeBoostManager: AudioContext resumed
+[2025-10-13T13:41:05.350Z] [log] Send transport connecting...
+[2025-10-13T13:41:06.129Z] [log] Send transport connected successfully
+[2025-10-13T13:41:06.137Z] [log] Producing media: audio
+[2025-10-13T13:41:06.286Z] [log] 🎯 [DEBUG] EVENT DATA RECEIVED: {
+  "producerId": "60d49340-75ae-49dd-a258-e9651c310cb1",
+  "clientID": "client_cwgm1c495",
+  "userId": "user_7416c226",
+  "kind": "audio",
+  "timestamp": 1760362866211,
+  "rtpParameters": {
+    "mid": "0",
+    "codecs": [
+      {
+        "mimeType": "audio/opus",
+        "payloadType": 109,
+        "clockRate": 48000,
+        "channels": 2,
+        "parameters": {
+          "maxplaybackrate": 48000,
+          "stereo": 1,
+          "useinbandfec": 1
+        },
+        "rtcpFeedback": []
+      }
+    ],
+    "headerExtensions": [
+      {
+        "uri": "urn:ietf:params:rtp-hdrext:sdes:mid",
+        "id": 3,
+        "encrypt": false,
+        "parameters": {}
+      },
+      {
+        "uri": "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
+        "id": 1,
+        "encrypt": false,
+        "parameters": {}
+      }
+    ],
+    "encodings": [
+      {
+        "ssrc": 1153225365,
+        "active": true,
+        "dtx": true,
+        "maxBitrate": 24000
+      }
+    ],
+    "rtcp": {
+      "cname": "{85d18981-a311-440c-a37b-e4b0921238b4}",
+      "reducedSize": true
+    }
+  }
+}
+[2025-10-13T13:41:06.287Z] [log] 🎯 [DEBUG] CLIENT STATE - clientID: client_cwgm1c495
+[2025-10-13T13:41:06.287Z] [log] 🎯 [DEBUG] Window producerClientMap before: 87e91691-1e63-4f9f-9201-ebfe7db6ed27,client_dd0pbmexw,65397822-911b-4b2b-8c34-f3089c8da35e,client_y4qljqbpi
+[2025-10-13T13:41:06.287Z] [log] 🎯 New producer event: [object Object]
+[2025-10-13T13:41:06.287Z] [log] 💾 Saved producerId → clientID: 60d49340-75ae-49dd-a258-e9651c310cb1 → client_cwgm1c495
+[2025-10-13T13:41:06.288Z] [log] 🔇 Ignoring own producer: 60d49340-75ae-49dd-a258-e9651c310cb1
+[2025-10-13T13:41:06.288Z] [log] 🎯 [DEBUG] Window producerClientMap after: 87e91691-1e63-4f9f-9201-ebfe7db6ed27,client_dd0pbmexw,65397822-911b-4b2b-8c34-f3089c8da35e,client_y4qljqbpi,60d49340-75ae-49dd-a258-e9651c310cb1,client_cwgm1c495
+[2025-10-13T13:41:06.300Z] [log] Media produced successfully: 60d49340-75ae-49dd-a258-e9651c310cb1
+[2025-10-13T13:41:06.301Z] [log] Microphone started successfully
+[2025-10-13T13:41:09.025Z] [log] Toggling microphone, current state: true
+[2025-10-13T13:41:09.026Z] [log] Disabling microphone for client: client_cwgm1c495
+[2025-10-13T13:41:09.026Z] [log] Microphone disabled successfully
+[2025-10-13T13:44:12.874Z] [log] VoiceChatClient initializing...
+[2025-10-13T13:44:12.874Z] [log] Initializing UI elements...
+[2025-10-13T13:44:12.874Z] [log] Setting up event listeners...
+[2025-10-13T13:44:12.874Z] [log] Starting auto-connect process...
+[2025-10-13T13:44:12.874Z] [log] Processing URL parameters...
+[2025-10-13T13:44:12.874Z] [log] URL params processed - server: null room: null invite: null
+[2025-10-13T13:44:12.876Z] [log] No auto-login found, showing auth modal
+[2025-10-13T13:44:13.747Z] [log] VolumeBoostManager: AudioContext resumed
+[2025-10-13T13:44:17.023Z] [log] Showing panel: rooms
+[2025-10-13T13:44:18.324Z] [log] ✅ Audio unlock successful on iOS
+[2025-10-13T13:44:18.325Z] [log] Joining room: srv_68e645d6-room-1bbdc1fe
+[2025-10-13T13:44:18.417Z] [log] Disconnecting from room: null
+[2025-10-13T13:44:18.638Z] [log] MediaManager connecting to room: srv_68e645d6-room-1bbdc1fe
+[2025-10-13T13:44:18.684Z] [log] Creating transports for client: client_kl8dgykdw
+[2025-10-13T13:44:18.684Z] [log] Creating send transport
+[2025-10-13T13:44:18.685Z] [log] Setting up send transport handlers
+[2025-10-13T13:44:18.685Z] [log] Creating receive transport
+[2025-10-13T13:44:18.687Z] [log] Setting up receive transport handlers
+[2025-10-13T13:44:18.687Z] [log] Starting keep-alive for client: client_kl8dgykdw
+[2025-10-13T13:44:18.687Z] [log] Requesting current producers for room: srv_68e645d6-room-1bbdc1fe
+[2025-10-13T13:44:18.896Z] [log] Found 3 producers in room
+[2025-10-13T13:44:18.896Z] [log] 🔹 producerId: 87e91691-1e63-4f9f-9201-ebfe7db6ed27
+[2025-10-13T13:44:18.896Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T13:44:18.896Z] [log] 🔄 Starting creation for producer: 87e91691-1e63-4f9f-9201-ebfe7db6ed27
+[2025-10-13T13:44:18.897Z] [log] 🔹 producerId: 87e91691-1e63-4f9f-9201-ebfe7db6ed27
+[2025-10-13T13:44:18.897Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T13:44:18.897Z] [log] 🔹 client.clientID: client_kl8dgykdw
+[2025-10-13T13:44:18.897Z] [log] 🔹 producerId: 87e91691-1e63-4f9f-9201-ebfe7db6ed27
+[2025-10-13T13:44:19.070Z] [log] 🔹 Server response  [object Object]
+[2025-10-13T13:44:19.070Z] [log] ✅ Consumer data received from server: cdd2d37a-f63b-4bdd-90c6-263fe4bb93a8
+[2025-10-13T13:44:19.074Z] [log] Receive transport connecting...
+[2025-10-13T13:44:19.239Z] [log] Receive transport connected successfully
+[2025-10-13T13:44:19.253Z] [log] 🎵 New audio element created for producer: 87e91691-1e63-4f9f-9201-ebfe7db6ed27
+[2025-10-13T13:44:19.254Z] [log] VolumeBoostManager: attached boost for client_dd0pbmexw gain= 1
+[2025-10-13T13:44:19.254Z] [log] ✅ Consumer created successfully: cdd2d37a-f63b-4bdd-90c6-263fe4bb93a8
+[2025-10-13T13:44:19.254Z] [log] ✅ Consumer created and activated for: 87e91691-1e63-4f9f-9201-ebfe7db6ed27
+[2025-10-13T13:44:19.254Z] [log] 🔹 producerId: 65397822-911b-4b2b-8c34-f3089c8da35e
+[2025-10-13T13:44:19.254Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T13:44:19.254Z] [log] 🔄 Starting creation for producer: 65397822-911b-4b2b-8c34-f3089c8da35e
+[2025-10-13T13:44:19.254Z] [log] 🔹 producerId: 65397822-911b-4b2b-8c34-f3089c8da35e
+[2025-10-13T13:44:19.254Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T13:44:19.254Z] [log] 🔹 client.clientID: client_kl8dgykdw
+[2025-10-13T13:44:19.254Z] [log] 🔹 producerId: 65397822-911b-4b2b-8c34-f3089c8da35e
+[2025-10-13T13:44:19.412Z] [log] 🔹 Server response  [object Object]
+[2025-10-13T13:44:19.412Z] [log] ✅ Consumer data received from server: 09c29282-a422-4d4f-a03f-068b020667cb
+[2025-10-13T13:44:19.416Z] [log] 🎵 New audio element created for producer: 65397822-911b-4b2b-8c34-f3089c8da35e
+[2025-10-13T13:44:19.416Z] [log] VolumeBoostManager: attached boost for client_y4qljqbpi gain= 1
+[2025-10-13T13:44:19.416Z] [log] ✅ Consumer created successfully: 09c29282-a422-4d4f-a03f-068b020667cb
+[2025-10-13T13:44:19.416Z] [log] ✅ Consumer created and activated for: 65397822-911b-4b2b-8c34-f3089c8da35e
+[2025-10-13T13:44:19.416Z] [log] 🔹 producerId: 447ae6f9-e8ca-4610-9048-f60e343a3af3
+[2025-10-13T13:44:19.416Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T13:44:19.416Z] [log] 🔄 Starting creation for producer: 447ae6f9-e8ca-4610-9048-f60e343a3af3
+[2025-10-13T13:44:19.416Z] [log] 🔹 producerId: 447ae6f9-e8ca-4610-9048-f60e343a3af3
+[2025-10-13T13:44:19.416Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T13:44:19.416Z] [log] 🔹 client.clientID: client_kl8dgykdw
+[2025-10-13T13:44:19.416Z] [log] 🔹 producerId: 447ae6f9-e8ca-4610-9048-f60e343a3af3
+[2025-10-13T13:44:19.589Z] [log] 🔹 Server response  [object Object]
+[2025-10-13T13:44:19.589Z] [log] ✅ Consumer data received from server: 8eb110f7-2271-4b2e-897b-dffd1a3f137a
+[2025-10-13T13:44:19.597Z] [log] 🎵 New audio element created for producer: 447ae6f9-e8ca-4610-9048-f60e343a3af3
+[2025-10-13T13:44:19.597Z] [log] VolumeBoostManager: attached boost for client_fo4pox72l gain= 1
+[2025-10-13T13:44:19.597Z] [log] ✅ Consumer created successfully: 8eb110f7-2271-4b2e-897b-dffd1a3f137a
+[2025-10-13T13:44:19.598Z] [log] ✅ Consumer created and activated for: 447ae6f9-e8ca-4610-9048-f60e343a3af3
+[2025-10-13T13:44:19.598Z] [log] MediaManager connected successfully
+[2025-10-13T13:44:19.598Z] [log] Setting up socket connection...
+[2025-10-13T13:44:19.598Z] [log] Destroying socket connection...
+[2025-10-13T13:44:19.598Z] [log] Creating new socket connection with token: token_rvho2aso71mmgp6pn3e
+[2025-10-13T13:44:19.902Z] [log] ✅ Socket connected with ID: uUw7IqjeEgmbZP7NAAA9
+[2025-10-13T13:44:19.902Z] [log] Rejoining room after socket reconnect: srv_68e645d6-room-1bbdc1fe
+[2025-10-13T13:44:22.928Z] [log] 🎯 [CLIENT] Received room-participants event. Replacing entire members list.
+[2025-10-13T13:44:22.928Z] [log] 🎯 [MEMBERS MANAGER] updateAllMembers called. Replacing entire members list.
+[2025-10-13T13:44:22.928Z] [log] 🎯 [MEMBERS MANAGER] New members list (in order): 1111 (ONLINE),Шеф (ONLINE),Баламут (OFFLINE),Высшая (OFFLINE),Enhaize (ONLINE),Амстрад (OFFLINE),Amstrad (OFFLINE),Maxoca (OFFLINE),Киткун (OFFLINE)
+[2025-10-13T13:44:22.928Z] [log] 🔹 Members received: 9
+[2025-10-13T13:44:22.929Z] [log] 🔹 Members data: [object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]
+[2025-10-13T13:44:22.930Z] [log] ✅ Members list updated. Now syncing sliders...
+[2025-10-13T13:44:22.930Z] [log] ✅ [MEMBERS MANAGER] Members list fully replaced and rendered in correct order.
+[2025-10-13T13:44:22.930Z] [log] ✅ [CLIENT] Members list fully replaced.
+[2025-10-13T13:44:22.940Z] [log] 🎯 [CLIENT] Received room-participants event. Replacing entire members list.
+[2025-10-13T13:44:22.941Z] [log] 🎯 [MEMBERS MANAGER] updateAllMembers called. Replacing entire members list.
+[2025-10-13T13:44:22.941Z] [log] 🎯 [MEMBERS MANAGER] New members list (in order): 1111 (ONLINE),Шеф (ONLINE),Баламут (OFFLINE),Высшая (OFFLINE),Enhaize (ONLINE),Амстрад (OFFLINE),Amstrad (OFFLINE),Maxoca (OFFLINE),Киткун (OFFLINE)
+[2025-10-13T13:44:22.941Z] [log] 🔹 Members received: 9
+[2025-10-13T13:44:22.941Z] [log] 🔹 Members data: [object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]
+[2025-10-13T13:44:22.943Z] [log] ✅ Members list updated. Now syncing sliders...
+[2025-10-13T13:44:22.943Z] [log] ✅ [MEMBERS MANAGER] Members list fully replaced and rendered in correct order.
+[2025-10-13T13:44:22.943Z] [log] ✅ [CLIENT] Members list fully replaced.
+[2025-10-13T13:44:27.701Z] [log] Toggling microphone, current state: false
+[2025-10-13T13:44:27.701Z] [log] Enabling microphone for client: client_kl8dgykdw
+[2025-10-13T13:44:27.701Z] [log] No audio producer or track found, starting microphone...
+[2025-10-13T13:44:27.701Z] [log] Starting microphone for client: client_kl8dgykdw
+[2025-10-13T13:44:28.720Z] [log] Send transport connecting...
+[2025-10-13T13:44:28.898Z] [log] Send transport connected successfully
+[2025-10-13T13:44:28.904Z] [log] Producing media: audio
+[2025-10-13T13:44:29.191Z] [log] 🎯 [DEBUG] EVENT DATA RECEIVED: {
+  "producerId": "08287c1f-9eeb-41d8-b8dd-a4e97b3f4421",
+  "clientID": "client_kl8dgykdw",
+  "userId": "user_7416c226",
+  "kind": "audio",
+  "timestamp": 1760363069036,
+  "rtpParameters": {
+    "mid": "0",
+    "codecs": [
+      {
+        "mimeType": "audio/opus",
+        "payloadType": 109,
+        "clockRate": 48000,
+        "channels": 2,
+        "parameters": {
+          "maxplaybackrate": 48000,
+          "stereo": 1,
+          "useinbandfec": 1
+        },
+        "rtcpFeedback": []
+      }
+    ],
+    "headerExtensions": [
+      {
+        "uri": "urn:ietf:params:rtp-hdrext:sdes:mid",
+        "id": 3,
+        "encrypt": false,
+        "parameters": {}
+      },
+      {
+        "uri": "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
+        "id": 1,
+        "encrypt": false,
+        "parameters": {}
+      }
+    ],
+    "encodings": [
+      {
+        "ssrc": 1230038557,
+        "active": true,
+        "dtx": true,
+        "maxBitrate": 24000
+      }
+    ],
+    "rtcp": {
+      "cname": "{e7d58f3c-1711-43b8-890c-5c3192b2eb44}",
+      "reducedSize": true
+    }
+  }
+}
+[2025-10-13T13:44:29.191Z] [log] 🎯 [DEBUG] CLIENT STATE - clientID: client_kl8dgykdw
+[2025-10-13T13:44:29.191Z] [log] 🎯 [DEBUG] Window producerClientMap before: 87e91691-1e63-4f9f-9201-ebfe7db6ed27,client_dd0pbmexw,65397822-911b-4b2b-8c34-f3089c8da35e,client_y4qljqbpi,447ae6f9-e8ca-4610-9048-f60e343a3af3,client_fo4pox72l
+[2025-10-13T13:44:29.191Z] [log] 🎯 New producer event: [object Object]
+[2025-10-13T13:44:29.191Z] [log] 💾 Saved producerId → clientID: 08287c1f-9eeb-41d8-b8dd-a4e97b3f4421 → client_kl8dgykdw
+[2025-10-13T13:44:29.191Z] [log] 🔇 Ignoring own producer: 08287c1f-9eeb-41d8-b8dd-a4e97b3f4421
+[2025-10-13T13:44:29.191Z] [log] 🎯 [DEBUG] Window producerClientMap after: 87e91691-1e63-4f9f-9201-ebfe7db6ed27,client_dd0pbmexw,65397822-911b-4b2b-8c34-f3089c8da35e,client_y4qljqbpi,447ae6f9-e8ca-4610-9048-f60e343a3af3,client_fo4pox72l,08287c1f-9eeb-41d8-b8dd-a4e97b3f4421,client_kl8dgykdw
+[2025-10-13T13:44:29.196Z] [log] Media produced successfully: 08287c1f-9eeb-41d8-b8dd-a4e97b3f4421
+[2025-10-13T13:44:29.196Z] [log] Microphone started successfully
+[2025-10-13T15:52:35.202Z] [log] VoiceChatClient initializing...
+[2025-10-13T15:52:35.202Z] [log] Initializing UI elements...
+[2025-10-13T15:52:35.202Z] [log] Setting up event listeners...
+[2025-10-13T15:52:35.202Z] [log] Starting auto-connect process...
+[2025-10-13T15:52:35.203Z] [log] Processing URL parameters...
+[2025-10-13T15:52:35.203Z] [log] URL params processed - server: null room: null invite: null
+[2025-10-13T15:52:35.204Z] [log] No auto-login found, showing auth modal
+[2025-10-13T15:52:36.109Z] [log] VolumeBoostManager: AudioContext resumed
+[2025-10-13T15:52:39.580Z] [log] Showing panel: rooms
+[2025-10-13T15:52:43.045Z] [log] ✅ Audio unlock successful on iOS
+[2025-10-13T15:52:43.045Z] [log] Joining room: srv_68e645d6-room-1bbdc1fe
+[2025-10-13T15:52:43.114Z] [log] Disconnecting from room: null
+[2025-10-13T15:52:43.315Z] [log] MediaManager connecting to room: srv_68e645d6-room-1bbdc1fe
+[2025-10-13T15:52:43.354Z] [log] Creating transports for client: client_ot7tt44b8
+[2025-10-13T15:52:43.354Z] [log] Creating send transport
+[2025-10-13T15:52:43.355Z] [log] Setting up send transport handlers
+[2025-10-13T15:52:43.355Z] [log] Creating receive transport
+[2025-10-13T15:52:43.355Z] [log] Setting up receive transport handlers
+[2025-10-13T15:52:43.355Z] [log] Starting keep-alive for client: client_ot7tt44b8
+[2025-10-13T15:52:43.355Z] [log] Requesting current producers for room: srv_68e645d6-room-1bbdc1fe
+[2025-10-13T15:52:43.534Z] [log] Found 2 producers in room
+[2025-10-13T15:52:43.535Z] [log] 🔹 producerId: af70b258-d00b-478e-bd9b-652fd81cd3f9
+[2025-10-13T15:52:43.535Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T15:52:43.535Z] [log] 🔄 Starting creation for producer: af70b258-d00b-478e-bd9b-652fd81cd3f9
+[2025-10-13T15:52:43.535Z] [log] 🔹 producerId: af70b258-d00b-478e-bd9b-652fd81cd3f9
+[2025-10-13T15:52:43.535Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T15:52:43.535Z] [log] 🔹 client.clientID: client_ot7tt44b8
+[2025-10-13T15:52:43.535Z] [log] 🔹 producerId: af70b258-d00b-478e-bd9b-652fd81cd3f9
+[2025-10-13T15:52:43.719Z] [log] 🔹 Server response  [object Object]
+[2025-10-13T15:52:43.719Z] [log] ✅ Consumer data received from server: 07f45095-e5a8-41ee-ba3d-d8e6daecd863
+[2025-10-13T15:52:43.725Z] [log] Receive transport connecting...
+[2025-10-13T15:52:43.887Z] [log] Receive transport connected successfully
+[2025-10-13T15:52:43.941Z] [log] 🎵 New audio element created for producer: af70b258-d00b-478e-bd9b-652fd81cd3f9
+[2025-10-13T15:52:43.942Z] [log] VolumeBoostManager: attached boost for client_3wzief19m gain= 1
+[2025-10-13T15:52:43.942Z] [log] ✅ Consumer created successfully: 07f45095-e5a8-41ee-ba3d-d8e6daecd863
+[2025-10-13T15:52:43.942Z] [log] ✅ Consumer created and activated for: af70b258-d00b-478e-bd9b-652fd81cd3f9
+[2025-10-13T15:52:43.943Z] [log] 🔹 producerId: 922f578e-2670-4265-b13a-ad9678c9dcce
+[2025-10-13T15:52:43.943Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T15:52:43.943Z] [log] 🔄 Starting creation for producer: 922f578e-2670-4265-b13a-ad9678c9dcce
+[2025-10-13T15:52:43.943Z] [log] 🔹 producerId: 922f578e-2670-4265-b13a-ad9678c9dcce
+[2025-10-13T15:52:43.943Z] [log] 🔹 producerData: [object Object]
+[2025-10-13T15:52:43.943Z] [log] 🔹 client.clientID: client_ot7tt44b8
+[2025-10-13T15:52:43.943Z] [log] 🔹 producerId: 922f578e-2670-4265-b13a-ad9678c9dcce
+[2025-10-13T15:52:44.112Z] [log] 🔹 Server response  [object Object]
+[2025-10-13T15:52:44.112Z] [log] ✅ Consumer data received from server: 086a7c78-5dcf-4870-9c25-8b90d5c27e46
+[2025-10-13T15:52:44.134Z] [log] 🎵 New audio element created for producer: 922f578e-2670-4265-b13a-ad9678c9dcce
+[2025-10-13T15:52:44.134Z] [log] VolumeBoostManager: attached boost for client_25f0dlbzp gain= 1
+[2025-10-13T15:52:44.134Z] [log] ✅ Consumer created successfully: 086a7c78-5dcf-4870-9c25-8b90d5c27e46
+[2025-10-13T15:52:44.135Z] [log] ✅ Consumer created and activated for: 922f578e-2670-4265-b13a-ad9678c9dcce
+[2025-10-13T15:52:44.135Z] [log] MediaManager connected successfully
+[2025-10-13T15:52:44.135Z] [log] Setting up socket connection...
+[2025-10-13T15:52:44.135Z] [log] Destroying socket connection...
+[2025-10-13T15:52:44.135Z] [log] Creating new socket connection with token: token_cbomjds9m0dmgpbaqgu
+[2025-10-13T15:52:44.699Z] [log] ✅ Socket connected with ID: vBLuOR9kKlE2u5_fAADB
+[2025-10-13T15:52:44.699Z] [log] Rejoining room after socket reconnect: srv_68e645d6-room-1bbdc1fe
+[2025-10-13T15:52:45.647Z] [log] 🎯 [CLIENT] Received room-participants event. Replacing entire members list.
+[2025-10-13T15:52:45.647Z] [log] 🎯 [MEMBERS MANAGER] updateAllMembers called. Replacing entire members list.
+[2025-10-13T15:52:45.647Z] [log] 🎯 [MEMBERS MANAGER] New members list (in order): 1111 (ONLINE),Высшая (ONLINE),Шеф (ONLINE),Enhaize (ONLINE),Silentia (OFFLINE),Vano (OFFLINE),Амстрад (OFFLINE),Баламут (OFFLINE),Amstrad (OFFLINE),Maxoca (OFFLINE),Киткун (OFFLINE)
+[2025-10-13T15:52:45.648Z] [log] 🔹 Members received: 11
+[2025-10-13T15:52:45.648Z] [log] 🔹 Members data: [object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]
+[2025-10-13T15:52:45.649Z] [log] ✅ Members list updated. Now syncing sliders...
+[2025-10-13T15:52:45.649Z] [log] ✅ [MEMBERS MANAGER] Members list fully replaced and rendered in correct order.
+[2025-10-13T15:52:45.649Z] [log] ✅ [CLIENT] Members list fully replaced.
+[2025-10-13T15:52:46.212Z] [log] Toggling microphone, current state: false
+[2025-10-13T15:52:46.212Z] [log] Enabling microphone for client: client_ot7tt44b8
+[2025-10-13T15:52:46.213Z] [log] No audio producer or track found, starting microphone...
+[2025-10-13T15:52:46.213Z] [log] Starting microphone for client: client_ot7tt44b8
+[2025-10-13T15:52:46.314Z] [log] 🎯 [CLIENT] Received room-participants event. Replacing entire members list.
+[2025-10-13T15:52:46.314Z] [log] 🎯 [MEMBERS MANAGER] updateAllMembers called. Replacing entire members list.
+[2025-10-13T15:52:46.315Z] [log] 🎯 [MEMBERS MANAGER] New members list (in order): 1111 (ONLINE),Высшая (ONLINE),Шеф (ONLINE),Enhaize (ONLINE),Silentia (OFFLINE),Vano (OFFLINE),Амстрад (OFFLINE),Баламут (OFFLINE),Amstrad (OFFLINE),Maxoca (OFFLINE),Киткун (OFFLINE)
+[2025-10-13T15:52:46.315Z] [log] 🔹 Members received: 11
+[2025-10-13T15:52:46.315Z] [log] 🔹 Members data: [object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]
+[2025-10-13T15:52:46.315Z] [log] ✅ Members list updated. Now syncing sliders...
+[2025-10-13T15:52:46.316Z] [log] ✅ [MEMBERS MANAGER] Members list fully replaced and rendered in correct order.
+[2025-10-13T15:52:46.316Z] [log] ✅ [CLIENT] Members list fully replaced.
+[2025-10-13T15:52:47.448Z] [log] Send transport connecting...
+[2025-10-13T15:52:47.647Z] [log] Send transport connected successfully
+[2025-10-13T15:52:47.652Z] [log] Producing media: audio
+[2025-10-13T15:52:47.831Z] [log] 🎯 [DEBUG] EVENT DATA RECEIVED: {
+  "producerId": "c7e940c7-f12f-4350-a3dd-380ce1736244",
+  "clientID": "client_ot7tt44b8",
+  "userId": "user_7416c226",
+  "kind": "audio",
+  "timestamp": 1760370767725,
+  "rtpParameters": {
+    "mid": "0",
+    "codecs": [
+      {
+        "mimeType": "audio/opus",
+        "payloadType": 109,
+        "clockRate": 48000,
+        "channels": 2,
+        "parameters": {
+          "maxplaybackrate": 48000,
+          "stereo": 1,
+          "useinbandfec": 1
+        },
+        "rtcpFeedback": []
+      }
+    ],
+    "headerExtensions": [
+      {
+        "uri": "urn:ietf:params:rtp-hdrext:sdes:mid",
+        "id": 3,
+        "encrypt": false,
+        "parameters": {}
+      },
+      {
+        "uri": "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
+        "id": 1,
+        "encrypt": false,
+        "parameters": {}
+      }
+    ],
+    "encodings": [
+      {
+        "ssrc": 3578633953,
+        "active": true,
+        "dtx": true,
+        "maxBitrate": 24000
+      }
+    ],
+    "rtcp": {
+      "cname": "{09b15885-0603-4a78-a50b-3a796cfaa182}",
+      "reducedSize": true
+    }
+  }
+}
+[2025-10-13T15:52:47.831Z] [log] 🎯 [DEBUG] CLIENT STATE - clientID: client_ot7tt44b8
+[2025-10-13T15:52:47.831Z] [log] 🎯 [DEBUG] Window producerClientMap before: af70b258-d00b-478e-bd9b-652fd81cd3f9,client_3wzief19m,922f578e-2670-4265-b13a-ad9678c9dcce,client_25f0dlbzp
+[2025-10-13T15:52:47.832Z] [log] 🎯 New producer event: [object Object]
+[2025-10-13T15:52:47.832Z] [log] 💾 Saved producerId → clientID: c7e940c7-f12f-4350-a3dd-380ce1736244 → client_ot7tt44b8
+[2025-10-13T15:52:47.832Z] [log] 🔇 Ignoring own producer: c7e940c7-f12f-4350-a3dd-380ce1736244
+[2025-10-13T15:52:47.832Z] [log] 🎯 [DEBUG] Window producerClientMap after: af70b258-d00b-478e-bd9b-652fd81cd3f9,client_3wzief19m,922f578e-2670-4265-b13a-ad9678c9dcce,client_25f0dlbzp,c7e940c7-f12f-4350-a3dd-380ce1736244,client_ot7tt44b8
+[2025-10-13T15:52:47.853Z] [log] Media produced successfully: c7e940c7-f12f-4350-a3dd-380ce1736244
+[2025-10-13T15:52:47.853Z] [log] Microphone started successfully
+[2025-10-13T15:52:49.172Z] [log] 🎯 [DEBUG] EVENT DATA RECEIVED: {
+  "userId": "user_044eefd6"
+}
+[2025-10-13T15:52:49.173Z] [log] User left: user_044eefd6
+[2025-10-13T15:52:49.173Z] [log] 🔇 Volume slider hidden for user: user_044eefd6
+[2025-10-13T15:52:52.435Z] [log] Toggling microphone, current state: true
+[2025-10-13T15:52:52.436Z] [log] Disabling microphone for client: client_ot7tt44b8
+[2025-10-13T15:52:52.436Z] [log] Microphone disabled successfully
+изучи логи. видно почему не создается войс связь? Я всех слышу, а меня никто

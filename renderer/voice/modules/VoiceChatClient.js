@@ -1,3 +1,4 @@
+import VolumeBoostManager from './VolumeBoostManager.js';
 import MediaManager from './MediaManager.js';
 import RoomManager from './RoomManager.js';
 import ServerManager from './ServerManager.js';
@@ -51,6 +52,7 @@ class VoiceChatClient {
         this.pttTimeoutId = null;
         this.isPTTActive = false;
         this.isMicInitializing = false;
+        window.voiceClient = this;
         this.init();
     }
 
@@ -127,6 +129,48 @@ class VoiceChatClient {
     }
 
     initEventListeners() {
+        console.log('Setting up event listeners...');
+        // 🔊 === РАЗБЛОКИРОВКА AUDIOCONTEXT ПРИ ПЕРВОМ ЖЕСТЕ ===
+        const userGestureHandler = () => {
+            VolumeBoostManager.resume();
+            document.removeEventListener('click', userGestureHandler, { once: true });
+            document.removeEventListener('touchstart', userGestureHandler, { once: true });
+        };
+
+        // Просмотр изображений в модальном окне
+        document.addEventListener('click', (e) => {
+            const placeholder = e.target.closest('.image-placeholder');
+            if (!placeholder) return;
+
+            const imageUrl = placeholder.dataset.src;
+            if (!imageUrl) return;
+
+            // Создаём модальное окно для просмотра
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0; left: 0; width: 100vw; height: 100vh;
+                background: rgba(0,0,0,0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            `;
+            const img = document.createElement('img');
+            img.style.maxWidth = '90vw';
+            img.style.maxHeight = '90vh';
+            img.src = imageUrl;
+            img.alt = 'Изображение из чата';
+            modal.appendChild(img);
+            document.body.appendChild(modal);
+
+            modal.addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+        });
+
+        document.addEventListener('click', userGestureHandler, { once: true });
+        document.addEventListener('touchstart', userGestureHandler, { once: true });
         console.log('Setting up event listeners...');
         if (this.elements.micButton) {
             this.elements.micButton.addEventListener('click', () => this.toggleMicrophone());
@@ -224,14 +268,17 @@ class VoiceChatClient {
         const mainContent = document.querySelector('.main-content');
         if (mainContent) {
             mainContent.addEventListener('click', (e) => {
-                if (!e.target.closest('.message') &&
+                if (
+                    !e.target.closest('.message') &&
                     !e.target.closest('.message-input') &&
                     !e.target.closest('.send-btn') &&
                     !e.target.closest('.mic-toggle-btn') &&
                     !e.target.closest('.settings-btn') &&
                     !e.target.closest('.toggle-members-btn') &&
                     !e.target.closest('.current-room-title') &&
-                    !e.target.closest('.toggle-sidebar-btn')) {
+                    !e.target.closest('.toggle-sidebar-btn') &&
+                    !e.target.closest('.attach-btn') // Добавлено из веб-клиента
+                ) {
                     this.elements.sidebar.classList.remove('open');
                     this.elements.membersPanel.classList.remove('open');
                 }
@@ -286,7 +333,7 @@ class VoiceChatClient {
                 }
                 try {
                     const imageUrl = await TextChatManager.uploadImage(this, this.currentRoom, file);
-                    await TextChatManager.sendMessage(this, imageUrl, 'image');
+                    await TextChatManager.sendMessage(this, imageUrl, 'image'); // Исправленная строка
                 } catch (error) {
                     console.error('Ошибка отправки изображения:', error);
                     this.showError('Не удалось отправить изображение: ' + error.message);
@@ -314,11 +361,10 @@ class VoiceChatClient {
                 this.showError('Файл слишком большой (макс. 5 МБ)');
                 return;
             }
-            try {
+           try {
                 const imageUrl = await TextChatManager.uploadImage(this, this.currentRoom, file);
-                await TextChatManager.sendImageMessage(this, imageUrl);
+                await TextChatManager.sendMessage(this, imageUrl, 'image'); // Исправленная строка
             } catch (error) {
-                console.error('Ошибка отправки изображения:', error);
                 this.showError('Не удалось отправить изображение: ' + error.message);
             }
             fileInput.value = '';

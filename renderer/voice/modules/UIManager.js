@@ -1,12 +1,13 @@
+// modules/UIManager.js
 import MembersManager from './MembersManager.js';
+// 🔊 === ИМПОРТ VolumeBoostManager ===
+import VolumeBoostManager from './VolumeBoostManager.js';
 
 class UIManager {
     static client = null;
-
     static setClient(client) {
         this.client = client;
     }
-
     static updateStatus(text, status) {
         const statusText = document.querySelector('.status-text');
         const statusIndicator = document.querySelector('.status-indicator');
@@ -24,18 +25,6 @@ class UIManager {
             }
         }
     }
-
-    static updatePTTButton(isActive) {
-        const pttButton = document.querySelector('.ptt-setup-btn');
-        if (pttButton) {
-            if (isActive) {
-                pttButton.classList.add('active');
-            } else {
-                pttButton.classList.remove('active');
-            }
-        }
-    }
-
     static openCreateRoomModal(client, onSubmit) {
         const modalOverlay = document.createElement('div');
         modalOverlay.className = 'modal-overlay';
@@ -71,71 +60,91 @@ class UIManager {
             }
         });
     }
-
     static updateRoomTitle(title) {
         const titleElement = document.querySelector('.current-room-title');
         if (titleElement) {
             titleElement.textContent = title;
         }
     }
-
-    static addMessage(user, text, timestamp = null, type = 'text', imageUrl = null, messageId = null, readBy = [], userId = null) {
-        const messagesContainer = document.querySelector('.messages-container');
-        if (!messagesContainer) return;
-        const safeUser = user || 'Unknown';
-        const safeText = text || '';
-        
-        // Исправлено: проверяем userId сообщения с userId клиента
-        const isOwn = this.client && userId && this.client.userId && userId.toString() === this.client.userId.toString();
-
-        const messageElement = document.createElement('div');
-        messageElement.className = 'message';
-        if (messageId) messageElement.dataset.messageId = messageId;
-        if (readBy?.length) messageElement.dataset.readBy = JSON.stringify(readBy);
-
-        const time = timestamp
-            ? new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-            : new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-
-        let finalImageUrl = imageUrl;
-        if (type === 'image' && imageUrl?.startsWith('/')) {
-            if (this.client?.API_SERVER_URL) {
-                finalImageUrl = this.client.API_SERVER_URL + imageUrl;
-            }
+static addMessage(user, text, timestamp = null, type = 'text', imageUrl = null, messageId = null, readBy = [], userId = null) {
+    const messagesContainer = document.querySelector('.messages-container');
+    if (!messagesContainer) return;
+    const safeUser = user || 'Unknown';
+    const safeText = text || '';
+    // 🔥 ПРОСТО: Определяем свои сообщения по нику
+    const client = this.client || window.voiceClient;
+    const isOwn = client && client.username && safeUser === client.username;
+    const messageElement = document.createElement('div');
+    messageElement.className = 'message';
+    if (messageId) messageElement.dataset.messageId = messageId;
+    if (readBy?.length) messageElement.dataset.readBy = JSON.stringify(readBy);
+    const time = timestamp
+        ? new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        : new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    let finalImageUrl = imageUrl;
+    if (type === 'image' && imageUrl?.startsWith('/')) {
+        if (client?.API_SERVER_URL) {
+            finalImageUrl = client.API_SERVER_URL + imageUrl;
         }
-
-        // Аватар только у чужих сообщений
-        const avatarHtml = isOwn ? '' : `<div class="message-avatar">${safeUser.charAt(0).toUpperCase()}</div>`;
-
-        if (type === 'image') {
-            messageElement.innerHTML = `
-                ${avatarHtml}
-                <div class="message-content${isOwn ? ' own' : ''}">
-                    <div class="message-header">
-                        <span class="message-username">${this.escapeHtml(safeUser)}</span>
-                        <span class="message-time">${time}</span>
-                    </div>
-                    <div class="message-text"><img src="${this.escapeHtml(finalImageUrl)}" alt="Изображение" class="message-image"></div>
-                </div>
-            `;
-        } else {
-            messageElement.innerHTML = `
-                ${avatarHtml}
-                <div class="message-content${isOwn ? ' own' : ''}">
-                    <div class="message-header">
-                        <span class="message-username">${this.escapeHtml(safeUser)}</span>
-                        <span class="message-time">${time}</span>
-                    </div>
-                    <div class="message-text">${this.escapeHtml(safeText)}</div>
-                </div>
-            `;
-        }
-
-        messagesContainer.appendChild(messageElement);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        setTimeout(() => messageElement.classList.add('appeared'), 10);
     }
+    // Аватарка ТОЛЬКО для чужих сообщений
+    const avatarHtml = isOwn ? '' : `<div class="message-avatar">${safeUser.charAt(0).toUpperCase()}</div>`;
 
+if (type === 'image') {
+    messageElement.innerHTML = `
+        ${avatarHtml}
+        <div class="message-content${isOwn ? ' own' : ''}">
+            <div class="message-header">
+                <span class="message-username">${this.escapeHtml(safeUser)}</span>
+                <span class="message-time">${time}</span>
+            </div>
+            <div class="message-text">
+                <div class="image-placeholder" data-src="${this.escapeHtml(finalImageUrl)}">
+                    📷 Изображение
+                </div>
+            </div>
+        </div>
+    `;
+}else {
+        messageElement.innerHTML = `
+            ${avatarHtml}
+            <div class="message-content${isOwn ? ' own' : ''}">
+                <div class="message-header">
+                    <span class="message-username">${this.escapeHtml(safeUser)}</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-text">${this.escapeHtml(safeText)}</div>
+            </div>
+        `;
+    }
+    messagesContainer.appendChild(messageElement);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    setTimeout(() => messageElement.classList.add('appeared'), 10);
+}
+static updateMessageReadStatus(messageId, readerId, readerName) {
+  const msgEl = document.querySelector(`.message[data-message-id="${messageId}"]`);
+  if (!msgEl) return;
+  const readBy = JSON.parse(msgEl.dataset.readBy || '[]');
+  if (!readBy.includes(readerId)) {
+    readBy.push(readerId);
+    msgEl.dataset.readBy = JSON.stringify(readBy);
+  }
+  // Обновить иконку статуса (например, в .message-time)
+  const timeEl = msgEl.querySelector('.message-time');
+  if (timeEl) {
+    const ownMsg = msgEl.querySelector('.message-content.own');
+    if (ownMsg) {
+      const readers = readBy.length;
+      if (readers === 0) {
+        timeEl.textContent = timeEl.textContent.replace(/✓✓?$/, '') + ' ✓'; // delivered
+      } else if (readers === 1) {
+        timeEl.textContent = timeEl.textContent.replace(/✓✓?$/, '') + ' ✓✓'; // read by someone
+      } else {
+        timeEl.textContent = timeEl.textContent.replace(/✓✓?$/, '') + ' ✓✓✓'; // read by all
+      }
+    }
+  }
+}
     static updateMicButton(status) {
         const micButton = document.querySelector('.mic-button');
         const micToggleBtn = document.querySelector('.mic-toggle-btn');
@@ -158,7 +167,6 @@ class UIManager {
             micToggleBtn.title = state.title;
         }
     }
-
     static updateAudioStatus(activeConsumers) {
         const statusElement = document.querySelector('.audio-status');
         if (!statusElement) return;
@@ -170,7 +178,6 @@ class UIManager {
             statusElement.style.color = 'var(--text-muted)';
         }
     }
-
     static renderServers(client) {
         const serversList = document.querySelector('.servers-list');
         if (!serversList) return;
@@ -217,7 +224,6 @@ class UIManager {
             serversList.appendChild(serverElement);
         });
     }
-
     static renderRooms(client, rooms) {
         const roomsList = document.querySelector('.rooms-list');
         if (!roomsList) return;
@@ -235,68 +241,304 @@ class UIManager {
             roomsList.appendChild(roomElement);
         });
     }
-
-    static updateMembersList(members) {
-        const membersList = document.querySelector('.members-list');
-        if (!membersList) return;
-        membersList.innerHTML = '';
-        if (this.client && this.client.username) {
-            const selfElement = document.createElement('div');
-            selfElement.className = 'member-item';
-            const selfUsername = this.client.username || 'Вы';
-            selfElement.innerHTML = `
-                <div class="member-avatar">${selfUsername.charAt(0).toUpperCase()}</div>
-                <div class="member-name">${selfUsername}</div>
-                <div class="member-status">
-                    <div class="status-indicator online" title="Online"></div>
-                    <div class="mic-indicator ${this.client.isMicActive ? 'active' : ''}" title="${this.client.isMicActive ? 'Microphone active' : 'Microphone muted'}"></div>
-                </div>
-            `;
-            membersList.appendChild(selfElement);
-        }
-        members.forEach(user => {
-            if (!user || !user.userId) {
-                console.warn('[UIManager] Пропускаем некорректного участника (отсутствует userId):', user);
-                return;
-            }
-            if (this.client && user.userId === this.client.userId) {
-                return;
-            }
-            const memberElement = document.createElement('div');
-            memberElement.className = 'member-item';
-            memberElement.dataset.userId = user.userId;
-            const isOnline = user.isOnline === true;
-            const statusClass = isOnline ? 'online' : 'offline';
-            const statusTitle = isOnline ? 'Online' : 'Offline';
-            memberElement.innerHTML = `
-                <div class="member-avatar">${user.username.charAt(0).toUpperCase()}</div>
-                <div class="member-name">${user.username}</div>
-                <div class="member-status">
-                    <div class="status-indicator ${statusClass}" title="${statusTitle}"></div>
-                    <div class="mic-indicator ${isOnline && user.isMicActive ? 'active' : ''}" title="${user.isMicActive ? 'Microphone active' : 'Microphone muted'}"></div>
-                </div>
-            `;
-            membersList.appendChild(memberElement);
-        });
+static syncVolumeSliders() {
+    console.group('🎚️ UIManager.syncVolumeSliders - START');
+    const membersList = document.querySelector('.members-list');
+    if (!membersList) {
+        console.error('❌ Members list not found');
+        console.groupEnd();
+        return;
     }
-
-    static updateMemberMicState(userId, isActive) {
-        const memberElement = document.querySelector(`.member-item[data-user-id="${userId}"]`);
-        if (memberElement) {
-            const micIndicator = memberElement.querySelector('.mic-indicator');
-            if (micIndicator) {
-                const member = MembersManager.getMember(userId);
-                if (member && member.isOnline) {
-                    micIndicator.className = isActive ? 'mic-indicator active' : 'mic-indicator';
-                    micIndicator.title = isActive ? 'Microphone active' : 'Microphone muted';
-                } else {
-                    micIndicator.className = 'mic-indicator';
-                    micIndicator.title = 'Microphone muted';
+    const memberItems = membersList.querySelectorAll('.member-item');
+    const producerUserMap = window.producerUserMap || new Map();
+    const producerClientMap = window.producerClientMap || new Map();
+    // Скрываем все слайдеры
+    memberItems.forEach(item => {
+        const slider = item.querySelector('.member-volume-slider');
+        if (slider) {
+            slider.style.display = 'none';
+            slider.dataset.producerId = '';
+        }
+    });
+    // 1. Сначала обрабатываем привязку по userId (приоритет)
+    for (const [producerId, userId] of producerUserMap.entries()) {
+        const memberItem = membersList.querySelector(`.member-item[data-user-id="${userId}"]`);
+        if (memberItem) {
+            const slider = memberItem.querySelector('.member-volume-slider');
+            if (slider) {
+                slider.dataset.producerId = producerId;
+                slider.style.display = 'block';
+                console.log('✅ Slider shown by userId:', userId, 'producer:', producerId);
+            }
+        }
+    }
+    // 2. Затем — fallback по clientId (для продюсеров без userId, например из /producers)
+    for (const [producerId, clientId] of producerClientMap.entries()) {
+        // Пропускаем, если уже обработан через userId
+        if (producerUserMap.has(producerId)) continue;
+        const memberItem = membersList.querySelector(`.member-item[data-client-id="${clientId}"]`);
+        if (memberItem) {
+            const slider = memberItem.querySelector('.member-volume-slider');
+            if (slider) {
+                slider.dataset.producerId = producerId;
+                slider.style.display = 'block';
+                console.log('✅ Slider shown by clientId:', clientId, 'producer:', producerId);
+                // 🔥 Дополнительно: если у участника есть userId — сохраняем в producerUserMap
+                const userId = memberItem.dataset.userId;
+                if (userId && !producerUserMap.has(producerId)) {
+                    if (!window.producerUserMap) window.producerUserMap = new Map();
+                    window.producerUserMap.set(producerId, userId);
+                    console.log('🔁 Mapped producer', producerId, 'to userId', userId, 'via clientId', clientId);
                 }
             }
         }
     }
+    console.groupEnd();
+}
 
+static updateMembersList(members) {
+    console.group('👥 UIManager.updateMembersList - START');
+    console.log('🔹 Members received:', members.length);
+    console.log('🔹 Members data:', members.map(m => ({ username: m.username, clientId: m.clientId, isOnline: m.isOnline })));
+    const membersList = document.querySelector('.members-list');
+    if (!membersList) {
+        console.error('❌ Members list element not found');
+        console.groupEnd();
+        return;
+    }
+
+    // 🔹 СОХРАНЯЕМ текущие значения слайдеров ПЕРЕД очисткой
+    const savedSliderValues = new Map();
+    membersList.querySelectorAll('.member-item').forEach(item => {
+        const userId = item.dataset.userId;
+        const slider = item.querySelector('.member-volume-slider');
+        if (userId && slider) {
+            // Сначала пробуем взять значение из VolumeBoostManager (точнее)
+            let value = VolumeBoostManager.getGain(userId);
+            if (value !== null) {
+                savedSliderValues.set(userId, Math.round(value * 100));
+            } else {
+                // fallback: из DOM
+                savedSliderValues.set(userId, slider.value);
+            }
+        }
+    });
+
+    // Полная очистка контейнера
+    membersList.innerHTML = '';
+
+    // Добавляем чекбокс общего мута
+    const globalMuteHeader = document.createElement('div');
+    globalMuteHeader.className = 'global-mute-header';
+    globalMuteHeader.innerHTML = `
+        <label class="global-mute-label">
+            <input type="checkbox" id="globalMuteCheckbox">
+            <span>Общий мут</span>
+        </label>
+    `;
+    membersList.appendChild(globalMuteHeader);
+
+    // Обработчик общего мута
+    const globalMuteCheckbox = globalMuteHeader.querySelector('#globalMuteCheckbox');
+    globalMuteCheckbox.addEventListener('change', (e) => {
+        const isMuted = e.target.checked;
+        const sliders = membersList.querySelectorAll('.member-volume-slider');
+        console.log('🔹 Global mute changed:', isMuted);
+        sliders.forEach(slider => {
+            const value = isMuted ? 0 : 100;
+            slider.value = value;
+            const producerId = slider.dataset.producerId;
+            const userId = window.producerUserMap?.get(producerId) || window.producerClientMap?.get(producerId);
+            if (userId) {
+                VolumeBoostManager.setGain(userId, value / 100);
+            }
+            slider.title = `Громкость: ${value}%`;
+        });
+    });
+
+    // Создаем элементы участников
+    members.forEach(user => {
+        if (!user || !user.userId) {
+            console.warn('⚠️ Skipping invalid member:', user);
+            return;
+        }
+        const memberElement = document.createElement('div');
+        memberElement.className = 'member-item';
+        memberElement.dataset.userId = user.userId;
+        memberElement.dataset.clientId = user.clientId || '';
+        const isOnline = user.isOnline === true;
+        const statusClass = isOnline ? 'online' : 'offline';
+        const statusTitle = isOnline ? 'Online' : 'Offline';
+
+        // 🔹 Получаем сохранённое значение или 100 по умолчанию
+        const savedValue = savedSliderValues.get(user.userId) || 100;
+
+        memberElement.innerHTML = `
+    <div class="member-avatar">${user.username.charAt(0).toUpperCase()}</div>
+    <div class="member-info">
+        <div class="member-name">${user.username}</div>
+        <div class="member-controls">
+            <div class="member-status">
+                <div class="status-indicator ${statusClass}" title="${statusTitle}"></div>
+                <div class="mic-indicator ${isOnline && user.isMicActive ? 'active' : ''}" 
+                     title="${user.isMicActive ? 'Microphone active' : 'Microphone muted'}"></div>
+            </div>
+            <input type="range" class="member-volume-slider" min="0" max="200" value="${savedValue}" 
+                   title="Громкость: ${savedValue}%" data-producer-id="" style="display: none;">
+        </div>
+    </div>
+`;
+        membersList.appendChild(memberElement);
+
+        // Настраиваем обработчик слайдера (один раз)
+        const slider = memberElement.querySelector('.member-volume-slider');
+        if (slider && !slider._hasVolumeHandler) {
+            slider.addEventListener('input', (e) => {
+                const value = e.target.value;
+                const producerId = e.target.dataset.producerId;
+                e.target.title = `Громкость: ${value}%`;
+                const userId = window.producerUserMap?.get(producerId) || window.producerClientMap?.get(producerId);
+                if (userId) {
+                    VolumeBoostManager.setGain(userId, value / 100);
+                }
+            });
+            slider._hasVolumeHandler = true;
+        }
+
+        // Добавляем показ/скрытие бегунка при наведении на ник
+        memberElement.addEventListener('mouseenter', () => {
+            if (slider.dataset.producerId) {
+                slider.style.display = 'block';
+            }
+        });
+        memberElement.addEventListener('mouseleave', () => {
+            setTimeout(() => {
+                if (!slider.matches(':hover')) {
+                    slider.style.display = 'none';
+                }
+            }, 100);
+        });
+        slider.addEventListener('mouseleave', () => {
+            slider.style.display = 'none';
+        });
+    });
+
+    console.log('✅ Members list updated. Now syncing sliders...');
+    this.syncVolumeSliders();
+    console.groupEnd();
+}
+
+static showVolumeSlider(producerId, clientId) {
+    console.group('🎚️ UIManager.showVolumeSlider - START');
+    console.log('🔹 producerId:', producerId);
+    console.log('🔹 clientId:', clientId);
+    const membersList = document.querySelector('.members-list');
+    if (!membersList) {
+        console.error('❌ Members list element not found');
+        console.groupEnd();
+        return;
+    }
+    // Ищем участника по clientId
+    const memberItems = membersList.querySelectorAll('.member-item');
+    let found = false;
+    for (const memberItem of memberItems) {
+        const memberClientId = memberItem.dataset.clientId;
+        console.log('🔹 Checking member item with clientId:', memberClientId);
+        if (memberClientId === clientId) {
+            const slider = memberItem.querySelector('.member-volume-slider');
+            if (slider) {
+                slider.dataset.producerId = producerId;
+                slider.style.display = 'block';
+                console.log('✅ Volume slider shown for client:', clientId, 'producer:', producerId);
+                found = true;
+                // Добавляем обработчик если его нет
+                if (!slider._hasVolumeHandler) {
+                    slider.addEventListener('input', (e) => {
+                        const value = e.target.value;
+                        const producerId = e.target.dataset.producerId;
+                        e.target.title = `Громкость: ${value}%`;
+                        const userId = window.producerUserMap?.get(producerId) || window.producerClientMap?.get(producerId);
+                        if (userId) {
+                            VolumeBoostManager.setGain(userId, value / 100);
+                        }
+                    });
+                    slider._hasVolumeHandler = true;
+                }
+                break;
+            }
+        }
+    }
+    if (!found) {
+        console.warn('❌ Member item not found for clientId:', clientId);
+        console.log('🔹 Available member items:', Array.from(memberItems).map(item => ({
+            clientId: item.dataset.clientId,
+            userId: item.dataset.userId
+        })));
+    }
+    console.groupEnd();
+}
+static showVolumeSliderByUserId(producerId, userId) {
+    console.group('🎚️ UIManager.showVolumeSliderByUserId - START');
+    console.log('🔹 producerId:', producerId);
+    console.log('🔹 userId:', userId);
+    const membersList = document.querySelector('.members-list');
+    if (!membersList) {
+        console.error('❌ Members list element not found');
+        console.groupEnd();
+        return;
+    }
+    const memberItem = membersList.querySelector(`.member-item[data-user-id="${userId}"]`);
+    if (memberItem) {
+        const slider = memberItem.querySelector('.member-volume-slider');
+        if (slider) {
+            slider.dataset.producerId = producerId;
+            slider.style.display = 'block';
+            console.log('✅ Volume slider shown for user:', userId, 'producer:', producerId);
+            if (!slider._hasVolumeHandler) {
+                slider.addEventListener('input', (e) => {
+                    const value = e.target.value;
+                    const pid = e.target.dataset.producerId;
+                    e.target.title = `Громкость: ${value}%`;
+                    const userId = window.producerUserMap?.get(pid) || window.producerClientMap?.get(pid);
+                    if (userId) {
+                        VolumeBoostManager.setGain(userId, value / 100);
+                    }
+                });
+                slider._hasVolumeHandler = true;
+            }
+        } else {
+            console.warn('⚠️ Slider element not found for user:', userId);
+        }
+    } else {
+        console.warn('❌ Member item not found for userId:', userId);
+        const allItems = Array.from(membersList.querySelectorAll('.member-item')).map(el => ({
+            userId: el.dataset.userId,
+            clientId: el.dataset.clientId
+        }));
+        console.log('🔹 Available members:', allItems);
+    }
+    console.groupEnd();
+}
+static updateMemberMicState(userId, isActive) {
+  const memberElement = document.querySelector(`.member-item[data-user-id="${userId}"]`);
+  if (memberElement) {
+    const micIndicator = memberElement.querySelector('.mic-indicator');
+    const statusIndicator = memberElement.querySelector('.status-indicator');
+    if (micIndicator) {
+      // Проверяем, онлайн ли пользователь (по классу status-indicator)
+      const isOnline = statusIndicator && statusIndicator.classList.contains('online');
+      if (isOnline) {
+        // Только онлайн-пользователи могут иметь активный микрофон
+        micIndicator.className = isActive ? 'mic-indicator active' : 'mic-indicator';
+        micIndicator.title = isActive ? 'Microphone active' : 'Microphone muted';
+      } else {
+        // Оффлайн → микрофон всегда выключен
+        micIndicator.className = 'mic-indicator';
+        micIndicator.title = 'Microphone muted';
+      }
+    }
+  }
+}
     static openModal(title, content, onSubmit) {
         const modalOverlay = document.querySelector('.modal-overlay');
         const modalContent = document.querySelector('.modal-content');
@@ -312,12 +554,10 @@ class UIManager {
             submitButton.addEventListener('click', onSubmit);
         }
     }
-
     static closeModal() {
         const modalOverlay = document.querySelector('.modal-overlay');
         if (modalOverlay) modalOverlay.classList.add('hidden');
     }
-
     static showError(message) {
         const errorElement = document.createElement('div');
         errorElement.className = 'error-message';
@@ -340,13 +580,11 @@ class UIManager {
             }
         }, 5000);
     }
-
     static escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
-
     static openSettings(client) {
         const modalContent = `
             <h2>Настройки</h2>
@@ -382,12 +620,10 @@ class UIManager {
             });
         }
     }
-
     static onRoomJoined(client, roomName) {
         this.updateRoomTitle(roomName);
         this.updateStatus('Подключено', 'connected');
     }
-
     static openPanel(client, panel) {
         if (!panel) return;
         panel.style.display = 'flex';
@@ -396,7 +632,6 @@ class UIManager {
             panel.style.transform = 'translateX(0)';
         }, 10);
     }
-
     static closePanel(client, panel) {
         if (!panel) return;
         panel.style.opacity = '0';
@@ -405,42 +640,40 @@ class UIManager {
             panel.style.display = 'none';
         }, 300);
     }
-
     static toggleSidebar() {
         const sidebar = document.querySelector('.sidebar');
         sidebar.classList.toggle('open');
     }
-
     static toggleMembersPanel(client) {
         const membersPanel = document.querySelector('.members-panel');
         membersPanel.classList.toggle('open');
     }
-
     static applySettings(client) {
         client.bitrate = document.getElementById('bitrateSlider').value * 1000;
         client.dtxEnabled = document.getElementById('dtxCheckbox').checked;
         client.fecEnabled = document.getElementById('fecCheckbox').checked;
         this.closeModal();
     }
-
-    static updateRoomUI(client) {
-        const messagesContainer = document.querySelector('.messages-container');
-        if (messagesContainer) {
-            messagesContainer.innerHTML = '';
-        }
-        let roomTitle = 'Выберите комнату';
-        if (client.currentRoom) {
-            const currentRoomData = client.rooms.find(room => room.id === client.currentRoom);
-            if (currentRoomData) {
-                roomTitle = `Комната: ${currentRoomData.name}`;
-            } else {
-                roomTitle = `Комната: ${client.currentRoom}`;
-            }
-        }
-        this.updateRoomTitle(roomTitle);
-        this.updateMicButton(client.isConnected ? (client.isMicActive ? 'active' : 'connected') : 'disconnected');
+static updateRoomUI(client) {
+    const messagesContainer = document.querySelector('.messages-container');
+    if (messagesContainer) {
+        messagesContainer.innerHTML = '';
     }
-
+    // ИСПРАВЛЕНО: Получаем название комнаты вместо ID
+    let roomTitle = 'Выберите комнату';
+    if (client.currentRoom) {
+        // Ищем комнату по ID в списке загруженных комнат
+        const currentRoomData = client.rooms.find(room => room.id === client.currentRoom);
+        if (currentRoomData) {
+            roomTitle = `Комната: ${currentRoomData.name}`;
+        } else {
+            // На случай, если комната не найдена (например, при переподключении), используем ID как fallback
+            roomTitle = `Комната: ${client.currentRoom}`;
+        }
+    }
+    this.updateRoomTitle(roomTitle);
+    this.updateMicButton(client.isConnected ? (client.isMicActive ? 'active' : 'connected') : 'disconnected');
+}
     static clearMessages() {
         const messagesContainer = document.querySelector('.messages-container');
         if (messagesContainer) {
@@ -448,5 +681,4 @@ class UIManager {
         }
     }
 }
-
 export default UIManager;
