@@ -1,0 +1,44 @@
+name: Build Native Addon
+
+on: [push]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build global-mouse-hook (Linux)
+        run: |
+          cd global-mouse-hook
+          npm install
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-addon
+          path: |
+            global-mouse-hook/*.node
+            global-mouse-hook/index.js
+            global-mouse-hook/index.d.ts
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build global-mouse-hook (Windows)
+        run: |
+          cd global-mouse-hook
+          npm install
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-addon
+          path: |
+            global-mouse-hook/*.node
+            global-mouse-hook/index.js
+            global-mouse-hook/index.d.ts

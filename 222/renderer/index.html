@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Night Watch Updater</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Всплывающая панель "Назад" -->
+    <div class="back-panel" id="back-panel">
+      <button class="back-btn" id="back-btn">← Назад к аддонам</button>
+    </div>
+    
+    <div class="top-bar" id="top-bar">
+      <h1>Менеджер аддонов</h1>
+      <button id="voice-btn" class="voice-btn" title="Открыть веб-клиент">🎤</button>
+    </div>
+    
+    <div class="game-panel" id="game-panel">
+      <span id="game-status">Проверка игры...</span>
+      <div style="display: flex; gap: 5px;">
+        <button id="change-path-btn" class="logs-btn" style="padding: 8px 10px;">Изменить путь</button>
+        <button id="launch-btn" disabled>Запустить игру</button>
+      </div>
+    </div>
+    
+    <div class="divider" id="divider"></div>
+    
+    <div class="addons-header" id="addons-header">
+      <h2>Доступные аддоны</h2>
+      <button id="logs-btn" class="logs-btn">Логи</button>
+    </div>
+    
+    <div class="addons-list" id="addons-list"></div>
+    
+    <!-- WebView для веб-клиента -->
+    <webview 
+      id="ns-webview"
+      src="https://ns.fiber-gate.ru/"
+      partition="persist:ns"
+      allowpopups
+      useragent="NightWatch/1.0"
+      webpreferences="nodeIntegration=no,contextIsolation=yes">
+    </webview>
+  </div>
+  
+  <script src="renderer.js"></script>
+</body>
+</html>
