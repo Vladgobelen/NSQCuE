@@ -15,8 +15,8 @@
     "icon": "assets/icon.png",
     "extraResources": [
       {
-        "from": "global-mouse-hook.win32-x64-msvc.node",
-        "to": "global-mouse-hook.win32-x64-msvc.node"
+        "from": "global-mouse-hook.exe",
+        "to": "global-mouse-hook.exe"
       }
     ],
     "win": {
