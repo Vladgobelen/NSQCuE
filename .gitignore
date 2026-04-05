@@ -17,6 +17,7 @@ yarn.lock
 pnpm-lock.yaml
 global-mouse-hook/
 !global-mouse-hook.win32-x64-msvc.node
+!global-mouse-hook.exe
 # === ЛОГИ И ВРЕМЕННЫЕ ===
 *.log
 logs/
