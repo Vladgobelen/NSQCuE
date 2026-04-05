@@ -13,7 +13,6 @@ out/
 *.dmg
 *.nsis
 *.blockmap
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
