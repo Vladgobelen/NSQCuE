@@ -30,10 +30,12 @@ temp/
 *.cache
 .cache/
 
-# === RUST / NATIVE ===
-# Игнорируем ВСЮ папку исходников модуля, КРОМЕ готового .node
-global-mouse-hook/
-!global-mouse-hook.win32-x64-msvc.node
+# === RUST / NATIVE MODULE ===
+# Игнорируем ТОЛЬКО артефакты компиляции и локальные зависимости модуля
+global-mouse-hook/target/
+global-mouse-hook/node_modules/
+global-mouse-hook/*.log
+global-mouse-hook/*.node
 
 # === IDE / ОС / СЕКРЕТЫ ===
 .DS_Store
@@ -61,26 +63,5 @@ coverage/
 !README.md
 docs/
 examples/
-benchmarks/
-
-# === ЯВНО РАЗРЕШАЕМ НУЖНЫЕ ФАЙЛЫ ПРОЕКТА ===
-# Рабочие процессы сборки
-!.github/workflows/build.yml
-!.github/workflows/build-win.yml
-
-# Исходники main/
-!main/addonManager.js
-!main/main.js
-!main/preload.js
-!main/settings.js
-!main/utils.js
-
-# Исходники renderer/
-!renderer/index.html
-!renderer/renderer.js
-!renderer/style.css
-
-# Ассеты и конфиги
-!assets/icon.png
-!package.json
-!.gitignore
+benchmarks/global-mouse-hook/.yarn/
+.yarn/

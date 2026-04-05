@@ -31,7 +31,7 @@ jobs:
       - name: Build native addon
         run: |
           cd global-mouse-hook
-          npm install
+          npm ci
           npm run build
 
       - name: Build Electron App (Windows Portable)

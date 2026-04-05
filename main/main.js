@@ -1,7 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
-const { spawn } = require('child_process');
 const addonManager = require('./addonManager');
 const settings = require('./settings');
 const { setupLogging } = require('./utils');
@@ -9,13 +8,12 @@ const logger = setupLogging();
 
 let mainWindow;
 let webviewWebContents = null;
-let rustHookProcess = null;
+let mouseHook = null;
 const pressedKeys = new Map();
 let currentPTTHotkeyCodes = null;
 let captureMode = false;
 const capturedCodes = new Set();
 let pttActive = false;
-let rustBuffer = '';
 
 async function ensureGamePath() {
   if (settings.isGamePathValid()) return true;
@@ -36,65 +34,67 @@ async function ensureGamePath() {
 }
 
 function startRustHook() {
-  const binaryPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'global_mouse_hook')
-    : path.join(__dirname, '../global-mouse-hook/target/release/global_mouse_hook');
-  if (!fs.existsSync(binaryPath)) {
-    logger.error(`[RUST_HOOK] Binary not found: ${binaryPath}`);
+  const addonPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'global-mouse-hook.win32-x64-msvc.node')
+    : path.join(__dirname, '../global-mouse-hook/global-mouse-hook.win32-x64-msvc.node');
+
+  if (!fs.existsSync(addonPath)) {
+    logger.error(`[HOOK] Addon not found: ${addonPath}`);
     return;
   }
-  rustHookProcess = spawn(binaryPath, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, RUST_LOG: 'error' }
-  });
-  rustHookProcess.stdout.on('data', (chunk) => {
-    rustBuffer += chunk.toString();
-    const lines = rustBuffer.split('\n');
-    rustBuffer = lines.pop() || '';
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-      if (!line) continue;
-      try {
-        const event = JSON.parse(line);
-        if (event.type === 'key' && typeof event.code === 'number') {
-          const code = event.code;
-          const isDown = event.event === 'down';
-          pressedKeys.set(code, isDown);
-          if (captureMode && isDown) {
-            capturedCodes.add(code);
-            mainWindow?.webContents?.send('key-captured', code);
-          }
-          if (currentPTTHotkeyCodes && Array.isArray(currentPTTHotkeyCodes) && currentPTTHotkeyCodes.length > 0) {
-            const allPressed = currentPTTHotkeyCodes.every(c => pressedKeys.get(c) === true);
-            const allReleased = currentPTTHotkeyCodes.every(c => pressedKeys.get(c) !== true);
-            if (allPressed && !pttActive) {
-              pttActive = true;
-              mainWindow?.webContents?.send('ptt-pressed');
-            } else if (allReleased && pttActive) {
-              pttActive = false;
-              mainWindow?.webContents?.send('ptt-released');
-            }
-          }
-        }
-      } catch (e) {
-        logger.warn(`[RUST_HOOK] Failed to parse JSON: "${line}" | Error: ${e.message}`);
+
+  try {
+    mouseHook = require(addonPath);
+    logger.info('[HOOK] Loaded successfully');
+
+    // Коллбэк, который вызывает Rust при нажатии/отпускании клавиш
+    const onKeyEvent = (msg) => {
+      if (!msg || typeof msg !== 'string') return;
+      const [type, codeStr] = msg.split(':');
+      const code = parseInt(codeStr, 10);
+      if (isNaN(code)) return;
+
+      const isDown = type === 'down';
+      pressedKeys.set(code, isDown);
+
+      if (captureMode && isDown) {
+        capturedCodes.add(code);
+        mainWindow?.webContents?.send('key-captured', code);
       }
+
+      if (currentPTTHotkeyCodes && Array.isArray(currentPTTHotkeyCodes) && currentPTTHotkeyCodes.length > 0) {
+        const allPressed = currentPTTHotkeyCodes.every(c => pressedKeys.get(c) === true);
+        const allReleased = currentPTTHotkeyCodes.every(c => pressedKeys.get(c) !== true);
+
+        if (allPressed && !pttActive) {
+          pttActive = true;
+          mainWindow?.webContents?.send('ptt-pressed');
+        } else if (allReleased && pttActive) {
+          pttActive = false;
+          mainWindow?.webContents?.send('ptt-released');
+        }
+      }
+    };
+
+    // @napi-rs по умолчанию конвертирует snake_case в camelCase для JS
+    const startFn = mouseHook.startGlobalKeyboardHook || mouseHook.start_global_keyboard_hook;
+    if (typeof startFn === 'function') {
+      startFn(onKeyEvent);
+    } else {
+      logger.error('[HOOK] Exported function not found');
     }
-  });
-  rustHookProcess.stderr.on('data', (data) => {
-    logger.warn(`[RUST_HOOK] stderr: ${data.toString().trim()}`);
-  });
-  rustHookProcess.on('error', (err) => logger.error(`[RUST_HOOK] Spawn error: ${err.message}`));
-  rustHookProcess.on('close', (code) => {
-    logger.error(`[RUST_HOOK] Process exited with code ${code}`);
-    rustHookProcess = null;
-  });
+  } catch (err) {
+    logger.error(`[HOOK] Failed to init: ${err.message}`);
+  }
 }
 
 function stopRustHook() {
-  if (rustHookProcess) {
-    rustHookProcess.kill('SIGTERM');
-    rustHookProcess = null;
+  if (mouseHook) {
+    const stopFn = mouseHook.stopGlobalKeyboardHook || mouseHook.stop_global_keyboard_hook;
+    if (typeof stopFn === 'function') {
+      try { stopFn(); } catch {}
+    }
+    mouseHook = null;
   }
 }
 
@@ -106,6 +106,7 @@ function createWindow() {
     }
     callback(false);
   });
+
   const applyCSP = (details, callback, isDefault) => {
     callback({
       responseHeaders: {
@@ -119,6 +120,7 @@ function createWindow() {
       }
     });
   };
+
   nsSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, false));
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, true));
 
@@ -131,8 +133,8 @@ function createWindow() {
     },
     icon: path.join(__dirname, '../assets/icon.png')
   });
-  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
+  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   mainWindow.on('closed', () => { mainWindow = null; });
   mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
     webviewWebContents = webContents;
@@ -143,25 +145,24 @@ function createWindow() {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
-
+  
   const gamePathValid = await ensureGamePath();
   if (!gamePathValid) { app.quit(); return; }
-
+  
   addonManager.setGamePath(settings.getGamePath());
   createWindow();
   startRustHook();
-
+  
   const savedHotkey = settings.getPTTHotkey();
   if (savedHotkey && Array.isArray(savedHotkey)) currentPTTHotkeyCodes = savedHotkey;
-
+  
   try {
     await addonManager.startupUpdateCheck(mainWindow);
   } catch (err) {
     logger.error('[STARTUP] Update check error:', err.message);
   }
-
+  
   addonManager.startBackgroundChecker(mainWindow);
-
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
@@ -216,24 +217,27 @@ ipcMain.handle('change-game-path', async () => {
 
 ipcMain.on('open-logs-folder', () => shell.openPath(path.join(app.getPath('userData'), 'logs')));
 ipcMain.on('go-back', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(`file://${__dirname}/../renderer/index.html`); });
-
 ipcMain.handle('start-key-capture', async () => { captureMode = true; capturedCodes.clear(); pressedKeys.clear(); return { success: true }; });
 ipcMain.handle('stop-key-capture', async () => { captureMode = false; const codes = Array.from(capturedCodes); capturedCodes.clear(); return { success: true, codes }; });
+
 ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
   if (!Array.isArray(codes)) return { success: false, message: 'Invalid hotkey format' };
   currentPTTHotkeyCodes = codes; settings.setPTTHotkey(codes); pttActive = false;
   return { success: true };
 });
+
 ipcMain.handle('get-ptt-hotkey', async () => currentPTTHotkeyCodes);
 ipcMain.handle('get-platform', async () => process.platform);
 ipcMain.handle('register-ptt-hotkey', async () => ({ success: true, message: 'Use set-ptt-hotkey with array of codes instead' }));
 ipcMain.on('webclient-mic-state', () => {});
+
 ipcMain.handle('clear-session-cache', async (event, partition) => {
   const sess = session.fromPartition(partition);
   await sess.clearCache();
   await sess.clearStorageData({ storages: ['cachestorage', 'serviceworkers', 'filesystem', 'indexeddb', 'localstorage'] });
   return true;
 });
+
 ipcMain.handle('execute-in-webview', async (event, { code }) => {
   if (!webviewWebContents || webviewWebContents.isDestroyed()) throw new Error('WebView webContents not available');
   try { return await webviewWebContents.executeJavaScript(code); }
