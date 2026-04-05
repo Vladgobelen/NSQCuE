@@ -1,8 +1,59 @@
-# === ЗАВИСИМОСТИ ===
+# === БЛОКИРУЕМ ВСЁ ПО УМОЛЧАНИЮ ===
+*
+
+# === РАЗРЕШАЕМ СТРУКТУРУ ПАПОК ===
+!.github/
+!.github/workflows/
+!main/
+!renderer/
+!assets/
+
+# === РАЗРЕШАЕМ КОНКРЕТНЫЕ ФАЙЛЫ ПРОЕКТА ===
+# Корень
+!package.json
+
+# .github
+!.github/workflows/build.yml
+!.github/workflows/build-win.yml
+
+# main/
+!main/addonManager.js
+!main/main.js
+!main/preload.js
+!main/settings.js
+!main/utils.js
+
+# renderer/
+!renderer/index.html
+!renderer/renderer.js
+!renderer/style.css
+
+# assets/
+!assets/icon.png
+
+# Нативный модуль (скомпилированный бинарь)
+!global-mouse-hook.win32-x64-msvc.node
+
+# === ЯВНО БЛОКИРУЕМ ОПАСНОЕ/ЛИШНЕЕ (даже если попадёт в папку) ===
+# Логи и отладка
+*.log
+logs/
+*.log.*
+debug/
+trace/
+
+# Зависимости и сборка
 node_modules/
 */node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# === СБОРКА ELECTRON ===
+# Electron / сборка
 dist/
 build/
 out/
@@ -13,32 +64,56 @@ out/
 *.zip
 *.tar.gz
 *.dmg
+*.nsis
+*.blockmap
 
-# === ЛОГИ И ВРЕМЕННЫЕ ФАЙЛЫ ===
-*.log
-logs/
-.tmp/
-temp/
+# Rust / native (исходники и артефакты сборки, кроме разрешённого .node)
+global-mouse-hook/
+!global-mouse-hook.win32-x64-msvc.node
 
-# === ОС И РЕДАКТОРЫ ===
+# Системные файлы и ОС
 .DS_Store
 Thumbs.db
 desktop.ini
+$RECYCLE.BIN/
+System Volume Information/
+
+# IDE и редакторы
 .idea/
 .vscode/
 *.swp
 *.swo
+*.swn
+*.backup
+*.tmp
+*.temp
 
-# === RUST / NATIVE MODULE ===
-# Игнорируем только тяжелую папку компиляции и локальные зависимости модуля
-global-mouse-hook/target/
-global-mouse-hook/node_modules/
-
-# Явно разрешаем отслеживать готовые файлы модуля (если вы коммитите .node)
-!global-mouse-hook/*.node
-!global-mouse-hook/index.js
-!global-mouse-hook/index.d.ts
-
-# === СЕКРЕТЫ ===
+# Конфиги среды и секреты
 .env
 .env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+secrets/
+
+# Кэш и временные файлы
+.cache/
+.tmp/
+temp/
+*.cache
+*.pid
+*.seed
+*.pid.lock
+
+# Тесты и покрытие
+coverage/
+*.lcov
+.nyc_output/
+
+# Документация и прочее
+*.md
+!README.md
+docs/
+examples/
+benchmarks/
