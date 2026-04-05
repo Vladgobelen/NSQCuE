@@ -74,7 +74,7 @@ function startRustHook() {
     try {
         hookProcess = spawn(exePath, [], {
             stdio: ['pipe', 'pipe', 'pipe'],
-            windowsHide: true, // Скрывает консольное окно
+            windowsHide: true,
             env: { ...process.env }
         });
 
@@ -90,15 +90,27 @@ function startRustHook() {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
 
-                const [type, codeStr] = trimmed.split(':');
-                const code = parseInt(codeStr, 10);
+                let code;
+                let isDown;
+
+                // 1. Попытка распарсить JSON (основной формат от вашего бинарника)
+                try {
+                    const json = JSON.parse(trimmed);
+                    if (typeof json.code !== 'number') continue; // Пропускаем {"type":"init", ...}
+                    code = json.code;
+                    isDown = json.event === 'down';
+                } catch (e) {
+                    // 2. Fallback на legacy-формат: down:70 / up:70
+                    const [typeStr, codeStr] = trimmed.split(':');
+                    code = parseInt(codeStr, 10);
+                    isDown = typeStr.toLowerCase() === 'down';
+                }
 
                 if (isNaN(code)) {
                     logger.warn(`[HOOK] Invalid payload format: "${trimmed}"`);
                     continue;
                 }
 
-                const isDown = type.toLowerCase() === 'down';
                 logger.info(`[HOOK_EVENT] Key ${code} (${getKeyName(code)}) ${isDown ? 'DOWN' : 'UP'}`);
                 pressedKeys.set(code, isDown);
 
@@ -127,7 +139,7 @@ function startRustHook() {
 
         hookProcess.stderr.on('data', (data) => {
             const err = data.toString().trim();
-            logger.error(`[HOOK_STDERR] → ${err}`);
+            if (err) logger.error(`[HOOK_STDERR] → ${err}`);
         });
 
         hookProcess.on('close', (code, signal) => {
