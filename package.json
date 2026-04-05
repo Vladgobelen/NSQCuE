@@ -21,10 +21,7 @@
     ],
     "win": {
       "target": [
-        {
-          "target": "portable",
-          "arch": ["x64"]
-        }
+        { "target": "portable", "arch": ["x64"] }
       ]
     },
     "portable": {
@@ -34,10 +31,7 @@
     },
     "linux": {
       "target": [
-        {
-          "target": "AppImage",
-          "arch": ["x64"]
-        }
+        { "target": "AppImage", "arch": ["x64"] }
       ],
       "category": "Utility",
       "synopsis": "Установщик аддонов Ночная Стража"

@@ -19,12 +19,13 @@ jobs:
         with:
           node-version: 20
 
-      - name: Verify pre-compiled addon exists
+      - name: Verify pre-compiled addon
         run: |
           if (-not (Test-Path "global-mouse-hook.win32-x64-msvc.node")) {
-            Write-Error "global-mouse-hook.win32-x64-msvc.node not found in repository!"
+            Write-Error "❌ global-mouse-hook.win32-x64-msvc.node not found!"
             exit 1
           }
+          Write-Host "✓ Found: global-mouse-hook.win32-x64-msvc.node"
 
       - name: Install dependencies
         run: npm ci
