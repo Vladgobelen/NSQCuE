@@ -15,7 +15,8 @@ out/
 *.blockmap
 yarn.lock
 pnpm-lock.yaml
-
+global-mouse-hook/
+!global-mouse-hook.win32-x64-msvc.node
 # === ЛОГИ И ВРЕМЕННЫЕ ===
 *.log
 logs/

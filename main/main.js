@@ -8,7 +8,7 @@ const logger = setupLogging();
 
 let mainWindow;
 let webviewWebContents = null;
-let mouseHook = null;
+let stopHookFn = null;
 const pressedKeys = new Map();
 let currentPTTHotkeyCodes = null;
 let captureMode = false;
@@ -36,7 +36,7 @@ async function ensureGamePath() {
 function startRustHook() {
   const addonPath = app.isPackaged
     ? path.join(process.resourcesPath, 'global-mouse-hook.win32-x64-msvc.node')
-    : path.join(__dirname, '../global-mouse-hook/global-mouse-hook.win32-x64-msvc.node');
+    : path.join(__dirname, '../global-mouse-hook.win32-x64-msvc.node');
 
   if (!fs.existsSync(addonPath)) {
     logger.error(`[HOOK] Addon not found: ${addonPath}`);
@@ -44,11 +44,18 @@ function startRustHook() {
   }
 
   try {
-    mouseHook = require(addonPath);
+    const hook = require(addonPath);
     logger.info('[HOOK] Loaded successfully');
 
-    // Коллбэк, который вызывает Rust при нажатии/отпускании клавиш
-    const onKeyEvent = (msg) => {
+    const startFn = hook.startGlobalKeyboardHook || hook.start_global_keyboard_hook;
+    stopHookFn = hook.stopGlobalKeyboardHook || hook.stop_global_keyboard_hook;
+
+    if (typeof startFn !== 'function') {
+      logger.error('[HOOK] start function not found');
+      return;
+    }
+
+    startFn((msg) => {
       if (!msg || typeof msg !== 'string') return;
       const [type, codeStr] = msg.split(':');
       const code = parseInt(codeStr, 10);
@@ -74,27 +81,16 @@ function startRustHook() {
           mainWindow?.webContents?.send('ptt-released');
         }
       }
-    };
-
-    // @napi-rs по умолчанию конвертирует snake_case в camelCase для JS
-    const startFn = mouseHook.startGlobalKeyboardHook || mouseHook.start_global_keyboard_hook;
-    if (typeof startFn === 'function') {
-      startFn(onKeyEvent);
-    } else {
-      logger.error('[HOOK] Exported function not found');
-    }
+    });
   } catch (err) {
-    logger.error(`[HOOK] Failed to init: ${err.message}`);
+    logger.error(`[HOOK] Failed to load: ${err.message}`);
   }
 }
 
 function stopRustHook() {
-  if (mouseHook) {
-    const stopFn = mouseHook.stopGlobalKeyboardHook || mouseHook.stop_global_keyboard_hook;
-    if (typeof stopFn === 'function') {
-      try { stopFn(); } catch {}
-    }
-    mouseHook = null;
+  if (typeof stopHookFn === 'function') {
+    try { stopHookFn(); } catch {}
+    stopHookFn = null;
   }
 }
 

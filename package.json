@@ -13,6 +13,12 @@
     "appId": "com.nsqcue.updater",
     "productName": "Ночная стража: установщик аддонов",
     "icon": "assets/icon.png",
+    "extraResources": [
+      {
+        "from": "global-mouse-hook.win32-x64-msvc.node",
+        "to": "global-mouse-hook.win32-x64-msvc.node"
+      }
+    ],
     "win": {
       "target": [
         {
@@ -43,7 +49,6 @@
     "unzipper": "^0.10.14"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3.3.0",
     "electron": "^22.3.27",
     "electron-builder": "^24.13.3"
   }
