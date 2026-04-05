@@ -1,59 +1,6 @@
-# === БЛОКИРУЕМ ВСЁ ПО УМОЛЧАНИЮ ===
-*
-
-# === РАЗРЕШАЕМ СТРУКТУРУ ПАПОК ===
-!.github/
-!.github/workflows/
-!main/
-!renderer/
-!assets/
-
-# === РАЗРЕШАЕМ КОНКРЕТНЫЕ ФАЙЛЫ ПРОЕКТА ===
-# Корень
-!package.json
-
-# .github
-!.github/workflows/build.yml
-!.github/workflows/build-win.yml
-
-# main/
-!main/addonManager.js
-!main/main.js
-!main/preload.js
-!main/settings.js
-!main/utils.js
-
-# renderer/
-!renderer/index.html
-!renderer/renderer.js
-!renderer/style.css
-
-# assets/
-!assets/icon.png
-
-# Нативный модуль (скомпилированный бинарь)
-!global-mouse-hook.win32-x64-msvc.node
-
-# === ЯВНО БЛОКИРУЕМ ОПАСНОЕ/ЛИШНЕЕ (даже если попадёт в папку) ===
-# Логи и отладка
-*.log
-logs/
-*.log.*
-debug/
-trace/
-
-# Зависимости и сборка
+# === ЗАВИСИМОСТИ И СБОРКА ===
 node_modules/
 */node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-store/
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-
-# Electron / сборка
 dist/
 build/
 out/
@@ -66,54 +13,74 @@ out/
 *.dmg
 *.nsis
 *.blockmap
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# Rust / native (исходники и артефакты сборки, кроме разрешённого .node)
+# === ЛОГИ И ВРЕМЕННЫЕ ===
+*.log
+logs/
+*.log.*
+debug/
+trace/
+.tmp/
+temp/
+*.tmp
+*.temp
+*.cache
+.cache/
+
+# === RUST / NATIVE ===
+# Игнорируем ВСЮ папку исходников модуля, КРОМЕ готового .node
 global-mouse-hook/
 !global-mouse-hook.win32-x64-msvc.node
 
-# Системные файлы и ОС
+# === IDE / ОС / СЕКРЕТЫ ===
 .DS_Store
 Thumbs.db
 desktop.ini
 $RECYCLE.BIN/
-System Volume Information/
-
-# IDE и редакторы
 .idea/
 .vscode/
 *.swp
 *.swo
 *.swn
 *.backup
-*.tmp
-*.temp
-
-# Конфиги среды и секреты
 .env
 .env.local
-.env.*.local
 *.pem
 *.key
 *.cert
 secrets/
 
-# Кэш и временные файлы
-.cache/
-.tmp/
-temp/
-*.cache
-*.pid
-*.seed
-*.pid.lock
-
-# Тесты и покрытие
+# === ТЕСТЫ / ДОКУМЕНТАЦИЯ ===
 coverage/
 *.lcov
 .nyc_output/
-
-# Документация и прочее
 *.md
 !README.md
 docs/
 examples/
 benchmarks/
+
+# === ЯВНО РАЗРЕШАЕМ НУЖНЫЕ ФАЙЛЫ ПРОЕКТА ===
+# Рабочие процессы сборки
+!.github/workflows/build.yml
+!.github/workflows/build-win.yml
+
+# Исходники main/
+!main/addonManager.js
+!main/main.js
+!main/preload.js
+!main/settings.js
+!main/utils.js
+
+# Исходники renderer/
+!renderer/index.html
+!renderer/renderer.js
+!renderer/style.css
+
+# Ассеты и конфиги
+!assets/icon.png
+!package.json
+!.gitignore
