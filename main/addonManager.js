@@ -5,532 +5,483 @@ const path = require('path');
 const unzipper = require('unzipper');
 const os = require('os');
 const { setupLogging } = require('./utils');
-const logger = setupLogging();
-let checkingUpdate = false;
-let gamePath = null;
 
-class AddonData {
-  constructor(name, config) {
-    this.name = name;
-    this.link = config.link;
-    this.description = config.description;
-    this.target_path = config.target_path.replace(/\//g, path.sep);
-    this.installed = false;
-    this.updating = false;
-    this.needs_update = false;
-    this.being_processed = false;
-    this.is_zip = config.is_zip !== undefined ? config.is_zip : true;
-  }
-}
+const logger = setupLogging();
 
 class AddonManager {
   constructor() {
     this.addons = {};
+    this.gamePath = null;
+    this.checkingUpdate = false;
+    this.updateInterval = null;
   }
-  
-  setGamePath(path) {
-    gamePath = path;
-    logger.info(`[ADDON_MANAGER] Game path set to: ${gamePath}`);
+
+  setGamePath(p) {
+    this.gamePath = p;
   }
-  
+
   getGamePath() {
-    if (!gamePath) {
-      throw new Error('Game path is not set. Call setGamePath first.');
-    }
-    return gamePath;
+    if (!this.gamePath) throw new Error('Game path is not set.');
+    return this.gamePath;
   }
-
-  async loadAddonsConfig() {
-  try {
-    logger.info('[LOAD_CONFIG] Attempting to fetch addons.json from GitHub...');
-    const response = await axios.get('https://raw.githubusercontent.com/Vladgobelen/NSQCu/main/addons.json', {
-      headers: { 'User-Agent': 'NightWatchUpdater' },
-      timeout: 10000
-    });
-    logger.info(`[LOAD_CONFIG] Successfully fetched config. Status: ${response.status}`);
-    return response.data;
-  } catch (error) {
-    // Логируем ВЕСЬ объект ошибки для максимальной детализации
-    logger.error('[LOAD_CONFIG] Full error object:', error);
-
-    // Также логируем конкретные, наиболее полезные поля
-    logger.error(`[LOAD_CONFIG] Error message: ${error.message || 'No message'}`);
-    logger.error(`[LOAD_CONFIG] Error code: ${error.code || 'No code'}`);
-    logger.error(`[LOAD_CONFIG] Error status: ${error.response?.status || 'No status'}`);
-    logger.error(`[LOAD_CONFIG] Error URL: https://raw.githubusercontent.com/Vladgobelen/NSQCu/main/addons.json`);
-
-    if (error.code === 'ECONNABORTED') {
-      throw new Error('Таймаут при загрузке конфигурации. Проверьте подключение к интернету.');
-    } else if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
-      throw new Error('Не удается найти сервер. Проверьте DNS или подключение к интернету.');
-    } else if (error.response && error.response.status === 404) {
-      throw new Error('Конфигурационный файл не найден на сервере. Обратитесь к разработчику.');
-    } else if (error.response && error.response.status === 403) {
-      throw new Error('Доступ к конфигурации запрещен. Возможно, сработал брандмауэр или блокировка.');
-    } else {
-      throw new Error(`Не удалось загрузить конфигурацию аддонов. Причина: ${error.message || 'Неизвестная ошибка'}`);
-    }
-  }
-}
 
   async loadAddons() {
     try {
-      const config = await this.loadAddonsConfig();
+      const configUrl = 'https://raw.githubusercontent.com/Vladgobelen/NSQCu/main/addons.json';
+      const response = await axios.get(configUrl, {
+        headers: { 'User-Agent': 'NightWatchUpdater/1.0' },
+        timeout: 10000,
+        maxRedirects: 5
+      });
+      const config = response.data;
+      if (!config.addons) throw new Error("No 'addons' field in config");
+
       this.addons = {};
-      for (const [name, configData] of Object.entries(config.addons)) {
-        this.addons[name] = new AddonData(name, configData);
+      const gamePath = this.getGamePath();
+
+      for (const [name, cfg] of Object.entries(config.addons)) {
+        const link = cfg.link || '';
+        const description = cfg.description || '';
+        const targetPath = cfg.target_path || '';
+        const isZip = cfg.is_zip !== undefined ? cfg.is_zip : !link.toLowerCase().endsWith('.mpq');
+        const installed = this._checkInstalled(name, targetPath, gamePath);
+        logger.info(`[LOAD] Addon ${name}: installed=${installed}`);
+
+        this.addons[name] = {
+          name,
+          description,
+          installed,
+          needs_update: false,
+          being_processed: false,
+          updating: false,
+          link,
+          target_path: targetPath.replace(/\//g, path.sep),
+          is_zip: isZip
+        };
       }
-      this.checkInstalled();
       return this.addons;
     } catch (error) {
-      logger.error('Error loading addons:', error);
+      logger.error('[LOAD_ADDONS] Error:', error.message || error);
       throw error;
     }
   }
 
-  checkInstalled() {
-    const gameBasePath = this.getGamePath();
-    logger.info(`[CHECK_INSTALLED] Game base path: ${gameBasePath}`);
+  _checkInstalled(name, targetPath, gamePath) {
+    if (!gamePath) return false;
+    const fullTarget = path.join(gamePath, targetPath);
 
-    for (const addon of Object.values(this.addons)) {
-      try {
-        if (addon.name === 'NSQC') {
-          const versPath = path.join(gameBasePath, addon.target_path, 'NSQC', 'vers');
-          addon.installed = fs.existsSync(versPath);
-          logger.debug(`[CHECK_INSTALLED] NSQC installed status: ${addon.installed} (checked: ${versPath})`);
-        } else {
-          const targetDir = path.join(gameBasePath, addon.target_path);
-          if (!fs.existsSync(targetDir)) {
-            addon.installed = false;
-            logger.debug(`[CHECK_INSTALLED] ${addon.name} installed status: false (target dir missing: ${targetDir})`);
-            continue;
-          }
-          const items = fs.readdirSync(targetDir);
-          addon.installed = items.some(item => 
-            item.toLowerCase().includes(addon.name.toLowerCase())
-          );
-          logger.debug(`[CHECK_INSTALLED] ${addon.name} installed status: ${addon.installed} (items in ${targetDir}: [${items.join(', ')}])`);
-        }
-      } catch (error) {
-        logger.error(`[CHECK_INSTALLED] Error checking addon ${addon.name}:`, error);
-        addon.installed = false;
-      }
+    if (name === 'NSQC') {
+      const versPath = path.join(fullTarget, 'NSQC', 'vers');
+      return fs.existsSync(versPath);
+    }
+    if (name === 'NSQC3') {
+      const nsqc3Path = path.join(fullTarget, 'NSQC3');
+      return fs.existsSync(nsqc3Path);
+    }
+
+    if (!fs.existsSync(fullTarget)) return false;
+    try {
+      const items = fs.readdirSync(fullTarget, { withFileTypes: true });
+      // Совпадение по подстроке оставлено намеренно для захвата всех связанных файлов
+      return items.some(item => item.name.toLowerCase().includes(name.toLowerCase()));
+    } catch {
+      return false;
     }
   }
 
-  async checkNSQCUpdate(mainWindow) {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (checkingUpdate) return;
-    checkingUpdate = true;
+  async startupUpdateCheck(mainWindow) {
+    logger.info('[STARTUP_CHECK] Blocking launch, checking updates...');
+    this._emitBlockLaunch(mainWindow, true);
+
+    const gamePath = this.getGamePath();
+    if (!gamePath) {
+      this._emitBlockLaunch(mainWindow, false);
+      return false;
+    }
+
+    const versPath = path.join(gamePath, 'Interface', 'AddOns', 'NSQC', 'vers');
+    let localVersion = '';
     try {
-      const addon = this.addons['NSQC'];
-      if (!addon || !addon.installed) return;
-      const localVer = await this._getLocalNSQCVersion();
-      const remoteVer = await this._getRemoteNSQCVersion();
-      if (!localVer || !remoteVer) {
-        addon.needs_update = false;
+      if (fs.existsSync(versPath)) {
+        localVersion = fs.readFileSync(versPath, 'utf-8').trim();
+      }
+    } catch { /* ignore */ }
+
+    if (!localVersion) {
+      this._emitBlockLaunch(mainWindow, false);
+      return false;
+    }
+
+    logger.info(`[STARTUP_CHECK] Local version: '${localVersion}'`);
+    const githubUrl = 'https://github.com/Vladgobelen/NSQC/blob/main/vers';
+
+    try {
+      const res = await axios.get(githubUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        timeout: 15000,
+        maxRedirects: 5
+      });
+      const html = res.data;
+      const found = html.includes(localVersion) || html.includes(this._htmlEscape(localVersion));
+
+      if (found) {
+        logger.info(`[STARTUP_CHECK] ✓ Version '${localVersion}' found - up to date`);
+        this._emitBlockLaunch(mainWindow, false);
+        return false;
+      }
+
+      logger.warn(`[STARTUP_CHECK] ✗ Version '${localVersion}' NOT found - UPDATE REQUIRED!`);
+      await this._forceReinstall(mainWindow);
+    } catch (err) {
+      logger.error('[STARTUP_CHECK] Fetch error:', err.message || err);
+    } finally {
+      setTimeout(() => this._emitBlockLaunch(mainWindow, false), 3000);
+    }
+    return true;
+  }
+
+  startBackgroundChecker(mainWindow) {
+    if (this.updateInterval) clearInterval(this.updateInterval);
+    this.updateInterval = setInterval(async () => {
+      if (this.checkingUpdate) return;
+      this.checkingUpdate = true;
+      try {
+        await this._checkForUpdates(mainWindow);
+      } catch (e) {
+        logger.error('[BACKGROUND_CHECK] Error:', e.message || e);
+      } finally {
+        this.checkingUpdate = false;
+      }
+    }, 30000);
+  }
+
+  async _checkForUpdates(mainWindow) {
+    const gamePath = this.getGamePath();
+    if (!gamePath) return;
+
+    const versPath = path.join(gamePath, 'Interface', 'AddOns', 'NSQC', 'vers');
+    let localVersion = '';
+    try {
+      if (fs.existsSync(versPath)) localVersion = fs.readFileSync(versPath, 'utf-8').trim();
+    } catch { return; }
+
+    if (!localVersion) return;
+    logger.info(`[UPDATE_CHECK] Local version: '${localVersion}'`);
+
+    const githubUrl = 'https://github.com/Vladgobelen/NSQC/blob/main/vers';
+    try {
+      const res = await axios.get(githubUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        timeout: 15000,
+        maxRedirects: 5
+      });
+      const html = res.data;
+      const found = html.includes(localVersion) || html.includes(this._htmlEscape(localVersion));
+
+      if (found) {
+        logger.info(`[UPDATE_CHECK] ✓ Up to date`);
         return;
       }
-      addon.needs_update = remoteVer !== localVer;
-      if (addon.needs_update && !addon.being_processed) {
-        mainWindow.webContents.send('addon-update-available', 'NSQC');
-      }
-    } catch (error) {
-      logger.error('Error checking NSQC update:', error);
-    } finally {
-      checkingUpdate = false;
+
+      logger.warn(`[UPDATE_CHECK] ✗ Update required!`);
+      await this._forceReinstall(mainWindow);
+    } catch (e) {
+      logger.error('[UPDATE_CHECK] Error:', e.message || e);
     }
   }
 
-  async _getLocalNSQCVersion() {
-    try {
-      const gameBasePath = this.getGamePath();
-      const versPath = path.join(gameBasePath, 'Interface', 'AddOns', 'NSQC', 'vers');
-      logger.debug(`[GET_LOCAL_NSQC_VER] Checking version at: ${versPath}`);
-      if (!fs.existsSync(versPath)) {
-        logger.debug(`[GET_LOCAL_NSQC_VER] Version file not found.`);
-        return null;
+  async _forceReinstall(mainWindow) {
+    logger.info('[REINSTALL] Starting forced reinstall: NSQC & NSQC3');
+    // 🔒 Блокируем запуск игры на время обновления
+    this._emitBlockLaunch(mainWindow, true);
+
+    const config = await this._fetchConfig();
+    if (!config) throw new Error('Config fetch failed');
+
+    const addonsToReinstall = ['NSQC', 'NSQC3'];
+
+    for (const addonName of addonsToReinstall) {
+      const cfg = config[addonName];
+      if (!cfg) continue;
+
+      const addon = {
+        name: addonName,
+        description: cfg.description || '',
+        installed: true,
+        needs_update: false,
+        being_processed: true,
+        updating: true,
+        link: cfg.link || '',
+        target_path: (cfg.target_path || '').replace(/\//g, path.sep),
+        is_zip: cfg.is_zip !== undefined ? cfg.is_zip : !cfg.link.toLowerCase().endsWith('.mpq')
+      };
+
+      this._emitEvent(mainWindow, 'addon-install-started', { name: addonName, install: true });
+      this._emitProgress(mainWindow, addonName, 0.1);
+
+      try {
+        logger.info(`[REINSTALL] Uninstalling ${addonName}...`);
+        await this._uninstallAddon(addon, mainWindow);
+        this._emitProgress(mainWindow, addonName, 0.4);
+        await new Promise(r => setTimeout(r, 200));
+
+        logger.info(`[REINSTALL] Installing ${addonName}...`);
+        await this._installAddon(addon, mainWindow);
+        this._emitProgress(mainWindow, addonName, 1.0);
+
+        if (this.addons[addonName]) {
+          Object.assign(this.addons[addonName], {
+            being_processed: false,
+            updating: false,
+            installed: true,
+            needs_update: false
+          });
+        }
+
+        // ✅ Отправляем событие в формате, который ожидает preload.js: (event, name, success)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('operation-finished', addonName, true);
+        }
+      } catch (err) {
+        logger.error(`[REINSTALL] Failed on ${addonName}:`, err.message || err);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('operation-error', err.message || 'Unknown error');
+        }
       }
-      const version = fs.readFileSync(versPath, 'utf-8').trim();
-      logger.debug(`[GET_LOCAL_NSQC_VER] Local version: ${version}`);
-      return version;
-    } catch (error) {
-      logger.error('[GET_LOCAL_NSQC_VER] Error reading local NSQC version:', error);
-      return null;
+
+      await new Promise(r => setTimeout(r, 300));
     }
+
+    await this.loadAddons();
+    logger.info('[REINSTALL] Reinstall completed');
+
+    // ⏱️ Разблокируем кнопку запуска через 3 секунды после полного завершения
+    setTimeout(() => {
+      this._emitBlockLaunch(mainWindow, false);
+    }, 3000);
   }
 
-  async _getRemoteNSQCVersion() {
-    try {
-      const response = await axios.get(
-        'https://raw.githubusercontent.com/Vladgobelen/NSQC/main/vers',
-        { headers: { 'User-Agent': 'NightWatchUpdater' }, timeout: 5000 }
-      );
-      const version = response.data.trim();
-      logger.debug(`[GET_REMOTE_NSQC_VER] Remote version: ${version}`);
-      return version;
-    } catch (error) {
-      logger.error('[GET_REMOTE_NSQC_VER] Error getting remote NSQC version:', error);
-      return null;
-    }
+  async _fetchConfig() {
+    const configUrl = 'https://raw.githubusercontent.com/Vladgobelen/NSQCu/main/addons.json';
+    const res = await axios.get(configUrl, { timeout: 10000, maxRedirects: 5 });
+    return res.data.addons;
   }
 
   async toggleAddon(name, install, mainWindow) {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
     const addon = this.addons[name];
-    if (!addon) {
-      logger.error(`[TOGGLE] Addon ${name} not found`);
-      throw new Error(`Аддон ${name} не найден`);
-    }
-    if (addon.being_processed) {
-      logger.warn(`[TOGGLE] Addon ${name} is already being processed`);
-      throw new Error(`Аддон ${name} уже обрабатывается`);
-    }
+    if (!addon) throw new Error(`Addon ${name} not found`);
+    if (addon.being_processed) throw new Error(`Addon ${name} is already processing`);
+
     addon.being_processed = true;
     addon.updating = true;
+    this._emitBlockLaunch(mainWindow, true);
+    this._emitProgress(mainWindow, name, 0.1);
+
     try {
       if (install) {
-        if (name === 'NSQC') {
-          await this._installNSQC(addon, mainWindow);
-        } else {
-          await this._installAddon(addon, mainWindow);
-        }
+        await this._installAddon(addon, mainWindow);
       } else {
         await this._uninstallAddon(addon, mainWindow);
       }
-      this.checkInstalled();
-      if (name === 'NSQC') {
-        await this.checkNSQCUpdate(mainWindow);
-      }
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('operation-finished', name, true);
+      if (install && name === 'NSQC') {
+        logger.info('[TOGGLE] NSQC installed, triggering NSQC3 auto-update');
+        await this._autoUpdateNSQC3(mainWindow);
       }
     } catch (error) {
-      logger.error(`[TOGGLE] Error ${install ? 'installing' : 'uninstalling'} addon ${name}:`, error);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('operation-error', error.message);
-      }
+      logger.error(`[TOGGLE] Error ${install ? 'installing' : 'uninstalling'} ${name}:`, error.message || error);
       throw error;
     } finally {
-      addon.updating = false;
       addon.being_processed = false;
+      addon.updating = false;
     }
+
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('operation-finished', name, true);
+        this._emitBlockLaunch(mainWindow, false);
+      }
+    }, 3000);
+
+    return true;
   }
 
-  async _installNSQC(addon, mainWindow) {
-    logger.info(`[INSTALL_NSQC] Starting installation for NSQC`);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('progress', addon.name, 0.1);
+  async _autoUpdateNSQC3(mainWindow) {
+    logger.info('[AUTO_NSQC3] Checking NSQC3...');
+    const nsqc3 = this.addons['NSQC3'];
+    if (!nsqc3) return;
+
+    const gamePath = this.getGamePath();
+    if (this._checkInstalled('NSQC3', nsqc3.target_path, gamePath)) {
+      logger.info('[AUTO_NSQC3] NSQC3 installed, uninstalling first...');
+      await this._uninstallAddon(nsqc3, mainWindow);
     }
-    const gameBasePath = this.getGamePath();
-    logger.debug(`[INSTALL_NSQC] Game base path: ${gameBasePath}`);
-    
-    const localVer = await this._getLocalNSQCVersion();
-    const remoteVer = await this._getRemoteNSQCVersion();
-    if (localVer === remoteVer && localVer) {
-      logger.info('[INSTALL_NSQC] NSQC is already up to date');
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('progress', addon.name, 1.0);
-      }
-      return;
-    }
-
-    const tempDir = path.join(os.tmpdir(), 'nsqc_temp');
-    const zipPath = path.join(os.tmpdir(), 'nsqc_main.zip');
-
-    try {
-      if (fs.existsSync(tempDir)) {
-        logger.debug(`[INSTALL_NSQC] Cleaning up previous temp dir: ${tempDir}`);
-        await fs.remove(tempDir);
-      }
-      if (fs.existsSync(zipPath)) {
-        logger.debug(`[INSTALL_NSQC] Cleaning up previous temp zip: ${zipPath}`);
-        await fs.unlink(zipPath);
-      }
-    } catch (error) {
-      logger.warn('[INSTALL_NSQC] Error cleaning up previous temp files:', error);
-    }
-
-    try {
-      logger.info('[INSTALL_NSQC] Downloading NSQC...');
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('progress', addon.name, 0.15);
-      }
-      const response = await axios.get(
-        'https://github.com/Vladgobelen/NSQC/archive/refs/heads/main.zip',
-        { responseType: 'stream', headers: { 'User-Agent': 'NightWatchUpdater' }, timeout: 30000 }
-      );
-      const writer = fs.createWriteStream(zipPath);
-      let downloaded = 0;
-      const totalLength = parseInt(response.headers['content-length'], 10) || 0;
-      logger.debug(`[INSTALL_NSQC] NSQC zip size: ${totalLength} bytes`);
-      response.data.on('data', (chunk) => {
-        downloaded += chunk.length;
-        if (totalLength > 0 && mainWindow && !mainWindow.isDestroyed()) {
-          const progress = 0.15 + 0.6 * (downloaded / totalLength);
-          mainWindow.webContents.send('progress', addon.name, progress);
-        }
-      });
-      response.data.pipe(writer);
-      await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-      });
-
-      logger.info('[INSTALL_NSQC] Download completed, extracting...');
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('progress', addon.name, 0.75);
-      }
-      await fs.ensureDir(tempDir);
-      logger.debug(`[INSTALL_NSQC] Extracting to temp dir: ${tempDir}`);
-      await fs.createReadStream(zipPath)
-        .pipe(unzipper.Extract({ path: tempDir }))
-        .promise();
-
-      const targetDir = path.join(gameBasePath, 'Interface', 'AddOns', 'NSQC');
-      logger.debug(`[INSTALL_NSQC] Target directory for NSQC: ${targetDir}`);
-
-      if (fs.existsSync(targetDir)) {
-        logger.debug(`[INSTALL_NSQC] Removing old NSQC directory: ${targetDir}`);
-        await fs.remove(targetDir);
-      }
-
-      const sourceDir = path.join(tempDir, 'NSQC-main');
-      logger.debug(`[INSTALL_NSQC] Copying from ${sourceDir} to ${targetDir}`);
-      await fs.copy(sourceDir, targetDir);
-
-      if (remoteVer) {
-        const versFilePath = path.join(targetDir, 'vers');
-        logger.debug(`[INSTALL_NSQC] Writing version file: ${versFilePath}`);
-        await fs.writeFile(versFilePath, remoteVer);
-      }
-
-      logger.info('[INSTALL_NSQC] NSQC installed successfully');
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('progress', addon.name, 0.95);
-      }
-
-      try {
-        if (fs.existsSync(tempDir)) await fs.remove(tempDir);
-        if (fs.existsSync(zipPath)) await fs.unlink(zipPath);
-      } catch (error) {
-        logger.warn('[INSTALL_NSQC] Error cleaning up temp files:', error);
-      }
-
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('progress', addon.name, 1.0);
-      }
-    } catch (error) {
-      logger.error('[INSTALL_NSQC] Error installing NSQC:', error);
-      try {
-        if (fs.existsSync(tempDir)) await fs.remove(tempDir);
-        if (fs.existsSync(zipPath)) await fs.unlink(zipPath);
-      } catch (cleanupError) {
-        logger.error('[INSTALL_NSQC] Error cleaning up after failed installation:', cleanupError);
-      }
-      throw error;
-    }
+    logger.info('[AUTO_NSQC3] Installing fresh NSQC3...');
+    await this._installAddon(nsqc3, mainWindow);
   }
 
   async _installAddon(addon, mainWindow) {
-    logger.info(`[INSTALL] Starting installation for ${addon.name}`);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('progress', addon.name, 0.1);
-    }
-    const gameBasePath = this.getGamePath();
-    const targetDir = path.join(gameBasePath, addon.target_path);
-    logger.info(`[INSTALL] Target directory for ${addon.name} is: ${targetDir}`);
+    logger.info(`[INSTALL] Installing ${addon.name}`);
+    this._emitProgress(mainWindow, addon.name, 0.15);
+
+    const gamePath = this.getGamePath();
+    const targetDir = path.join(gamePath, addon.target_path);
+    await fs.ensureDir(targetDir);
+
+    const isMpq = addon.link.toLowerCase().endsWith('.mpq');
+    const tempDir = path.join(os.tmpdir(), `extract_${addon.name}_${Date.now()}`);
+    const tempZip = path.join(os.tmpdir(), `download_${addon.name}_${Date.now()}.zip`);
 
     try {
-      logger.info(`[INSTALL] Ensuring directory exists: ${targetDir}`);
-      await fs.ensureDir(targetDir);
-      logger.info(`[INSTALL] Directory ensured: ${targetDir}`);
-    } catch (ensureDirError) {
-      logger.error(`[INSTALL] Failed to ensure directory ${targetDir}:`, ensureDirError);
-      throw new Error(`Не удалось создать директорию ${targetDir}: ${ensureDirError.message}`);
-    }
-
-    const isMpqFile = addon.link.toLowerCase().endsWith('.mpq');
-
-    if (isMpqFile) {
-      const targetPath = path.join(targetDir, path.basename(addon.link));
-      logger.info(`[INSTALL] Target path for .mpq file: ${targetPath}`);
-      try {
-        logger.info(`[INSTALL] Downloading .mpq file: ${addon.name} from ${addon.link}`);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('progress', addon.name, 0.2);
-        }
+      if (isMpq) {
         const response = await axios.get(addon.link, {
           responseType: 'stream',
-          headers: { 'User-Agent': 'NightWatchUpdater' },
-          timeout: 30000
+          headers: { 'User-Agent': 'NightWatchUpdater/1.0' },
+          timeout: 30000,
+          maxRedirects: 5
         });
-        const writer = fs.createWriteStream(targetPath);
         let downloaded = 0;
         const totalLength = parseInt(response.headers['content-length'], 10) || 0;
-        logger.info(`[INSTALL] .mpq file size: ${totalLength} bytes`);
         response.data.on('data', (chunk) => {
           downloaded += chunk.length;
-          if (totalLength > 0 && mainWindow && !mainWindow.isDestroyed()) {
-            const progress = 0.2 + 0.7 * (downloaded / totalLength);
-            mainWindow.webContents.send('progress', addon.name, progress);
+          if (totalLength > 0) {
+            this._emitProgress(mainWindow, addon.name, 0.15 + 0.6 * (downloaded / totalLength));
           }
         });
-        response.data.pipe(writer);
+        const writer = fs.createWriteStream(tempZip);
         await new Promise((resolve, reject) => {
+          response.data.pipe(writer);
           writer.on('finish', resolve);
           writer.on('error', reject);
         });
-
-        logger.info(`[INSTALL] ${addon.name} (.mpq) downloaded successfully`);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('progress', addon.name, 1.0);
-        }
-      } catch (error) {
-        logger.error(`[INSTALL] Error downloading .mpq file ${addon.name}:`, error);
-        if (fs.existsSync(targetPath)) await fs.unlink(targetPath);
-        throw new Error(`Ошибка скачивания .mpq ${addon.name}: ${error.message}`);
+        const mpqPath = path.join(targetDir, path.basename(addon.link));
+        await fs.move(tempZip, mpqPath, { overwrite: true });
+      } else {
+        const response = await axios.get(addon.link, {
+          responseType: 'stream',
+          headers: { 'User-Agent': 'NightWatchUpdater/1.0' },
+          timeout: 30000,
+          maxRedirects: 5
+        });
+        let downloaded = 0;
+        const totalLength = parseInt(response.headers['content-length'], 10) || 0;
+        response.data.on('data', (chunk) => {
+          downloaded += chunk.length;
+          if (totalLength > 0) {
+            this._emitProgress(mainWindow, addon.name, 0.15 + 0.5 * (downloaded / totalLength));
+          }
+        });
+        const writer = fs.createWriteStream(tempZip);
+        await new Promise((resolve, reject) => {
+          response.data.pipe(writer);
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+        });
+        await fs.ensureDir(tempDir);
+        await new Promise((resolve, reject) => {
+          fs.createReadStream(tempZip)
+            .pipe(unzipper.Extract({ path: tempDir }))
+            .on('close', resolve)
+            .on('error', reject);
+        });
+        await this._handleGithubStructure(tempDir, targetDir, addon.name);
       }
-      return;
-    }
-
-    const tempZip = path.join(os.tmpdir(), `${addon.name}.zip`);
-    logger.info(`[INSTALL] Temp zip path for ${addon.name}: ${tempZip}`);
-
-    try {
-      logger.info(`[INSTALL] Downloading ${addon.name} (.zip) from ${addon.link}...`);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('progress', addon.name, 0.15);
-      }
-      const response = await axios.get(addon.link, {
-        responseType: 'stream',
-        headers: { 'User-Agent': 'NightWatchUpdater' },
-        timeout: 30000
-      });
-      const writer = fs.createWriteStream(tempZip);
-      let downloaded = 0;
-      const totalLength = parseInt(response.headers['content-length'], 10) || 0;
-      logger.info(`[INSTALL] .zip file size: ${totalLength} bytes`);
-      response.data.on('data', (chunk) => {
-        downloaded += chunk.length;
-        if (totalLength > 0 && mainWindow && !mainWindow.isDestroyed()) {
-          const progress = 0.15 + 0.6 * (downloaded / totalLength);
-          mainWindow.webContents.send('progress', addon.name, progress);
-        }
-      });
-      response.data.pipe(writer);
-      await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-      });
-
-      logger.info('[INSTALL] Download completed, extracting...');
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('progress', addon.name, 0.75);
-      }
-
-      await fs.createReadStream(tempZip)
-        .pipe(unzipper.Extract({ path: targetDir }))
-        .promise();
-
-      logger.info(`[INSTALL] Extraction finished. Contents of ${targetDir}:`);
-      try {
-        const contents = fs.readdirSync(targetDir);
-        logger.info(`[INSTALL] ${contents.join(', ')}`);
-      } catch (e) { }
-
-      const installedItems = fs.readdirSync(targetDir);
-      const installed = installedItems.some(item => 
-        item.toLowerCase().includes(addon.name.toLowerCase())
-      );
-
-      if (!installed) {
-        logger.warn(`[INSTALL] Addon ${addon.name} not found in ${targetDir} after extraction`);
-        throw new Error(`Аддон ${addon.name} не найден. Проверьте структуру архива.`);
-      }
-
-      logger.info(`[INSTALL] ${addon.name} installed successfully`);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('progress', addon.name, 0.95);
-      }
-
-      try {
-        if (fs.existsSync(tempZip)) await fs.unlink(tempZip);
-      } catch (error) {
-        logger.warn('[INSTALL] Error cleaning up temp file:', error);
-      }
-
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('progress', addon.name, 1.0);
-      }
+      this._emitProgress(mainWindow, addon.name, 1.0);
+      logger.info(`[INSTALL] Completed ${addon.name}`);
     } catch (error) {
-      logger.error(`[INSTALL] Error installing ${addon.name}:`, error);
-      try {
-        if (fs.existsSync(tempZip)) await fs.unlink(tempZip);
-      } catch (cleanupError) {
-        logger.error('[INSTALL] Error cleaning up after failed installation:', cleanupError);
+      logger.error(`[INSTALL] Error ${addon.name}:`, error.message || error);
+      throw new Error(`Failed to install ${addon.name}: ${error.message || 'Unknown error'}`);
+    } finally {
+      await Promise.allSettled([
+        fs.remove(tempDir).catch(() => {}),
+        fs.remove(tempZip).catch(() => {})
+      ]);
+    }
+  }
+
+  async _handleGithubStructure(tempDir, targetDir, addonName) {
+    try {
+      const entries = await fs.readdir(tempDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const dirName = entry.name;
+          const expected = [`${addonName}-main`, `${addonName}-master`];
+          if (expected.includes(dirName)) {
+            const finalPath = path.join(targetDir, addonName);
+            logger.info(`[STRUCTURE] Renaming ${dirName} -> ${addonName}`);
+            if (await fs.pathExists(finalPath)) await fs.remove(finalPath);
+            await fs.move(path.join(tempDir, dirName), finalPath);
+            return;
+          }
+        }
       }
-      throw new Error(`Ошибка установки ${addon.name}: ${error.message}`);
+    } catch {}
+
+    const entries = await fs.readdir(tempDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const src = path.join(tempDir, entry.name);
+      const dst = path.join(targetDir, entry.name);
+      if (entry.isDirectory()) {
+        await fs.copy(src, dst);
+      } else {
+        await fs.copyFile(src, dst);
+      }
     }
   }
 
   async _uninstallAddon(addon, mainWindow) {
-    const gameBasePath = this.getGamePath();
-    const targetDir = path.join(gameBasePath, addon.target_path);
-    logger.info(`[UNINSTALL] Uninstalling ${addon.name} from ${targetDir}`);
-    if (!fs.existsSync(targetDir)) return;
+    logger.info(`[UNINSTALL] Uninstalling ${addon.name}`);
+    const gamePath = this.getGamePath();
+    const targetDir = path.join(gamePath, addon.target_path);
 
-    const items = fs.readdirSync(targetDir);
-    const itemsToRemove = items.filter(item => 
-      item.toLowerCase().includes(addon.name.toLowerCase())
-    );
-
-    if (itemsToRemove.length === 0) return;
-
-    let success = true;
-    for (let i = 0; i < itemsToRemove.length; i++) {
-      const item = itemsToRemove[i];
-      const itemPath = path.join(targetDir, item);
-      try {
-        logger.info(`[UNINSTALL] Removing: ${itemPath}`);
-        await fs.remove(itemPath);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('progress', addon.name, 0.1 + 0.8 * ((i + 1) / itemsToRemove.length));
-        }
-      } catch (error) {
-        logger.error(`[UNINSTALL] Error removing ${item}:`, error);
-        success = false;
-      }
+    if (!await fs.pathExists(targetDir)) {
+      logger.info(`[UNINSTALL] Target dir not exists, skipping`);
+      this._emitProgress(mainWindow, addon.name, 1.0);
+      return;
     }
 
-    if (!success) throw new Error('Failed to completely uninstall addon');
+    const items = await fs.readdir(targetDir, { withFileTypes: true });
+    const toRemove = items.filter(i => i.name.toLowerCase().includes(addon.name.toLowerCase()));
 
-    logger.info(`[UNINSTALL] ${addon.name} uninstalled successfully`);
+    for (let i = 0; i < toRemove.length; i++) {
+      const progress = 0.1 + 0.8 * ((i + 1) / toRemove.length);
+      this._emitProgress(mainWindow, addon.name, progress);
+      const itemPath = path.join(targetDir, toRemove[i].name);
+      await fs.remove(itemPath);
+    }
+    this._emitProgress(mainWindow, addon.name, 1.0);
+    logger.info(`[UNINSTALL] Completed ${addon.name}`);
+  }
+
+  _emitProgress(mainWindow, name, progress) {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('progress', addon.name, 1.0);
+      mainWindow.webContents.send('progress', name, progress);
     }
   }
 
+  _emitBlockLaunch(mainWindow, shouldBlock) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('block-launch-game', shouldBlock);
+    }
+  }
+
+  _emitEvent(mainWindow, event, data) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(event, data);
+    }
+  }
+
+  _htmlEscape(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   async launchGame() {
-    const gameBasePath = this.getGamePath();
-    const wowPath = path.join(gameBasePath, 'Wow.exe');
-    logger.info(`[LAUNCH] Attempting to launch game from: ${wowPath}`);
-    if (!fs.existsSync(wowPath)) {
-      logger.error('[LAUNCH] Wow.exe not found');
-      return false;
-    }
+    const wowPath = path.join(this.getGamePath(), 'Wow.exe');
+    if (!fs.existsSync(wowPath)) return false;
     try {
-      logger.info('[LAUNCH] Launching game...');
-      if (process.platform === 'win32') {
-        require('child_process').exec(`start "" "${wowPath}"`, { cwd: gameBasePath });
-      } else {
-        require('child_process').spawn(wowPath, [], { cwd: gameBasePath });
-      }
+      require('child_process').exec(`start "" "${wowPath}"`, { cwd: this.getGamePath() });
       return true;
-    } catch (error) {
-      logger.error('[LAUNCH] Error launching game:', error);
-      return false;
-    }
+    } catch { return false; }
   }
 }
 

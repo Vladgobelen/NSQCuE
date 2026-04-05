@@ -1,417 +1,222 @@
-/* === Базовые переменные === */
 :root {
-    --bg-primary: #2d2d2d;
-    --bg-secondary: #252525;
-    --text-primary: #ffffff;
-    --text-secondary: #aaaaaa;
-    --accent: #2a82da;
-    --success: #2ecc71;
-    --warning: #f39c12;
-    --danger: #e74c3c;
-    --border: #555555;
+  --bg-primary: #2d2d2d;
+  --bg-secondary: #252525;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --accent: #2a82da;
+  --success: #2ecc71;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --border: #555555;
 }
 
-/* === Базовые сбросы === */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: var(--bg-primary); }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: var(--text-primary); line-height: 1.6; }
 
-html, body {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background-color: var(--bg-primary);
-}
+.container { width: 100%; height: 100vh; padding: 10px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.webview-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 9999; display: none; }
+.webview-container.active { display: block; }
+#ns-webview { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; background: #1a1a1a; }
 
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: var(--text-primary);
-    line-height: 1.6;
-}
-
-/* === Контейнер === */
-.container {
-    width: 100%;
-    height: 100vh;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    overflow: hidden;
-}
-
-/* Контейнер веб-клиента */
-.webview-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: #1a1a1a;
-    z-index: 9999;
-    display: none; /* скрыт по умолчанию */
-}
-
-/* При активном контейнере показываем его */
-.webview-container.active {
-    display: block;
-}
-
-/* Сам webview */
-#ns-webview {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-    background: #1a1a1a;
-}
-
-/* === Всплывающая панель "Назад" === */
 .back-panel {
-    position: fixed;
-    top: -50px;
+  position: fixed; top: -50px; left: 50%; transform: translateX(-50%);
+  background: #252525; border: 1px solid var(--border); border-top: none;
+  border-radius: 0 0 10px 10px; padding: 10px 20px; z-index: 10001;
+  transition: top 0.3s ease; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  display: none; pointer-events: auto; align-items: center; gap: 10px;
+}
+.back-panel.visible { top: 0; }
+.panel-divider { width: 1px; height: 24px; background-color: var(--border); margin: 0 5px; }
+
+.panel-mic-btn { background: transparent; border: 1px solid var(--border); border-radius: 50%; color: var(--text-secondary); font-size: 16px; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.panel-mic-btn:hover { background-color: #3d3d3d; color: var(--text-primary); border-color: #777777; }
+.panel-mic-btn.active { background-color: rgba(46, 204, 113, 0.15); border-color: #2ecc71; color: #2ecc71; }
+
+.panel-refresh-btn { background: transparent; border: 1px solid var(--border); border-radius: 50%; color: var(--text-secondary); font-size: 16px; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.panel-refresh-btn:hover { background-color: #3d3d3d; color: var(--text-primary); border-color: #777777; transform: rotate(90deg); }
+.panel-refresh-btn:active { transform: scale(0.95) rotate(90deg); }
+
+/* 🔌 Кнопка настроек PTT */
+.panel-settings-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.panel-settings-btn:hover {
+  background-color: #3d3d3d;
+  color: var(--text-primary);
+  border-color: #777777;
+  transform: rotate(45deg);
+}
+
+/* 🔌 Панель настроек PTT */
+.ptt-settings-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 15px;
+  z-index: 10002;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  width: 320px;
+  max-width: 90vw;
+}
+
+.ptt-settings-panel.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+
+.ptt-settings-header {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.ptt-capture-area {
+  background: #1a1a1a;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+  user-select: none;
+}
+.ptt-capture-area.active {
+  border-color: var(--accent);
+  background: rgba(42, 130, 218, 0.1);
+  color: var(--text-primary);
+  border-style: solid;
+}
+/* 🔌 Кастомная подсказка для кнопки настроек */
+.panel-settings-btn[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -35px;
     left: 50%;
     transform: translateX(-50%);
-    background: linear-gradient(180deg, #2a82da 0%, #1e6fba 100%);
-    border-radius: 0 0 10px 10px;
-    padding: 10px 20px;
-    z-index: 1000;
-    transition: top 0.3s ease;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    display: none;
-}
-
-.back-panel.visible {
-    top: 0;
-}
-
-.back-btn {
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    padding: 5px 15px;
-    border-radius: 5px;
-    transition: background 0.2s;
-}
-
-.back-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-/* === Топ-бар === */
-.top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 15px;
-    background-color: #252525;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    flex-shrink: 0;
-}
-
-.top-bar h1 {
-    font-size: 18px;
-    font-weight: bold;
+    background: #1a1a1a;
     color: var(--text-primary);
-}
-
-.voice-btn {
-    background-color: var(--accent);
-    border: none;
-    border-radius: 20px;
-    color: white;
-    font-size: 16px;
-    width: 40px;
-    height: 40px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.voice-btn:hover {
-    background-color: #1e6fba;
-}
-
-.voice-btn.speaking {
-    animation: pulse 1s infinite;
-    background-color: #2ecc71;
-}
-
-.voice-btn.muted {
-    background-color: #e74c3c;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.1);
-    }
-}
-
-/* === Game panel === */
-.game-panel {
-    background-color: #252525;
-    border-radius: 10px;
-    padding: 10px 15px;
-    margin: 0 10px 15px 10px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-}
-
-#game-status {
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-
-#launch-btn {
-    background-color: var(--success);
-    border: none;
-    border-radius: 5px;
-    color: white;
-    font-weight: bold;
-    padding: 8px 15px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    height: 36px;
-    min-width: 120px;
-}
-
-#launch-btn:hover:not(:disabled) {
-    background-color: #27ae60;
-}
-
-#launch-btn:disabled {
-    background-color: #7f8c8d;
-    cursor: not-allowed;
-}
-
-.divider {
-    height: 1px;
-    background-color: var(--border);
-    margin: 0 10px 10px 10px;
-    flex-shrink: 0;
-}
-
-.addons-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 10px 5px 10px;
-    margin-bottom: 5px;
-    flex-shrink: 0;
-}
-
-.addons-header h2 {
-    font-size: 16px;
-    font-weight: bold;
-    color: var(--text-primary);
-}
-
-.logs-btn {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    padding: 3px 8px;
+    padding: 4px 8px;
     border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.logs-btn:hover {
-    background-color: #3d3d3d;
-    color: var(--text-primary);
-}
-
-#addons-list {
-    flex-grow: 1;
-    overflow-y: auto;
-    min-height: 0;
-}
-
-.addon-card {
-    background-color: var(--bg-secondary);
-    border-radius: 10px;
-    margin: 0 10px 10px 10px;
-    position: relative;
-    z-index: 1;
-    transition: background-color 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.addon-card:hover {
-    background-color: #353535;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    transform: translateY(-1px);
-    transition: transform 0.2s;
-}
-
-.addon-content-wrapper {
-    padding: 12px;
-    overflow: hidden;
-    border-radius: 10px;
-}
-
-.addon-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    position: relative;
-    z-index: 2;
-}
-
-.addon-name {
-    font-weight: bold;
-    font-size: 14px;
-    color: var(--text-primary);
-}
-
-.update-label {
-    color: #8BC34A;
-    font-style: italic;
-    background-color: rgba(139, 195, 74, 0.1);
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 12px;
-    margin-right: 8px;
-}
-
-.addon-description {
-    color: var(--text-secondary);
-    font-size: 13px;
-    margin-bottom: 8px;
-    line-height: 1.4;
-    z-index: 2;
-    position: relative;
-}
-
-.progress-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg,
-        rgba(0, 0, 0, 0.8) var(--progress),
-        rgba(0, 0, 0, 0.8) var(--progress),
-        transparent var(--progress),
-        transparent 100%);
-    z-index: 1;
-    pointer-events: none;
-    opacity: 1;
-    transition: opacity 0.3s ease;
-}
-
-.progress-overlay.hidden {
-    opacity: 0;
-}
-
-.addon-card.deleting-warning {
-    background-color: #ff4444 !important;
-}
-
-.addon-card.deleting-warning .addon-content-wrapper::after {
-    content: "ВНИМАНИЕ: БУДЕТ УДАЛЕН";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.85);
-    color: #ff4444;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-weight: bold;
-    font-size: 14px;
+    font-size: 11px;
     white-space: nowrap;
-    z-index: 10;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 10003;
     pointer-events: none;
+    animation: fadeIn 0.15s ease;
 }
 
-.addon-top > input[type="checkbox"] {
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: 30px;
-    height: 30px;
-    opacity: 0;
-    cursor: pointer;
-    z-index: 5;
-    margin: 0;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(5px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.ptt-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.ptt-buttons button {
+  padding: 6px 12px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: #3d3d3d;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+.ptt-buttons button:hover {
+  background: #4d4d4d;
+}
+.ptt-buttons button#ptt-save-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ptt-buttons button#ptt-save-btn:hover {
+  background: #1a6bb5;
 }
 
-.addon-top > input[type="checkbox"] + .custom-checkbox {
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: 18px;
-    height: 18px;
-    border: 2px solid #555555;
-    border-radius: 3px;
-    background-color: #333333;
-    cursor: pointer;
-    z-index: 2;
-    transition: all 0.2s ease;
-}
+.top-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background-color: #252525; border-radius: 8px; margin-bottom: 15px; flex-shrink: 0; }
+.top-bar h1 { font-size: 18px; font-weight: bold; color: var(--text-primary); }
 
-.addon-top > input[type="checkbox"]:checked + .custom-checkbox {
-    background-color: #2A82DA;
-    border-color: #2A82DA;
-}
+.voice-btn { background-color: #252525; border: 1px solid var(--border); border-radius: 20px; color: white; font-size: 16px; width: 40px; height: 40px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+.voice-btn:hover { background-color: #3d3d3d; border-color: #777777; }
+.voice-btn.speaking { animation: pulse 1s infinite; background-color: rgba(46, 204, 113, 0.15); border-color: #2ecc71; color: #2ecc71; }
+.voice-btn.muted { background-color: rgba(231, 76, 60, 0.15); border-color: #e74c3c; color: #e74c3c; }
 
-.addon-top > input[type="checkbox"]:checked + .custom-checkbox:after {
-    content: '';
-    position: absolute;
-    top: 3px;
-    left: 6px;
-    width: 4px;
-    height: 8px;
-    border: solid white;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-}
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 
-.addon-top > input[type="checkbox"]:disabled + .custom-checkbox {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
+.back-btn { background: transparent; border: 1px solid var(--border); color: var(--text-primary); font-size: 14px; font-weight: bold; cursor: pointer; padding: 6px 16px; border-radius: 6px; transition: all 0.2s; white-space: nowrap; }
+.back-btn:hover { background: #3d3d3d; border-color: #777777; }
 
-.addon-top > input[type="checkbox"]:hover + .custom-checkbox {
-    border-color: #777777;
-}
+.game-panel { background-color: #252525; border-radius: 10px; padding: 10px 15px; margin: 0 10px 15px 10px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+#game-status { font-size: 14px; color: var(--text-secondary); }
+#launch-btn { background-color: var(--success); border: none; border-radius: 5px; color: white; font-weight: bold; padding: 8px 15px; cursor: pointer; transition: background-color 0.2s; height: 36px; min-width: 120px; }
+#launch-btn:hover:not(:disabled) { background-color: #27ae60; }
+#launch-btn:disabled { background-color: #7f8c8d; cursor: not-allowed; }
 
-#addons-list::-webkit-scrollbar {
-    width: 8px;
-}
+.divider { height: 1px; background-color: var(--border); margin: 0 10px 10px 10px; flex-shrink: 0; }
+.addons-header { display: flex; justify-content: space-between; align-items: center; padding: 0 10px 5px 10px; margin-bottom: 5px; flex-shrink: 0; }
+.addons-header h2 { font-size: 16px; font-weight: bold; color: var(--text-primary); }
+.logs-btn { background: none; border: 1px solid var(--border); color: var(--text-secondary); padding: 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.logs-btn:hover { background-color: #3d3d3d; color: var(--text-primary); }
 
-#addons-list::-webkit-scrollbar-track {
-    background: #2d2d2d;
-    border-radius: 4px;
-}
+#addons-list { flex-grow: 1; overflow-y: auto; min-height: 0; }
+.addon-card { background-color: var(--bg-secondary); border-radius: 10px; margin: 0 10px 10px 10px; position: relative; z-index: 1; transition: background-color 0.2s ease; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
+.addon-card:hover { background-color: #353535; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); transform: translateY(-1px); transition: transform 0.2s; }
+.addon-content-wrapper { padding: 12px; overflow: hidden; border-radius: 10px; }
+.addon-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; position: relative; z-index: 2; }
+.addon-name { font-weight: bold; font-size: 14px; color: var(--text-primary); }
+.update-label { color: #8BC34A; font-style: italic; background-color: rgba(139, 195, 74, 0.1); padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-right: 8px; }
+.addon-description { color: var(--text-secondary); font-size: 13px; margin-bottom: 8px; line-height: 1.4; z-index: 2; position: relative; }
 
-#addons-list::-webkit-scrollbar-thumb {
-    background: #555555;
-    border-radius: 4px;
-}
+.progress-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, rgba(0, 0, 0, 0.8) var(--progress), rgba(0, 0, 0, 0.8) var(--progress), transparent var(--progress), transparent 100%); z-index: 1; pointer-events: none; opacity: 1; transition: opacity 0.3s ease; }
+.progress-overlay.hidden { opacity: 0; }
 
-#addons-list::-webkit-scrollbar-thumb:hover {
-    background: #777777;
-}
+.addon-card.deleting-warning { background-color: #ff4444 !important; }
+.addon-card.deleting-warning .addon-content-wrapper::after { content: "ВНИМАНИЕ: БУДЕТ УДАЛЕН"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.85); color: #ff4444; padding: 8px 16px; border-radius: 4px; font-weight: bold; font-size: 14px; white-space: nowrap; z-index: 10; pointer-events: none; }
 
-#addons-list {
-    scrollbar-width: thin;
-    scrollbar-color: #555555 #2d2d2d;
-}
+.addon-top > input[type="checkbox"] { position: absolute; right: 0; top: 0; width: 30px; height: 30px; opacity: 0; cursor: pointer; z-index: 5; margin: 0; }
+.addon-top > input[type="checkbox"] + .custom-checkbox { position: absolute; right: 0; top: 0; width: 18px; height: 18px; border: 2px solid #555555; border-radius: 3px; background-color: #333333; cursor: pointer; z-index: 2; transition: all 0.2s ease; }
+.addon-top > input[type="checkbox"]:checked + .custom-checkbox { background-color: #2A82DA; border-color: #2A82DA; }
+.addon-top > input[type="checkbox"]:checked + .custom-checkbox:after { content: ''; position: absolute; top: 3px; left: 6px; width: 4px; height: 8px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.addon-top > input[type="checkbox"]:disabled + .custom-checkbox { opacity: 0.5; cursor: not-allowed; }
+.addon-top > input[type="checkbox"]:hover + .custom-checkbox { border-color: #777777; }
+
+#addons-list::-webkit-scrollbar { width: 8px; }
+#addons-list::-webkit-scrollbar-track { background: #2d2d2d; border-radius: 4px; }
+#addons-list::-webkit-scrollbar-thumb { background: #555555; border-radius: 4px; }
+#addons-list::-webkit-scrollbar-thumb:hover { background: #777777; }
+#addons-list { scrollbar-width: thin; scrollbar-color: #555555 #2d2d2d; }

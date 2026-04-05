@@ -1,483 +1,405 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // === Отладка: логгер для renderer ===
-    function loggerDebug(message) {
-        console.debug(`[NightWatchRenderer] ${message}`);
-    }
-    
-    loggerDebug('DOM loaded, initializing...');
+  const gameStatus = document.getElementById('game-status');
+  const launchBtn = document.getElementById('launch-btn');
+  const addonsList = document.getElementById('addons-list');
+  const logsBtn = document.getElementById('logs-btn');
+  const voiceBtn = document.getElementById('voice-btn');
+  const changePathBtn = document.getElementById('change-path-btn');
+  const webviewContainer = document.getElementById('webview-container');
+  const nsWebview = document.getElementById('ns-webview');
+  const backPanel = document.getElementById('back-panel');
+  const backBtn = document.getElementById('back-btn');
+  const panelMicBtn = document.getElementById('panel-mic-btn');
+  const panelRefreshBtn = document.getElementById('panel-refresh-btn');
+  const panelSettingsBtn = document.getElementById('panel-settings-btn');
+  const pttSettingsPanel = document.getElementById('ptt-settings-panel');
+  const pttCaptureArea = document.getElementById('ptt-capture-area');
+  const pttSaveBtn = document.getElementById('ptt-save-btn');
+  const pttCancelBtn = document.getElementById('ptt-cancel-btn');
+  const topBar = document.getElementById('top-bar');
+  const gamePanel = document.getElementById('game-panel');
+  const divider = document.getElementById('divider');
+  const addonsHeader = document.getElementById('addons-header');
 
-    const gameStatus = document.getElementById('game-status');
-    const launchBtn = document.getElementById('launch-btn');
-    const addonsList = document.getElementById('addons-list');
-    const logsBtn = document.getElementById('logs-btn');
-    const voiceBtn = document.getElementById('voice-btn');
-    const changePathBtn = document.getElementById('change-path-btn');
+  let isWebViewVisible = false;
+  let hidePanelTimeout = null;
+  let isPanelMicActive = false;
+  let capturedHotkey = new Set();
+  let isSettingsOpen = false;
+  let isMouseInCaptureZone = false;
+  let isGameReady = false;
+  let isLaunchBlocked = false;
 
-    // WebView и контейнер
-    const webviewContainer = document.getElementById('webview-container');
-    const nsWebview = document.getElementById('ns-webview');
-    const backPanel = document.getElementById('back-panel');
-    const backBtn = document.getElementById('back-btn');
+  function updateLaunchButtonState() {
+    if (launchBtn) launchBtn.disabled = !isGameReady || isLaunchBlocked;
+  }
 
-    // Элементы для скрытия
-    const topBar = document.getElementById('top-bar');
-    const gamePanel = document.getElementById('game-panel');
-    const divider = document.getElementById('divider');
-    const addonsHeader = document.getElementById('addons-header');
+  function formatHotkey(codes) {
+    if (!codes || !Array.isArray(codes) || codes.length === 0) return 'Не задан';
+    const keyNames = {
+      16: 'Shift', 17: 'Ctrl', 18: 'Alt', 32: 'Space', 27: 'Esc', 13: 'Enter',
+      9: 'Tab', 8: 'Backspace', 46: 'Del', 37: '←', 38: '↑', 39: '→', 40: '↓',
+      112: 'F1', 113: 'F2', 114: 'F3', 115: 'F4', 116: 'F5', 117: 'F6', 118: 'F7', 119: 'F8',
+      120: 'F9', 121: 'F10', 122: 'F11', 123: 'F12',
+      272: 'Mouse4', 273: 'Mouse5', 276: 'MouseLeft', 277: 'MouseRight', 278: 'MouseMiddle'
+    };
+    return codes.map(code => keyNames[code] || `K${code}`).join(' + ');
+  }
 
-    let isWebViewVisible = false;
-    let hidePanelTimeout = null;
+  function updateSettingsTooltip(codes) {
+    if (panelSettingsBtn) panelSettingsBtn.title = `PTT: ${formatHotkey(codes)}`;
+  }
 
-    // === Инициализация ===
-    loggerDebug('Starting initialization: loadAddons, checkGame');
-    loadAddons();
-    checkGame();
+  loadAddons();
+  checkGame();
+  (async () => {
+    try {
+      const saved = await window.electronAPI?.getPTTHotkey?.();
+      updateSettingsTooltip(saved);
+    } catch { updateSettingsTooltip(null); }
+  })();
 
-    // === Обработчики кнопок ===
-    launchBtn.addEventListener('click', () => {
-        loggerDebug('Launch button clicked');
-        launchGame();
+  if (window.electronAPI?.onBlockLaunchGame) {
+    window.electronAPI.onBlockLaunchGame((blocked) => {
+      isLaunchBlocked = blocked;
+      updateLaunchButtonState();
     });
-    
-    logsBtn.addEventListener('click', () => {
-        loggerDebug('Logs button clicked');
-        openLogsFolder();
+  }
+
+  launchBtn.addEventListener('click', () => { launchGame(); });
+  logsBtn.addEventListener('click', () => { openLogsFolder(); });
+  changePathBtn.addEventListener('click', () => { changeGamePath(); });
+  voiceBtn.addEventListener('click', async () => { isWebViewVisible = true; await toggleView(); });
+  backBtn.addEventListener('click', () => { isWebViewVisible = false; toggleView(); });
+
+  if (panelMicBtn) {
+    panelMicBtn.addEventListener('click', () => {
+      isPanelMicActive = !isPanelMicActive;
+      panelMicBtn.classList.toggle('active', isPanelMicActive);
+      panelMicBtn.title = isPanelMicActive ? 'Микрофон активен (выкл)' : 'Активировать микрофон';
+      window.electronAPI?.sendToWebClient('toggle-mic', { active: isPanelMicActive });
     });
-    
-    changePathBtn.addEventListener('click', () => {
-        loggerDebug('Change path button clicked');
-        changeGamePath();
+  }
+
+  if (panelRefreshBtn) {
+    panelRefreshBtn.addEventListener('click', async () => {
+      panelRefreshBtn.style.pointerEvents = 'none';
+      panelRefreshBtn.style.opacity = '0.5';
+      try {
+        await window.electronAPI.clearWebviewCache();
+        if (nsWebview) nsWebview.reload();
+      } catch (err) { showError('Ошибка обновления веб-клиента'); }
+      finally {
+        setTimeout(() => {
+          panelRefreshBtn.style.pointerEvents = 'auto';
+          panelRefreshBtn.style.opacity = '1';
+        }, 500);
+      }
+    });
+  }
+
+  if (panelSettingsBtn) {
+    panelSettingsBtn.addEventListener('click', () => {
+      isSettingsOpen = true;
+      pttSettingsPanel.classList.add('visible');
+      pttCaptureArea.classList.add('active');
+      pttCaptureArea.textContent = 'Наведите курсор на это поле и нажмите клавиши...';
+      capturedHotkey.clear();
+      isMouseInCaptureZone = false;
+      window.electronAPI?.startKeyCapture?.().catch(() => {});
+    });
+  }
+
+  if (pttCancelBtn) {
+    pttCancelBtn.addEventListener('click', () => {
+      isSettingsOpen = false;
+      pttSettingsPanel.classList.remove('visible');
+      pttCaptureArea.classList.remove('active');
+      isMouseInCaptureZone = false;
+      window.electronAPI?.getPTTHotkey?.().then(updateSettingsTooltip);
+      window.electronAPI?.stopKeyCapture?.();
+    });
+  }
+
+  if (pttSaveBtn) {
+    pttSaveBtn.addEventListener('click', async () => {
+      const codes = Array.from(capturedHotkey);
+      if (codes.length > 0) {
+        const res = await window.electronAPI.setPTTHotkey(codes);
+        if (res?.success) {
+          pttCaptureArea.textContent = `✅ Сохранено: ${codes.join(' + ')}`;
+          updateSettingsTooltip(codes);
+          setTimeout(() => {
+            pttSettingsPanel.classList.remove('visible');
+            pttCaptureArea.classList.remove('active');
+            isSettingsOpen = false;
+            isMouseInCaptureZone = false;
+            window.electronAPI?.stopKeyCapture?.();
+          }, 1000);
+        } else { pttCaptureArea.textContent = '❌ Ошибка сохранения'; }
+      } else { pttCaptureArea.textContent = '⚠️ Сначала нажмите клавиши!'; }
+    });
+  }
+
+  if (pttCaptureArea) {
+    pttCaptureArea.addEventListener('mouseenter', () => {
+      isMouseInCaptureZone = true;
+      if (capturedHotkey.size === 0) pttCaptureArea.textContent = 'Запись... Нажмите клавиши';
+    });
+    pttCaptureArea.addEventListener('mouseleave', () => {
+      isMouseInCaptureZone = false;
+      if (capturedHotkey.size === 0) pttCaptureArea.textContent = 'Наведите курсор и нажмите клавиши...';
+    });
+  }
+
+  if (backPanel) {
+    backPanel.addEventListener('mouseenter', () => { clearTimeout(hidePanelTimeout); backPanel.classList.add('visible'); });
+    backPanel.addEventListener('mouseleave', () => {
+      if (isSettingsOpen) return;
+      hidePanelTimeout = setTimeout(() => backPanel.classList.remove('visible'), 500);
+    });
+  }
+
+  window.electronAPI.onProgress((name, progress) => updateAddonProgress(name, progress));
+  window.electronAPI.onOperationFinished((name, success) => { if (success) refreshAddonStatus(name); });
+  window.electronAPI.onAddonUpdateAvailable((name) => { if (name === 'NSQC') refreshAddonStatus(name); });
+  window.electronAPI.onError((error) => {
+    showError(error);
+    document.querySelectorAll('.addon-card input[type="checkbox"]').forEach(cb => cb.disabled = false);
+  });
+
+  if (window.electronAPI?.onKeyCaptured) {
+    window.electronAPI.onKeyCaptured((code) => {
+      if (isMouseInCaptureZone) {
+        capturedHotkey.add(code);
+        pttCaptureArea.textContent = Array.from(capturedHotkey).join(' + ');
+      }
+    });
+  }
+
+  if (window.electronAPI?.onPTTPressed) {
+    window.electronAPI.onPTTPressed(() => {
+      if (!isPanelMicActive) {
+        isPanelMicActive = true;
+        panelMicBtn?.classList.add('active');
+        panelMicBtn.title = 'Микрофон активен (PTT)';
+        window.electronAPI?.sendToWebClient('toggle-mic', { active: true });
+      }
+    });
+  }
+
+  if (window.electronAPI?.onPTTReleased) {
+    window.electronAPI.onPTTReleased(() => {
+      if (isPanelMicActive) {
+        isPanelMicActive = false;
+        panelMicBtn?.classList.remove('active');
+        panelMicBtn.title = 'Активировать микрофон';
+        window.electronAPI?.sendToWebClient('toggle-mic', { active: false });
+      }
+    });
+  }
+
+  if (window.electronAPI?.onWebClientEvent) {
+    window.electronAPI.onWebClientEvent('mic-state', (state) => {
+      if (voiceBtn) {
+        voiceBtn.classList.toggle('speaking', state?.speaking);
+        voiceBtn.classList.toggle('muted', state?.muted);
+        voiceBtn.title = state?.muted ? 'Микрофон выключен' : state?.speaking ? 'Говорите...' : 'Микрофон готов';
+      }
+      if (panelMicBtn) {
+        const active = state?.active || state?.speaking || false;
+        if (!isPanelMicActive || active !== isPanelMicActive) {
+          isPanelMicActive = active;
+          panelMicBtn.classList.toggle('active', isPanelMicActive);
+        }
+      }
+      window.electronAPI?.sendMicState(state);
+    });
+    window.electronAPI.onWebClientEvent('request-ptt-register', (config) => {
+      if (window.electronAPI?.registerPTTHotkey && config?.hotkey) {
+        window.electronAPI.registerPTTHotkey(config.hotkey).then(result => window.electronAPI.sendToWebClient('ptt-register-result', result)).catch(() => {});
+      }
+    });
+  }
+
+  if (nsWebview) {
+    nsWebview.addEventListener('dom-ready', () => window.electronAPI?.sendToWebClient('electron-config', { theme: 'dark', language: 'ru' }));
+    nsWebview.addEventListener('did-fail-load', (event) => showError('Не удалось загрузить веб-клиент: ' + (event.errorDescription || 'Unknown error')));
+  }
+
+  async function toggleView() {
+    if (isWebViewVisible) {
+      webviewContainer?.classList.add('active');
+      topBar.style.display = 'none';
+      gamePanel.style.display = 'none';
+      divider.style.display = 'none';
+      addonsHeader.style.display = 'none';
+      addonsList.style.display = 'none';
+      backPanel.style.display = 'flex';
+      voiceBtn.style.display = 'none';
+      try {
+        const platform = await window.electronAPI.getPlatform();
+        window.electronAPI.sendToWebClient('electron-ready', { version: '1.0.0', platform: platform || 'unknown', userAgent: navigator.userAgent });
+      } catch { window.electronAPI.sendToWebClient('electron-ready', { version: '1.0.0', platform: 'unknown', userAgent: navigator.userAgent }); }
+    } else {
+      webviewContainer?.classList.remove('active');
+      topBar.style.display = 'flex';
+      gamePanel.style.display = 'flex';
+      divider.style.display = 'block';
+      addonsHeader.style.display = 'flex';
+      addonsList.style.display = 'block';
+      backPanel.style.display = 'none';
+      backPanel.classList.remove('visible');
+      voiceBtn.style.display = 'block';
+    }
+  }
+
+  async function loadAddons() {
+    try { renderAddons(await window.electronAPI.loadAddons()); }
+    catch { showError('Не удалось загрузить список аддонов'); }
+  }
+
+  function renderAddons(addons) {
+    addonsList.innerHTML = '';
+    for (const [name, addon] of Object.entries(addons)) addonsList.appendChild(createAddonElement(name, addon));
+  }
+
+  function createAddonElement(name, addon) {
+    const card = document.createElement('div');
+    card.className = 'addon-card';
+    card.dataset.name = name;
+
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'addon-content-wrapper';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'progress-overlay';
+    overlay.classList.add('hidden');
+    card.overlay = overlay;
+
+    const topRow = document.createElement('div');
+    topRow.className = 'addon-top';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'addon-name';
+    nameEl.textContent = name;
+
+    const updateLabel = document.createElement('span');
+    updateLabel.className = 'update-label';
+    updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
+    updateLabel.textContent = 'Доступно обновление';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `checkbox-${name}`;
+    checkbox.checked = addon.installed;
+    checkbox.disabled = addon.being_processed || addon.updating;
+
+    const label = document.createElement('label');
+    label.htmlFor = `checkbox-${name}`;
+    label.className = 'custom-checkbox';
+
+    topRow.append(nameEl, updateLabel, checkbox, label);
+
+    const description = document.createElement('div');
+    description.className = 'addon-description';
+    description.textContent = addon.description;
+
+    card.checkbox = checkbox;
+    card.updateLabel = updateLabel;
+    card.appendChild(overlay);
+    contentWrapper.append(topRow, description);
+    card.appendChild(contentWrapper);
+
+    if (addon.installed) {
+      card.onmouseenter = () => card.classList.add('deleting-warning');
+      card.onmouseleave = () => card.classList.remove('deleting-warning');
+    }
+
+    checkbox.addEventListener('change', () => {
+      const willInstall = checkbox.checked;
+      const originalState = !willInstall;
+      checkbox.disabled = true;
+      card.classList.remove('deleting-warning');
+      window.electronAPI.toggleAddon(name, willInstall)
+        .then(success => { if (!success) checkbox.checked = originalState; })
+        .catch(() => { checkbox.checked = originalState; checkbox.disabled = false; });
     });
 
-    // === Кнопка микрофона → переключение на веб-клиент ===
-    voiceBtn.addEventListener('click', async () => {
-        loggerDebug('Voice button clicked, switching to webview');
-        isWebViewVisible = true;
-        await toggleView();
+    return card;
+  }
+
+  function updateAddonProgress(name, progress) {
+    for (const card of document.querySelectorAll('.addon-card')) {
+      if (card.dataset.name === name && card.overlay) {
+        card.overlay.style.setProperty('--progress', Math.min(progress, 1.0) * 100 + '%');
+        card.overlay.classList.toggle('hidden', progress <= 0);
+        card.overlay.style.opacity = progress > 0 ? '1' : '0';
+        if (progress >= 1.0) {
+          setTimeout(() => {
+            card.overlay.classList.add('hidden');
+            // ✅ Сбрасываем инлайн-стиль, чтобы CSS-класс .hidden корректно скрыл полоску
+            card.overlay.style.opacity = '';
+          }, 300);
+        }
+        break;
+      }
+    }
+  }
+
+  function refreshAddonStatus(name) {
+    window.electronAPI.loadAddons().then(addons => {
+      const addon = addons[name];
+      if (!addon) return;
+      for (const card of document.querySelectorAll('.addon-card')) {
+        if (card.dataset.name === name) {
+          card.checkbox.disabled = false;
+          card.checkbox.checked = addon.installed;
+
+          if (card.overlay) {
+            card.overlay.classList.add('hidden');
+            card.overlay.style.opacity = '0';
+            card.overlay.style.setProperty('--progress', '0%');
+          }
+
+          if (addon.installed) {
+            card.onmouseenter = () => card.classList.add('deleting-warning');
+            card.onmouseleave = () => card.classList.remove('deleting-warning');
+          } else {
+            card.onmouseenter = null;
+            card.onmouseleave = null;
+          }
+
+          card.updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
+          break;
+        }
+      }
+    }).catch(() => {
+      for (const card of document.querySelectorAll('.addon-card')) {
+        if (card.dataset.name === name) card.checkbox.disabled = false;
+      }
     });
+  }
 
-    // === Кнопка "Назад" → возврат к менеджеру аддонов ===
-    backBtn.addEventListener('click', () => {
-        loggerDebug('Back button clicked, switching to addons');
-        isWebViewVisible = false;
-        toggleView();
+  function checkGame() {
+    window.electronAPI.checkGame().then(exists => {
+      isGameReady = exists;
+      gameStatus.textContent = exists ? 'Готова к запуску' : 'Игра не найдена';
+      gameStatus.style.color = exists ? '#4CAF50' : '#F44336';
+      updateLaunchButtonState();
+    }).catch(() => {
+      isGameReady = false;
+      gameStatus.textContent = 'Ошибка проверки игры';
+      gameStatus.style.color = '#F44336';
+      updateLaunchButtonState();
     });
+  }
 
-    // === Логика скрытия/показа панели ===
-    if (backPanel) {
-        backPanel.addEventListener('mouseenter', () => {
-            clearTimeout(hidePanelTimeout);
-            backPanel.classList.add('visible');
-            loggerDebug('Back panel: mouseenter, showing');
-        });
+  async function launchGame() {
+    if (!await window.electronAPI.launchGame()) showError('Не удалось запустить игру');
+  }
 
-        backPanel.addEventListener('mouseleave', () => {
-            hidePanelTimeout = setTimeout(() => {
-                backPanel.classList.remove('visible');
-                loggerDebug('Back panel: mouseleave, hiding after delay');
-            }, 500);
-        });
-    }
-
-    // === Подписка на события Electron API ===
-    window.electronAPI.onProgress((name, progress) => {
-        loggerDebug(`Progress event: ${name} = ${Math.round(progress * 100)}%`);
-        updateAddonProgress(name, progress);
-    });
-
-    window.electronAPI.onOperationFinished((name, success) => {
-        loggerDebug(`Operation finished: ${name}, success=${success}`);
-        if (success) {
-            refreshAddonStatus(name);
-        }
-    });
-
-    window.electronAPI.onAddonUpdateAvailable((name) => {
-        loggerDebug(`Update available: ${name}`);
-        if (name === 'NSQC') {
-            refreshAddonStatus(name);
-        }
-    });
-
-    window.electronAPI.onError((error) => {
-        loggerDebug(`Error event: ${error}`);
-        showError(error);
-        document.querySelectorAll('.addon-card input[type="checkbox"]').forEach(checkbox => {
-            checkbox.disabled = false;
-        });
-    });
-
-    // === Слушатели событий от веб-клиента ===
-    if (window.electronAPI?.onWebClientEvent) {
-        window.electronAPI.onWebClientEvent('mic-state', (state) => {
-            loggerDebug(`WebClient mic-state: ${JSON.stringify(state)}`);
-            if (voiceBtn) {
-                voiceBtn.classList.toggle('speaking', state?.speaking);
-                voiceBtn.classList.toggle('muted', state?.muted);
-                voiceBtn.title = state?.muted ? 'Микрофон выключен' :
-                    state?.speaking ? 'Говорите...' : 'Микрофон готов';
-            }
-            if (window.electronAPI?.sendMicState) {
-                window.electronAPI.sendMicState(state);
-            }
-        });
-
-        window.electronAPI.onWebClientEvent('request-ptt-register', (config) => {
-            loggerDebug(`WebClient request-ptt-register: ${JSON.stringify(config)}`);
-            if (window.electronAPI?.registerPTTHotkey && config?.hotkey) {
-                window.electronAPI.registerPTTHotkey(config.hotkey)
-                    .then(result => {
-                        loggerDebug(`PTT register result: ${JSON.stringify(result)}`);
-                        window.electronAPI.sendToWebClient('ptt-register-result', result);
-                    })
-                    .catch(err => {
-                        loggerDebug(`PTT register error: ${err}`);
-                    });
-            }
-        });
-    }
-
-    // === PTT: при активации хоткея отправляем сигнал во фрейм ===
-    if (window.electronAPI?.onPTTActivated) {
-        window.electronAPI.onPTTActivated(() => {
-            loggerDebug('PTT activated, signal sent to web client');
-        });
-    }
-
-    // === События webview ===
-    if (nsWebview) {
-        nsWebview.addEventListener('dom-ready', () => {
-            loggerDebug('Web client frame dom-ready');
-            if (window.electronAPI?.sendToWebClient) {
-                // Отправляем базовую конфигурацию
-                window.electronAPI.sendToWebClient('electron-config', {
-                    theme: 'dark',
-                    language: 'ru'
-                });
-            }
-        });
-
-        nsWebview.addEventListener('did-fail-load', (event) => {
-            loggerDebug(`Web client failed to load: ${JSON.stringify(event)}`);
-            showError('Не удалось загрузить веб-клиент: ' + (event.errorDescription || 'Unknown error'));
-        });
-        
-        nsWebview.addEventListener('console-message', (event) => {
-            // Перенаправляем логи из webview в консоль с префиксом
-            console.debug(`[WebView] ${event.message}`);
-        });
-    }
-
-    // === Функция переключения вида (async для получения платформы) ===
-    async function toggleView() {
-        loggerDebug(`toggleView() called, isWebViewVisible=${isWebViewVisible}`);
-        
-        if (isWebViewVisible) {
-            // Показываем контейнер
-            if (webviewContainer) {
-                webviewContainer.classList.add('active');
-                loggerDebug('WebView container: added active class');
-            }
-
-            // Скрываем элементы менеджера аддонов
-            if (topBar) topBar.style.display = 'none';
-            if (gamePanel) gamePanel.style.display = 'none';
-            if (divider) divider.style.display = 'none';
-            if (addonsHeader) addonsHeader.style.display = 'none';
-            if (addonsList) addonsList.style.display = 'none';
-            if (backPanel) backPanel.style.display = 'block';
-            if (voiceBtn) voiceBtn.style.display = 'none';
-            loggerDebug('Hidden addon manager UI elements');
-
-            // Отправляем сигнал готовности в webview
-            if (window.electronAPI?.sendToWebClient) {
-                try {
-                    // Получаем платформу через IPC (вместо process.platform)
-                    const platform = await window.electronAPI.getPlatform();
-                    loggerDebug(`Got platform via IPC: ${platform}`);
-                    
-                    window.electronAPI.sendToWebClient('electron-ready', {
-                        version: '1.0.0',
-                        platform: platform || 'unknown',
-                        userAgent: navigator.userAgent
-                    });
-                    loggerDebug('Sent electron-ready to web client');
-                } catch (err) {
-                    loggerDebug(`Error getting platform: ${err}`);
-                    // Fallback на неизвестную платформу
-                    window.electronAPI.sendToWebClient('electron-ready', {
-                        version: '1.0.0',
-                        platform: 'unknown',
-                        userAgent: navigator.userAgent
-                    });
-                }
-            }
-        } else {
-            // Скрываем контейнер
-            if (webviewContainer) {
-                webviewContainer.classList.remove('active');
-                loggerDebug('WebView container: removed active class');
-            }
-
-            // Возвращаем исходное состояние
-            if (topBar) topBar.style.display = 'flex';
-            if (gamePanel) gamePanel.style.display = 'flex';
-            if (divider) divider.style.display = 'block';
-            if (addonsHeader) addonsHeader.style.display = 'flex';
-            if (addonsList) addonsList.style.display = 'block';
-            if (backPanel) backPanel.style.display = 'none';
-            backPanel?.classList.remove('visible');
-            if (voiceBtn) voiceBtn.style.display = 'block';
-            loggerDebug('Restored addon manager UI elements');
-        }
-    }
-
-    // === Функции ===
-    async function loadAddons() {
-        loggerDebug('loadAddons() called');
-        try {
-            const addons = await window.electronAPI.loadAddons();
-            loggerDebug(`loadAddons() completed, received ${Object.keys(addons).length} addons`);
-            renderAddons(addons);
-        } catch (error) {
-            loggerDebug(`loadAddons() error: ${error}`);
-            showError('Не удалось загрузить список аддонов');
-        }
-    }
-
-    function renderAddons(addons) {
-        loggerDebug(`renderAddons() called with ${Object.keys(addons).length} addons`);
-        addonsList.innerHTML = '';
-        for (const [name, addon] of Object.entries(addons)) {
-            const addonElement = createAddonElement(name, addon);
-            addonsList.appendChild(addonElement);
-        }
-    }
-
-    function createAddonElement(name, addon) {
-        loggerDebug(`createAddonElement() for ${name}, installed=${addon.installed}`);
-        const card = document.createElement('div');
-        card.className = 'addon-card';
-        card.dataset.name = name;
-
-        const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'addon-content-wrapper';
-
-        const overlay = document.createElement('div');
-        overlay.className = 'progress-overlay';
-        overlay.classList.add('hidden');
-        card.overlay = overlay;
-
-        const topRow = document.createElement('div');
-        topRow.className = 'addon-top';
-
-        const nameEl = document.createElement('span');
-        nameEl.className = 'addon-name';
-        nameEl.textContent = name;
-
-        const updateLabel = document.createElement('span');
-        updateLabel.className = 'update-label';
-        updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
-        updateLabel.textContent = 'Доступно обновление';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.id = `checkbox-${name}`;
-        checkbox.checked = addon.installed;
-        checkbox.disabled = addon.being_processed || addon.updating;
-
-        const label = document.createElement('label');
-        label.htmlFor = `checkbox-${name}`;
-        label.className = 'custom-checkbox';
-
-        topRow.appendChild(nameEl);
-        topRow.appendChild(updateLabel);
-        topRow.appendChild(checkbox);
-        topRow.appendChild(label);
-
-        const description = document.createElement('div');
-        description.className = 'addon-description';
-        description.textContent = addon.description;
-
-        card.checkbox = checkbox;
-        card.updateLabel = updateLabel;
-        card.appendChild(overlay);
-        contentWrapper.appendChild(topRow);
-        contentWrapper.appendChild(description);
-        card.appendChild(contentWrapper);
-
-        if (addon.installed) {
-            checkbox.addEventListener('mouseenter', () => {
-                card.classList.add('deleting-warning');
-            });
-
-            checkbox.addEventListener('mouseleave', () => {
-                card.classList.remove('deleting-warning');
-            });
-        }
-
-        checkbox.addEventListener('change', () => {
-            const willInstall = checkbox.checked;
-            const originalState = !willInstall;
-            loggerDebug(`Checkbox changed for ${name}: willInstall=${willInstall}`);
-
-            checkbox.disabled = true;
-            card.classList.remove('deleting-warning');
-
-            window.electronAPI.toggleAddon(name, willInstall)
-                .then(success => {
-                    loggerDebug(`toggleAddon result for ${name}: ${success}`);
-                    if (!success) {
-                        checkbox.checked = originalState;
-                    }
-                })
-                .catch(error => {
-                    loggerDebug(`toggleAddon error for ${name}: ${error}`);
-                    checkbox.checked = originalState;
-                    checkbox.disabled = false;
-                });
-        });
-
-        return card;
-    }
-
-    function updateAddonProgress(name, progress) {
-        const cards = document.querySelectorAll('.addon-card');
-        for (const card of cards) {
-            if (card.dataset.name === name && card.overlay) {
-                const overlay = card.overlay;
-                const progressPercent = Math.min(progress, 1.0) * 100 + '%';
-                overlay.style.setProperty('--progress', progressPercent);
-
-                if (progress > 0) {
-                    overlay.classList.remove('hidden');
-                    overlay.style.opacity = '1';
-                }
-
-                if (progress >= 1.0) {
-                    setTimeout(() => {
-                        overlay.classList.add('hidden');
-                    }, 300);
-                }
-                break;
-            }
-        }
-    }
-
-    function refreshAddonStatus(name) {
-        loggerDebug(`refreshAddonStatus() for ${name}`);
-        window.electronAPI.loadAddons().then(addons => {
-            const addon = addons[name];
-            if (!addon) return;
-
-            const cards = document.querySelectorAll('.addon-card');
-            for (const card of cards) {
-                if (card.dataset.name === name) {
-                    card.checkbox.disabled = false;
-                    card.checkbox.checked = addon.installed;
-
-                    const checkbox = card.checkbox;
-                    const newCheckbox = checkbox.cloneNode(true);
-                    checkbox.parentNode.replaceChild(newCheckbox, checkbox);
-                    card.checkbox = newCheckbox;
-
-                    if (addon.installed) {
-                        newCheckbox.addEventListener('mouseenter', () => {
-                            card.classList.add('deleting-warning');
-                        });
-
-                        newCheckbox.addEventListener('mouseleave', () => {
-                            card.classList.remove('deleting-warning');
-                        });
-                    }
-
-                    newCheckbox.addEventListener('change', () => {
-                        const willInstall = newCheckbox.checked;
-                        const originalState = !willInstall;
-
-                        newCheckbox.disabled = true;
-                        card.classList.remove('deleting-warning');
-
-                        window.electronAPI.toggleAddon(name, willInstall)
-                            .then(success => {
-                                if (!success) {
-                                    newCheckbox.checked = originalState;
-                                }
-                            })
-                            .catch(error => {
-                                newCheckbox.checked = originalState;
-                                newCheckbox.disabled = false;
-                            });
-                    });
-
-                    card.updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
-
-                    if (card.overlay) {
-                        card.overlay.classList.add('hidden');
-                        card.overlay.style.opacity = '0';
-                    }
-                    break;
-                }
-            }
-        }).catch(error => {
-            loggerDebug(`refreshAddonStatus error: ${error}`);
-            const cards = document.querySelectorAll('.addon-card');
-            for (const card of cards) {
-                if (card.dataset.name === name && card.overlay) {
-                    card.checkbox.disabled = false;
-                    card.overlay.classList.add('hidden');
-                }
-            }
-        });
-    }
-
-    function checkGame() {
-        loggerDebug('checkGame() called');
-        window.electronAPI.checkGame().then(exists => {
-            loggerDebug(`checkGame result: exists=${exists}`);
-            gameStatus.textContent = exists ? 'Готова к запуску' : 'Игра не найдена';
-            gameStatus.style.color = exists ? '#4CAF50' : '#F44336';
-            launchBtn.disabled = !exists;
-        }).catch((err) => {
-            loggerDebug(`checkGame error: ${err}`);
-            gameStatus.textContent = 'Ошибка проверки игры';
-            gameStatus.style.color = '#F44336';
-            launchBtn.disabled = true;
-        });
-    }
-
-    async function launchGame() {
-        loggerDebug('launchGame() called');
-        const success = await window.electronAPI.launchGame();
-        if (!success) {
-            loggerDebug('launchGame failed');
-            showError('Не удалось запустить игру');
-        } else {
-            loggerDebug('launchGame succeeded');
-        }
-    }
-
-    function openLogsFolder() {
-        loggerDebug('openLogsFolder() called');
-        window.electronAPI.openLogsFolder();
-    }
-
-    async function changeGamePath() {
-        loggerDebug('changeGamePath() called');
-        const success = await window.electronAPI.changeGamePath();
-        if (success) {
-            loggerDebug('changeGamePath succeeded, refreshing UI');
-            checkGame();
-            loadAddons();
-        } else {
-            loggerDebug('changeGamePath canceled or failed');
-        }
-    }
-
-    function showError(message) {
-        loggerDebug(`showError: ${message}`);
-        alert(`Ошибка: ${message}`);
-    }
-    
-    loggerDebug('Renderer initialization complete');
+  function openLogsFolder() { window.electronAPI.openLogsFolder(); }
+  async function changeGamePath() { if (await window.electronAPI.changeGamePath()) { checkGame(); loadAddons(); } }
+  function showError(message) { alert(`Ошибка: ${message}`); }
 });

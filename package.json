@@ -1,23 +1,29 @@
 {
-  "name": "night-watch-updater",
+  "name": "nsqcue-updater",
   "version": "1.0.0",
-  "description": "Addon manager for World of Warcraft",
+  "description": "Установщик аддонов Ночная Стража",
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "build:win64": "electron-builder --win portable --x64"
+    "build:win64": "electron-builder --win portable --x64",
+    "build:linux": "electron-builder --linux AppImage --x64"
   },
   "build": {
-    "appId": "com.nightwatch.updater",
-    "productName": "Night Watch Updater",
+    "appId": "com.nsqcue.updater",
+    "productName": "Ночная стража: установщик аддонов",
+    "icon": "assets/icon.png",
+    "extraResources": [
+      {
+        "from": "global-mouse-hook/target/release/global_mouse_hook",
+        "to": "global_mouse_hook"
+      }
+    ],
     "win": {
       "target": [
         {
           "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ]
     },
@@ -25,16 +31,25 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "unicode": true,
       "warningsAsErrors": false
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Utility",
+      "synopsis": "Установщик аддонов Ночная Стража"
     }
   },
   "dependencies": {
-    "@napi-rs/cli": "^3.3.0",
     "axios": "^1.6.8",
     "fs-extra": "^11.2.0",
-    "mediasoup-client": "^3.16.1",
     "unzipper": "^0.10.14"
   },
   "devDependencies": {
+    "@napi-rs/cli": "^3.3.0",
     "electron": "^22.3.27",
     "electron-builder": "^24.13.3"
   }

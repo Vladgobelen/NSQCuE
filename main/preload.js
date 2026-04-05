@@ -1,165 +1,91 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// === Мост между Electron и веб-клиентом ===
 function sendToWebClient(channel, data) {
-    const frame = document.getElementById('ns-webview');
-    if (frame?.contentWindow) {
-        loggerDebug(`[preload] sendToWebClient: channel=${channel}`);
-        frame.contentWindow.postMessage(
-            { channel, data, source: 'electron' },
-            'https://ns.fiber-gate.ru'
-        );
-    } else {
-        loggerDebug(`[preload] sendToWebClient: webview not found`);
-    }
+  const frame = document.getElementById('ns-webview');
+  if (!frame) return;
+  if (channel === 'toggle-mic') {
+    ipcRenderer.invoke('execute-in-webview', {
+      code: 'if (window.voiceClient && typeof window.voiceClient.toggleMicrophone === "function") { window.voiceClient.toggleMicrophone(); }'
+    }).catch(() => {});
+  } else if (frame.contentWindow) {
+    frame.contentWindow.postMessage({ channel, data, source: 'electron' }, '*');
+  }
 }
 
 function listenFromWebClient(channel, callback) {
-    const handler = (event) => {
-        if (event.origin !== 'https://ns.fiber-gate.ru') return;
-        if (event.data?.channel === channel && event.data?.source === 'webclient') {
-            loggerDebug(`[preload] listenFromWebClient: received ${channel}`);
-            callback(event.data.data);
-        }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-}
-
-// Отладка: безопасный логгер для preload (работает без Node.js API)
-function loggerDebug(message) {
-    if (typeof console !== 'undefined') {
-        console.debug(`[NightWatchPreload] ${message}`);
+  const handler = (event) => {
+    if (event.data?.channel === channel && event.data?.source === 'webclient') {
+      callback(event.data.data);
     }
+  };
+  window.addEventListener('message', handler);
+  return () => window.removeEventListener('message', handler);
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    // === Существующие методы менеджера аддонов ===
-    loadAddons: () => {
-        loggerDebug('[electronAPI] loadAddons called');
-        return ipcRenderer.invoke('load-addons');
-    },
-    toggleAddon: (name, install) => {
-        loggerDebug(`[electronAPI] toggleAddon: ${name}, install=${install}`);
-        return ipcRenderer.invoke('toggle-addon', name, install);
-    },
-    launchGame: () => {
-        loggerDebug('[electronAPI] launchGame called');
-        return ipcRenderer.invoke('launch-game');
-    },
-    openLogsFolder: () => {
-        loggerDebug('[electronAPI] openLogsFolder called');
-        ipcRenderer.send('open-logs-folder');
-    },
-    checkGame: () => {
-        loggerDebug('[electronAPI] checkGame called');
-        return ipcRenderer.invoke('check-game');
-    },
-    changeGamePath: () => {
-        loggerDebug('[electronAPI] changeGamePath called');
-        return ipcRenderer.invoke('change-game-path');
-    },
-    goBack: () => {
-        loggerDebug('[electronAPI] goBack called');
-        ipcRenderer.send('go-back');
-    },
-    setPTTHotkey: (hotkey) => {
-        loggerDebug(`[electronAPI] setPTTHotkey: ${hotkey || 'null'}`);
-        return ipcRenderer.invoke('set-ptt-hotkey', hotkey);
-    },
-    getPTTHotkey: () => {
-        loggerDebug('[electronAPI] getPTTHotkey called');
-        return ipcRenderer.invoke('get-ptt-hotkey');
-    },
-    
-    // === НОВЫЙ метод для получения платформы ===
-    getPlatform: () => {
-        loggerDebug('[electronAPI] getPlatform called');
-        return ipcRenderer.invoke('get-platform');
-    },
-    
-    // === Существующие слушатели событий ===
-    onPTTPressed: (callback) => {
-        loggerDebug('[electronAPI] onPTTPressed listener registered');
-        if (typeof callback !== 'function') return;
-        const handler = () => {
-            loggerDebug('[electronAPI] PTT pressed event received');
-            callback();
-        };
-        ipcRenderer.on('ptt-pressed', handler);
-        return () => ipcRenderer.off('ptt-pressed', handler);
-    },
-    onProgress: (callback) => {
-        loggerDebug('[electronAPI] onProgress listener registered');
-        if (typeof callback !== 'function') return;
-        const handler = (event, name, progress) => {
-            if (typeof name === 'string' && typeof progress === 'number') {
-                loggerDebug(`[electronAPI] Progress: ${name} = ${progress * 100}%`);
-                callback(name, progress);
-            }
-        };
-        ipcRenderer.on('progress', handler);
-        return () => ipcRenderer.off('progress', handler);
-    },
-    onOperationFinished: (callback) => {
-        loggerDebug('[electronAPI] onOperationFinished listener registered');
-        if (typeof callback !== 'function') return;
-        const handler = (event, name, success) => {
-            loggerDebug(`[electronAPI] Operation finished: ${name}, success=${success}`);
-            callback(name, success);
-        };
-        ipcRenderer.on('operation-finished', handler);
-        return () => ipcRenderer.off('operation-finished', handler);
-    },
-    onError: (callback) => {
-        loggerDebug('[electronAPI] onError listener registered');
-        if (typeof callback !== 'function') return;
-        const handler = (event, error) => {
-            loggerDebug(`[electronAPI] Error received: ${error}`);
-            callback(error);
-        };
-        ipcRenderer.on('operation-error', handler);
-        return () => ipcRenderer.off('operation-error', handler);
-    },
-    onAddonUpdateAvailable: (callback) => {
-        loggerDebug('[electronAPI] onAddonUpdateAvailable listener registered');
-        if (typeof callback !== 'function') return;
-        const handler = (event, name) => {
-            loggerDebug(`[electronAPI] Update available: ${name}`);
-            callback(name);
-        };
-        ipcRenderer.on('addon-update-available', handler);
-        return () => ipcRenderer.off('addon-update-available', handler);
-    },
-    
-    // === НОВЫЕ методы для веб-клиента ===
-    sendToWebClient: (channel, data) => {
-        loggerDebug(`[electronAPI] sendToWebClient: ${channel}`);
-        sendToWebClient(channel, data);
-    },
-    onWebClientEvent: (channel, callback) => {
-        loggerDebug(`[electronAPI] onWebClientEvent registered: ${channel}`);
-        return listenFromWebClient(channel, callback);
-    },
-    registerPTTHotkey: (hotkey) => {
-        loggerDebug(`[electronAPI] registerPTTHotkey: ${hotkey || 'null'}`);
-        return ipcRenderer.invoke('register-ptt-hotkey', hotkey);
-    },
-    onPTTActivated: (callback) => {
-        loggerDebug('[electronAPI] onPTTActivated listener registered');
-        if (typeof callback !== 'function') return;
-        const handler = () => {
-            loggerDebug('[electronAPI] PTT activated, sending to web client');
-            sendToWebClient('ptt-activated', { pressed: true });
-            if (typeof callback === 'function') callback();
-        };
-        ipcRenderer.on('ptt-activated', handler);
-        return () => ipcRenderer.off('ptt-activated', handler);
-    },
-    sendMicState: (state) => {
-        loggerDebug(`[electronAPI] sendMicState: ${JSON.stringify(state)}`);
-        ipcRenderer.send('webclient-mic-state', state);
-    },
+  loadAddons: () => ipcRenderer.invoke('load-addons'),
+  toggleAddon: (n, i) => ipcRenderer.invoke('toggle-addon', n, i),
+  launchGame: () => ipcRenderer.invoke('launch-game'),
+  openLogsFolder: () => ipcRenderer.send('open-logs-folder'),
+  checkGame: () => ipcRenderer.invoke('check-game'),
+  changeGamePath: () => ipcRenderer.invoke('change-game-path'),
+  goBack: () => ipcRenderer.send('go-back'),
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
+  registerPTTHotkey: (h) => ipcRenderer.invoke('register-ptt-hotkey', h),
+  sendMicState: (s) => ipcRenderer.send('webclient-mic-state', s),
+  clearWebviewCache: () => ipcRenderer.invoke('clear-session-cache', 'persist:ns'),
+  sendToWebClient: (ch, d) => sendToWebClient(ch, d),
+  onWebClientEvent: (ch, cb) => listenFromWebClient(ch, cb),
+  setPTTHotkey: (codes) => ipcRenderer.invoke('set-ptt-hotkey', codes),
+  getPTTHotkey: () => ipcRenderer.invoke('get-ptt-hotkey'),
+  startKeyCapture: () => ipcRenderer.invoke('start-key-capture'),
+  stopKeyCapture: () => ipcRenderer.invoke('stop-key-capture'),
+  onBlockLaunchGame: (cb) => {
+    const h = (e, blocked) => cb(blocked);
+    ipcRenderer.on('block-launch-game', h);
+    return () => ipcRenderer.off('block-launch-game', h);
+  },
+  onPTTPressed: (cb) => {
+    const h = () => cb();
+    ipcRenderer.on('ptt-pressed', h);
+    return () => ipcRenderer.off('ptt-pressed', h);
+  },
+  onPTTReleased: (cb) => {
+    const h = () => cb();
+    ipcRenderer.on('ptt-released', h);
+    return () => ipcRenderer.off('ptt-released', h);
+  },
+  onKeyCaptured: (cb) => {
+    const h = (e, code) => cb(code);
+    ipcRenderer.on('key-captured', h);
+    return () => ipcRenderer.off('key-captured', h);
+  },
+  onProgress: (cb) => {
+    const h = (e, n, p) => typeof n === 'string' && typeof p === 'number' ? cb(n, p) : null;
+    ipcRenderer.on('progress', h);
+    return () => ipcRenderer.off('progress', h);
+  },
+  onOperationFinished: (cb) => {
+    const h = (e, n, s) => cb(n, s);
+    ipcRenderer.on('operation-finished', h);
+    return () => ipcRenderer.off('operation-finished', h);
+  },
+  onError: (cb) => {
+    const h = (e, err) => cb(err.message || err);
+    ipcRenderer.on('operation-error', h);
+    return () => ipcRenderer.off('operation-error', h);
+  },
+  onAddonUpdateAvailable: (cb) => {
+    const h = (e, n) => cb(n);
+    ipcRenderer.on('addon-update-available', h);
+    return () => ipcRenderer.off('addon-update-available', h);
+  },
+  onPTTActivated: (cb) => {
+    const h = () => {
+      sendToWebClient('ptt-activated', { pressed: true });
+      if (typeof cb === 'function') cb();
+    };
+    ipcRenderer.on('ptt-activated', h);
+    return () => ipcRenderer.off('ptt-activated', h);
+  }
 });
-
-loggerDebug('[preload] Context bridge exposed successfully');

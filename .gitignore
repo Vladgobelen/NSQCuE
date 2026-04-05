@@ -1,57 +1,44 @@
-# Node.js
+# === ЗАВИСИМОСТИ ===
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.yarn/
+*/node_modules/
 
-# Rust
-/target/
-**/*.node
+# === СБОРКА ELECTRON ===
+dist/
+build/
+out/
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.zip
+*.tar.gz
+*.dmg
 
-# Electron builder
-/dist/
-/out/
-/build/
-
-# Logs and temp files
+# === ЛОГИ И ВРЕМЕННЫЕ ФАЙЛЫ ===
 *.log
-*.tmp
+logs/
+.tmp/
+temp/
+
+# === ОС И РЕДАКТОРЫ ===
 .DS_Store
 Thumbs.db
-.zshistory
-
-# IDE / Editor
-.vscode/
+desktop.ini
 .idea/
+.vscode/
 *.swp
 *.swo
 
-# Environment
+# === RUST / NATIVE MODULE ===
+# Игнорируем только тяжелую папку компиляции и локальные зависимости модуля
+global-mouse-hook/target/
+global-mouse-hook/node_modules/
+
+# Явно разрешаем отслеживать готовые файлы модуля (если вы коммитите .node)
+!global-mouse-hook/*.node
+!global-mouse-hook/index.js
+!global-mouse-hook/index.d.ts
+
+# === СЕКРЕТЫ ===
 .env
 .env.local
-
-# Tests
-__test__/
-*.spec.*
-*.test.*
-
-# TypeScript / Build artifacts
-*.d.ts
-*.map
-tsconfig.tsbuildinfo
-
-# WASM / Workers
-wasi-worker*.mjs
-
-# Audio / Assets (если не нужны в репо)
-/renderer/voice/sounds/*.mp3
-
-# OS generated
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
