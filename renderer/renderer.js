@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   loadAddons();
   checkGame();
+
   (async () => {
     try {
       const saved = await window.electronAPI?.getPTTHotkey?.();
@@ -268,43 +269,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = document.createElement('div');
     card.className = 'addon-card';
     card.dataset.name = name;
-
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'addon-content-wrapper';
-
     const overlay = document.createElement('div');
     overlay.className = 'progress-overlay';
     overlay.classList.add('hidden');
     card.overlay = overlay;
-
     const topRow = document.createElement('div');
     topRow.className = 'addon-top';
-
     const nameEl = document.createElement('span');
     nameEl.className = 'addon-name';
     nameEl.textContent = name;
-
     const updateLabel = document.createElement('span');
     updateLabel.className = 'update-label';
     updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
     updateLabel.textContent = 'Доступно обновление';
-
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.id = `checkbox-${name}`;
     checkbox.checked = addon.installed;
     checkbox.disabled = addon.being_processed || addon.updating;
-
     const label = document.createElement('label');
     label.htmlFor = `checkbox-${name}`;
     label.className = 'custom-checkbox';
-
     topRow.append(nameEl, updateLabel, checkbox, label);
-
     const description = document.createElement('div');
     description.className = 'addon-description';
     description.textContent = addon.description;
-
     card.checkbox = checkbox;
     card.updateLabel = updateLabel;
     card.appendChild(overlay);
@@ -325,7 +316,6 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(success => { if (!success) checkbox.checked = originalState; })
         .catch(() => { checkbox.checked = originalState; checkbox.disabled = false; });
     });
-
     return card;
   }
 
@@ -338,7 +328,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (progress >= 1.0) {
           setTimeout(() => {
             card.overlay.classList.add('hidden');
-            // ✅ Сбрасываем инлайн-стиль, чтобы CSS-класс .hidden корректно скрыл полоску
             card.overlay.style.opacity = '';
           }, 300);
         }
@@ -355,13 +344,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (card.dataset.name === name) {
           card.checkbox.disabled = false;
           card.checkbox.checked = addon.installed;
-
           if (card.overlay) {
             card.overlay.classList.add('hidden');
             card.overlay.style.opacity = '0';
             card.overlay.style.setProperty('--progress', '0%');
           }
-
           if (addon.installed) {
             card.onmouseenter = () => card.classList.add('deleting-warning');
             card.onmouseleave = () => card.classList.remove('deleting-warning');
@@ -369,7 +356,6 @@ document.addEventListener('DOMContentLoaded', () => {
             card.onmouseenter = null;
             card.onmouseleave = null;
           }
-
           card.updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
           break;
         }
@@ -400,6 +386,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function openLogsFolder() { window.electronAPI.openLogsFolder(); }
+
   async function changeGamePath() { if (await window.electronAPI.changeGamePath()) { checkGame(); loadAddons(); } }
+
   function showError(message) { alert(`Ошибка: ${message}`); }
 });

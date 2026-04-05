@@ -115,7 +115,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.off('key-captured', h);
   },
   onProgress: (cb) => {
-    const h = (e, n, p) => { 
+    const h = (e, n, p) => {
       if (typeof n === 'string' && typeof p === 'number') {
         log('progress', '←', { name: n, progress: p });
         cb(n, p);
@@ -147,5 +147,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
     ipcRenderer.on('ptt-activated', h);
     return () => ipcRenderer.off('ptt-activated', h);
+  },
+  openExternal: (url) => {
+    log('open-external', '→', url);
+    return ipcRenderer.invoke('open-external', url);
   }
 });

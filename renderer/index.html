@@ -13,7 +13,6 @@
       <h1>Менеджер аддонов</h1>
       <button id="voice-btn" class="voice-btn" title="Открыть веб-клиент">🎤</button>
     </div>
-
     <div class="game-panel" id="game-panel">
       <span id="game-status">Проверка игры...</span>
       <div style="display: flex; gap: 5px;">
@@ -21,14 +20,11 @@
         <button id="launch-btn" disabled>Запустить игру</button>
       </div>
     </div>
-
     <div class="divider" id="divider"></div>
-
     <div class="addons-header" id="addons-header">
       <h2>Доступные аддоны</h2>
       <button id="logs-btn" class="logs-btn">Логи</button>
     </div>
-
     <div class="addons-list" id="addons-list"></div>
   </div>
 
@@ -38,6 +34,7 @@
       id="ns-webview"
       src="https://ns.fiber-gate.ru/"
       partition="persist:ns"
+      allowpopups="true"
       useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36 NightWatch/1.0"
       webpreferences="nodeIntegration=no,contextIsolation=yes,sandbox=yes,websecurity=yes"
     ></webview>
@@ -49,11 +46,10 @@
     <div class="panel-divider"></div>
     <button class="panel-mic-btn" id="panel-mic-btn" title="Микрофон">🎤</button>
     <button class="panel-refresh-btn" id="panel-refresh-btn" title="Обновить веб-клиент (очистить кэш)">🔄</button>
-    <!-- 🔌 Новая кнопка: Настройки PTT -->
     <button class="panel-settings-btn" id="panel-settings-btn" title="Настройки PTT">⚙️</button>
   </div>
 
-  <!-- 🔌 Панель настроек хоткея PTT (скрыта по умолчанию через CSS) -->
+  <!-- Панель настроек хоткея PTT -->
   <div class="ptt-settings-panel" id="ptt-settings-panel">
     <div class="ptt-settings-header">Настройка PTT</div>
     <div class="ptt-capture-area" id="ptt-capture-area">Нажмите комбинацию клавиш...</div>

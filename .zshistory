@@ -1,0 +1,4 @@
+cargo build --release
+npm start
+cargo add .
+git add .
