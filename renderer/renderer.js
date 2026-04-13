@@ -521,48 +521,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Обработка звуков из webview
-    nsWebview.addEventListener('ipc-message', (event) => {
-      if (event.channel === 'play-sound') {
-        const soundType = event.args[0];
-        window.electronAPI?.playSound(soundType).catch(() => {});
-      }
-    });
+nsWebview.addEventListener('ipc-message', (event) => {
+  if (event.channel === 'play-sound') {
+    const soundType = event.args[0];
+    window.electronAPI.playSound(soundType).catch(() => {});
+  }
+});
     
-    nsWebview.addEventListener('dom-ready', () => {
-      nsWebview.executeJavaScript(`
-        (function() {
-          window.addEventListener('message', (event) => {
-            if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
-              if (window.ipcRenderer) {
-                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-              }
-            }
-            if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
-              if (window.ipcRenderer) {
-                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-              }
-            }
-          });
-        })();
-      `).catch(() => {});
-    });
+nsWebview.addEventListener('dom-ready', () => {
+  nsWebview.executeJavaScript(`
+    (function() {
+      window.addEventListener('message', (event) => {
+        if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
+          if (window.ipcRenderer) {
+            window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
+          }
+        }
+        if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
+          if (window.ipcRenderer) {
+            window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
+          }
+        }
+      });
+    })();
+  `).catch(() => {});
+});
     
-    nsWebview.addEventListener('console-message', (event) => {
-      const message = event.message;
-      let soundType = null;
-      
-      if (message.includes('[WebView] ✓ Sent via postMessage:')) {
-        const match = message.match(/postMessage:\s*(\w+-\w+)/);
-        if (match) soundType = match[1];
-      } else if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
-        const match = message.match(/playSound called with:\s*(\w+-\w+)/);
-        if (match) soundType = match[1];
-      }
-      
-      if (soundType) {
-        window.electronAPI?.playSound(soundType).catch(() => {});
-      }
-    });
+nsWebview.addEventListener('console-message', (event) => {
+  const message = event.message;
+  let soundType = null;
+  
+  if (message.includes('[WebView] ✓ Sent via postMessage:')) {
+    const match = message.match(/postMessage:\s*(\w+-\w+)/);
+    if (match) {
+      soundType = match[1];
+    }
+  } else if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
+    const match = message.match(/playSound called with:\s*(\w+-\w+)/);
+    if (match) {
+      soundType = match[1];
+    }
+  }
+  
+  if (soundType) {
+    window.electronAPI.playSound(soundType).catch(() => {});
+  }
+});
   }
 
   // Обработка копирования в буфер обмена

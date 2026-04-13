@@ -233,21 +233,27 @@ function setupWebviewHandlers(webContents) {
     if (channel === 'play-sound') {
       const soundType = args[0];
       const fileName = SOUND_MAP[soundType];
-      if (!fileName) return;
+      if (!fileName) {
+        return;
+      }
       
       const soundPath = path.join(SOUNDS_DIR, fileName);
-      let finalPath = soundPath;
+      let finalPath = null;
       
-      if (!fs.existsSync(soundPath)) {
+      if (fs.existsSync(soundPath)) {
+        finalPath = soundPath;
+      } else {
         const resourcePath = app.isPackaged 
           ? path.join(process.resourcesPath, 'sounds', fileName)
           : path.join(__dirname, '..', 'sounds', fileName);
         
         if (fs.existsSync(resourcePath)) {
           finalPath = resourcePath;
-        } else {
-          return;
         }
+      }
+      
+      if (!finalPath) {
+        return;
       }
       
       try {
@@ -614,10 +620,8 @@ ipcMain.handle('copy-to-clipboard', (event, text) => {
   }
 });
 
-// 🎵 IPC Handler для воспроизведения звука
 ipcMain.handle('play-sound', async (event, soundType) => {
-  logger.info(`🔊🔊🔊 [IPC] play-sound CALLED with: ${soundType}`);
-  logger.debug(`[IPC] play-sound: ${soundType}`);
+  logger.info(`🔊 [IPC] play-sound CALLED with: ${soundType}`);
   
   const fileName = SOUND_MAP[soundType];
   if (!fileName) {
@@ -626,9 +630,12 @@ ipcMain.handle('play-sound', async (event, soundType) => {
   }
   
   const soundPath = path.join(SOUNDS_DIR, fileName);
+  let finalPath = null;
   
-  let finalPath = soundPath;
-  if (!fs.existsSync(soundPath)) {
+  if (fs.existsSync(soundPath)) {
+    finalPath = soundPath;
+    logger.debug(`[SOUND] Using custom sound: ${soundPath}`);
+  } else {
     const resourcePath = app.isPackaged 
       ? path.join(process.resourcesPath, 'sounds', fileName)
       : path.join(__dirname, '..', 'sounds', fileName);
@@ -636,34 +643,45 @@ ipcMain.handle('play-sound', async (event, soundType) => {
     if (fs.existsSync(resourcePath)) {
       finalPath = resourcePath;
       logger.debug(`[SOUND] Using built-in sound: ${resourcePath}`);
-    } else {
-      logger.debug(`[SOUND] No sound file for: ${soundType} (${fileName})`);
-      return false;
     }
+  }
+  
+  if (!finalPath) {
+    logger.debug(`[SOUND] No sound file for: ${soundType} (${fileName}) - SILENCE`);
+    return false;
   }
   
   try {
     if (process.platform === 'win32') {
       exec(`powershell -c (New-Object Media.SoundPlayer '${finalPath}').PlaySync()`, (err) => {
-        if (err) logger.error(`[SOUND] Windows playback error:`, err.message);
-        else logger.info(`[SOUND] ✓ Windows playback completed: ${soundType}`);
+        if (err) {
+          logger.error(`[SOUND] Windows playback error: ${err.message}`);
+        } else {
+          logger.info(`[SOUND] ✓ Windows playback completed: ${soundType}`);
+        }
       });
     } else if (process.platform === 'linux') {
       exec(`which paplay > /dev/null 2>&1 && paplay '${finalPath}' || which aplay > /dev/null 2>&1 && aplay '${finalPath}' || which play > /dev/null 2>&1 && play '${finalPath}'`, (err) => {
-        if (err) logger.error(`[SOUND] Linux playback error:`, err.message);
-        else logger.info(`[SOUND] ✓ Linux playback completed: ${soundType}`);
+        if (err) {
+          logger.error(`[SOUND] Linux playback error: ${err.message}`);
+        } else {
+          logger.info(`[SOUND] ✓ Linux playback completed: ${soundType}`);
+        }
       });
     } else if (process.platform === 'darwin') {
       exec(`afplay '${finalPath}'`, (err) => {
-        if (err) logger.error(`[SOUND] macOS playback error:`, err.message);
-        else logger.info(`[SOUND] ✓ macOS playback completed: ${soundType}`);
+        if (err) {
+          logger.error(`[SOUND] macOS playback error: ${err.message}`);
+        } else {
+          logger.info(`[SOUND] ✓ macOS playback completed: ${soundType}`);
+        }
       });
     }
     
     logger.info(`[SOUND] Playing: ${soundType} → ${path.basename(finalPath)}`);
     return true;
   } catch (error) {
-    logger.error(`[SOUND] Error playing ${soundType}:`, error.message);
+    logger.error(`[SOUND] Error playing ${soundType}: ${error.message}`);
     return false;
   }
 });

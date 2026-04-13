@@ -806,7 +806,9 @@ function getKeyName(code) {
   return names[code] || `K${code}`;
 }
 
+// 👇 Функция для настройки обработчиков webview
 function setupWebviewHandlers(webContents) {
+  logger.info('[WEBVIEW] Setting up handlers for webContents');
   webviewWebContents = webContents;
 
   const isExternalUrl = (url) => {
@@ -832,15 +834,23 @@ function setupWebviewHandlers(webContents) {
     return { action: 'deny' };
   });
 
-  webContents.on('did-fail-load', (e, code, desc) => {
-    logger.error(`[WEBVIEW] Failed: ${code} - ${desc}`);
-  });
+  webContents.on('did-fail-load', (e, code, desc) =>
+    logger.error(`[WEBVIEW] Failed: ${code} - ${desc}`)
+  );
 
+  // 👇 Обработчик IPC сообщений из webview
   webContents.on('ipc-message', (event, channel, ...args) => {
+    logger.info(`[WEBVIEW IPC] Received channel: ${channel}, args:`, args);
+    
     if (channel === 'play-sound') {
       const soundType = args[0];
+      logger.info(`🔊 [WEBVIEW IPC] Play sound: ${soundType}`);
+      
       const fileName = SOUND_MAP[soundType];
-      if (!fileName) return;
+      if (!fileName) {
+        logger.warn(`[SOUND] Unknown sound type: ${soundType}`);
+        return;
+      }
       
       const soundPath = path.join(SOUNDS_DIR, fileName);
       let finalPath = soundPath;
@@ -852,7 +862,9 @@ function setupWebviewHandlers(webContents) {
         
         if (fs.existsSync(resourcePath)) {
           finalPath = resourcePath;
+          logger.debug(`[SOUND] Using built-in sound: ${resourcePath}`);
         } else {
+          logger.debug(`[SOUND] No sound file for: ${soundType} (${fileName})`);
           return;
         }
       }
@@ -860,61 +872,126 @@ function setupWebviewHandlers(webContents) {
       try {
         if (process.platform === 'win32') {
           exec(`powershell -c (New-Object Media.SoundPlayer '${finalPath}').PlaySync()`, (err) => {
-            if (err) logger.error(`[SOUND] Error: ${err.message}`);
+            if (err) logger.error(`[SOUND] Windows playback error:`, err.message);
+            else logger.info(`[SOUND] ✓ Windows playback completed: ${soundType}`);
           });
         } else if (process.platform === 'linux') {
           exec(`which paplay > /dev/null 2>&1 && paplay '${finalPath}' || which aplay > /dev/null 2>&1 && aplay '${finalPath}' || which play > /dev/null 2>&1 && play '${finalPath}'`, (err) => {
-            if (err) logger.error(`[SOUND] Error: ${err.message}`);
+            if (err) logger.error(`[SOUND] Linux playback error:`, err.message);
+            else logger.info(`[SOUND] ✓ Linux playback completed: ${soundType}`);
           });
         } else if (process.platform === 'darwin') {
           exec(`afplay '${finalPath}'`, (err) => {
-            if (err) logger.error(`[SOUND] Error: ${err.message}`);
+            if (err) logger.error(`[SOUND] macOS playback error:`, err.message);
+            else logger.info(`[SOUND] ✓ macOS playback completed: ${soundType}`);
           });
         }
+        
+        logger.info(`[SOUND] Playing: ${soundType} → ${path.basename(finalPath)}`);
       } catch (error) {
-        logger.error(`[SOUND] Error: ${error.message}`);
+        logger.error(`[SOUND] Error playing ${soundType}:`, error.message);
       }
     }
   });
 
   webContents.on('did-finish-load', () => {
+    logger.info('[WEBVIEW] Finished load');
+    
+    // 👇 ПРИНУДИТЕЛЬНО ОТКРЫВАЕМ DEVTOOLS ДЛЯ WEBVIEW
+    try {
+      webContents.openDevTools({ mode: 'detach' });
+      logger.info('[WEBVIEW] ✓ DevTools opened successfully');
+    } catch (error) {
+      logger.error('[WEBVIEW] Failed to open DevTools:', error.message);
+    }
+    
+    // 👇 ИНЖЕКТИМ API В WEBVIEW
     const injectCode = `
       (function() {
+        console.log('[WebView Inject] Starting API injection...');
+        
+        // Пробуем получить ipcRenderer разными способами
         let ipcRenderer = null;
         try {
           if (typeof require !== 'undefined') {
             ipcRenderer = require('electron').ipcRenderer;
           }
-        } catch (e) {}
+        } catch (e) {
+          console.log('[WebView Inject] require not available, trying window.ipcRenderer');
+        }
         
         if (!ipcRenderer && window.ipcRenderer) {
           ipcRenderer = window.ipcRenderer;
         }
         
+        console.log('[WebView Inject] ipcRenderer available:', !!ipcRenderer);
+        
         window.ELECTRON_CUSTOM_SOUNDS_ENABLED = true;
+        window.DEVTOOLS_OPEN = true;
         
         window.electronAPI = {
           playSound: (soundType) => {
+            console.log('[WebView] 🔊 playSound called with:', soundType);
+            
+            // Способ 1: через ipcRenderer (если доступен)
             if (ipcRenderer) {
               try {
                 ipcRenderer.sendToHost('play-sound', soundType);
+                console.log('[WebView] ✓ Sent via ipcRenderer.sendToHost:', soundType);
                 return Promise.resolve(true);
-              } catch (e) {}
+              } catch (e) {
+                console.error('[WebView] ipcRenderer.sendToHost failed:', e.message);
+              }
             }
             
+            // Способ 2: через postMessage (работает всегда)
+            console.log('[WebView] Using postMessage fallback');
             window.postMessage({
               type: 'ELECTRON_PLAY_SOUND',
               soundType: soundType,
               source: 'webview'
             }, '*');
             
+            console.log('[WebView] ✓ Sent via postMessage:', soundType);
             return Promise.resolve(true);
+          },
+          
+          testSound: () => {
+            console.log('[WebView] 🧪 Testing sound system...');
+            window.electronAPI.playSound('message');
           }
         };
+        
+        console.log('[WebView] ✓ electronAPI injected successfully');
+        console.log('[WebView] Available methods:', Object.keys(window.electronAPI));
+        console.log('[WebView] 💡 Tip: Run "window.electronAPI.testSound()" to test sound');
+        
+        // Проверка
+        console.log('[WebView Check] ========================================');
+        console.log('[WebView Check] electronAPI exists:', !!window.electronAPI);
+        console.log('[WebView Check] playSound exists:', !!(window.electronAPI && window.electronAPI.playSound));
+        console.log('[WebView Check] ipcRenderer available:', !!ipcRenderer);
+        console.log('[WebView Check] ========================================');
       })();
     `;
     
-    webContents.executeJavaScript(injectCode).catch(() => {});
+    webContents.executeJavaScript(injectCode)
+      .then(() => {
+        logger.info('[WEBVIEW] ✓ API injected successfully');
+      })
+      .catch(err => {
+        logger.error('[WEBVIEW] ❌ Failed to inject API:', err.message);
+      });
+  });
+  
+  // 👇 Логирование консольных сообщений из webview
+  webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const levelNames = ['VERBOSE', 'INFO', 'WARNING', 'ERROR'];
+    const levelName = levelNames[level] || 'UNKNOWN';
+    
+    if (message.includes('[WebView') || message.includes('playSound') || message.includes('ELECTRON') || level >= 2) {
+      logger.info(`[WEBVIEW CONSOLE] [${levelName}] ${message}`);
+    }
   });
 }
 
@@ -966,7 +1043,7 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   
   // 👇 ОТКРЫВАЕМ DEVTOOLS ДЛЯ ОСНОВНОГО ОКНА
-  //mainWindow.webContents.openDevTools({ mode: 'detach' });
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
   
   mainWindow.on('closed', () => {
     logger.info('[WINDOW] Closed');
@@ -2166,59 +2243,59 @@ document.addEventListener('DOMContentLoaded', () => {
     nsWebview.addEventListener('did-fail-load', event => {
       showError('Не удалось загрузить веб-клиент: ' + (event.errorDescription || 'Unknown error'));
     });
+  }
 
-    // Обработка звуков из webview
-    nsWebview.addEventListener('ipc-message', (event) => {
-      if (event.channel === 'play-sound') {
-        const soundType = event.args[0];
-        window.electronAPI?.playSound(soundType).catch(() => {});
-      }
+// ЗАМЕНИ существующий обработчик message на этот:
+window.addEventListener('message', event => {
+  console.log('[Renderer] Received postMessage:', {
+    origin: event.origin,
+    type: event.data?.type,
+    source: event.data?.source,
+    hasText: !!event.data?.text,
+    soundType: event.data?.soundType
+  });
+  
+  // === ОБРАБОТКА PLAY_SOUND ===
+  // Вариант 1: через старый формат TYPE: 'PLAY_SOUND'
+  if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
+    console.log('🔊 [RENDERER] PLAY_SOUND received (type format), forwarding to IPC:', event.data.soundType);
+    window.electronAPI?.playSound(event.data.soundType).then(result => {
+      console.log('🔊 [RENDERER] IPC playSound result:', result);
+    }).catch(err => {
+      console.error('🔊 [RENDERER] IPC playSound error:', err);
     });
-    
-    nsWebview.addEventListener('dom-ready', () => {
-      nsWebview.executeJavaScript(`
-        (function() {
-          window.addEventListener('message', (event) => {
-            if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
-              if (window.ipcRenderer) {
-                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-              }
-            }
-            if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
-              if (window.ipcRenderer) {
-                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-              }
-            }
-          });
-        })();
-      `).catch(() => {});
-    });
-    
-    nsWebview.addEventListener('console-message', (event) => {
-      const message = event.message;
-      let soundType = null;
-      
-      if (message.includes('[WebView] ✓ Sent via postMessage:')) {
-        const match = message.match(/postMessage:\s*(\w+-\w+)/);
-        if (match) soundType = match[1];
-      } else if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
-        const match = message.match(/playSound called with:\s*(\w+-\w+)/);
-        if (match) soundType = match[1];
-      }
-      
-      if (soundType) {
-        window.electronAPI?.playSound(soundType).catch(() => {});
-      }
+  }
+  
+  // Вариант 2: через новый формат от webview (ELECTRON_PLAY_SOUND)
+  if (event.data?.source === 'webview' && event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
+    console.log('🔊 [RENDERER] ELECTRON_PLAY_SOUND received (webview source), forwarding to IPC:', event.data.soundType);
+    window.electronAPI?.playSound(event.data.soundType).then(result => {
+      console.log('🔊 [RENDERER] IPC playSound result:', result);
+    }).catch(err => {
+      console.error('🔊 [RENDERER] IPC playSound error:', err);
     });
   }
 
-  // Обработка копирования в буфер обмена
-  window.addEventListener('message', (event) => {
-    if (event.data?.type === 'COPY_TO_CLIPBOARD' && event.data?.text) {
-      window.electronAPI?.copyToClipboard(event.data.text).catch(() => {});
+  // === ОБРАБОТКА COPY_TO_CLIPBOARD ===
+  if (event.data?.type === 'COPY_TO_CLIPBOARD' && event.data?.text) {
+    console.log('[Renderer] COPY_TO_CLIPBOARD message, text length:', event.data.text.length);
+    console.log('[Renderer] electronAPI available:', !!window.electronAPI);
+    console.log('[Renderer] copyToClipboard available:', !!window.electronAPI?.copyToClipboard);
+    
+    if (!window.electronAPI?.copyToClipboard) {
+      console.error('[Renderer] copyToClipboard method not available!');
+      return;
     }
-  });
-  
+    
+    window.electronAPI.copyToClipboard(event.data.text)
+      .then(result => {
+        console.log('[Renderer] copyToClipboard result:', result);
+      })
+      .catch(err => {
+        console.error('[Renderer] copyToClipboard error:', err);
+      });
+  }
+});
 });
 ════════════════════════════════════════
 📄 FILE: renderer/style.css
