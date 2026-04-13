@@ -21,7 +21,12 @@
     ],
     "win": {
       "target": [
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "portable": {
@@ -31,7 +36,12 @@
     },
     "linux": {
       "target": [
-        { "target": "AppImage", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "category": "Utility",
       "synopsis": "Установщик аддонов Ночная Стража"
@@ -40,6 +50,7 @@
   "dependencies": {
     "axios": "^1.6.8",
     "fs-extra": "^11.2.0",
+    "play-sound": "^1.1.6",
     "unzipper": "^0.10.14"
   },
   "devDependencies": {
