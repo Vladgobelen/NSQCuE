@@ -127,20 +127,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => {
     return ipcRenderer.invoke('open-external', url);
   },
-  // Внутри contextBridge.exposeInMainWorld, заменить copyToClipboard на:
+  copyToClipboard: (text) => {
+    return ipcRenderer.invoke('copy-to-clipboard', text);
+  },
 
-copyToClipboard: (text) => {
-  console.log('[Preload] copyToClipboard called, text length:', text?.length);
-  console.log('[Preload] Text preview:', text?.substring(0, 50));
-  
-  return ipcRenderer.invoke('copy-to-clipboard', text)
-    .then(result => {
-      console.log('[Preload] IPC result:', result);
-      return result;
-    })
-    .catch(err => {
-      console.error('[Preload] IPC error:', err);
-      throw err;
-    });
-}
+  // ========== НОВЫЕ МЕТОДЫ ДЛЯ КАСТОМНЫХ ЗВУКОВ ==========
+  playSound: (soundType) => {
+    return ipcRenderer.invoke('play-sound', soundType);
+  },
+  selectSoundsFolder: () => {
+    return ipcRenderer.invoke('select-sounds-folder');
+  },
+  importSounds: (sourceFolder) => {
+    return ipcRenderer.invoke('import-sounds', sourceFolder);
+  },
+  getSoundsStatus: () => {
+    return ipcRenderer.invoke('get-sounds-status');
+  },
+  openSoundsFolder: () => {
+    ipcRenderer.send('open-sounds-folder');
+  }
 });

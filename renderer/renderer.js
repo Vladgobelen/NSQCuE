@@ -519,40 +519,57 @@ document.addEventListener('DOMContentLoaded', () => {
     nsWebview.addEventListener('did-fail-load', event => {
       showError('Не удалось загрузить веб-клиент: ' + (event.errorDescription || 'Unknown error'));
     });
+
+    // Обработка звуков из webview
+    nsWebview.addEventListener('ipc-message', (event) => {
+      if (event.channel === 'play-sound') {
+        const soundType = event.args[0];
+        window.electronAPI?.playSound(soundType).catch(() => {});
+      }
+    });
+    
+    nsWebview.addEventListener('dom-ready', () => {
+      nsWebview.executeJavaScript(`
+        (function() {
+          window.addEventListener('message', (event) => {
+            if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
+              if (window.ipcRenderer) {
+                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
+              }
+            }
+            if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
+              if (window.ipcRenderer) {
+                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
+              }
+            }
+          });
+        })();
+      `).catch(() => {});
+    });
+    
+    nsWebview.addEventListener('console-message', (event) => {
+      const message = event.message;
+      let soundType = null;
+      
+      if (message.includes('[WebView] ✓ Sent via postMessage:')) {
+        const match = message.match(/postMessage:\s*(\w+-\w+)/);
+        if (match) soundType = match[1];
+      } else if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
+        const match = message.match(/playSound called with:\s*(\w+-\w+)/);
+        if (match) soundType = match[1];
+      }
+      
+      if (soundType) {
+        window.electronAPI?.playSound(soundType).catch(() => {});
+      }
+    });
   }
 
-  // В конце DOMContentLoaded, заменить window.addEventListener('message', ...) на:
-
-window.addEventListener('message', event => {
-  console.log('[Renderer] Received postMessage:', {
-    origin: event.origin,
-    type: event.data?.type,
-    hasText: !!event.data?.text,
-    textLength: event.data?.text?.length
+  // Обработка копирования в буфер обмена
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'COPY_TO_CLIPBOARD' && event.data?.text) {
+      window.electronAPI?.copyToClipboard(event.data.text).catch(() => {});
+    }
   });
   
-  if (event.origin !== 'https://ns.fiber-gate.ru') {
-    console.warn('[Renderer] Message from unexpected origin:', event.origin);
-    return;
-  }
-
-  if (event.data?.type === 'COPY_TO_CLIPBOARD' && event.data?.text) {
-    console.log('[Renderer] COPY_TO_CLIPBOARD message, text length:', event.data.text.length);
-    console.log('[Renderer] electronAPI available:', !!window.electronAPI);
-    console.log('[Renderer] copyToClipboard available:', !!window.electronAPI?.copyToClipboard);
-    
-    if (!window.electronAPI?.copyToClipboard) {
-      console.error('[Renderer] copyToClipboard method not available!');
-      return;
-    }
-    
-    window.electronAPI.copyToClipboard(event.data.text)
-      .then(result => {
-        console.log('[Renderer] copyToClipboard result:', result);
-      })
-      .catch(err => {
-        console.error('[Renderer] copyToClipboard error:', err);
-      });
-  }
-});
 });

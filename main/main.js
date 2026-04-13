@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const addonManager = require('./addonManager');
 const settings = require('./settings');
 const { setupLogging } = require('./utils');
@@ -15,6 +15,21 @@ let currentPTTHotkeyCodes = null;
 let captureMode = false;
 const capturedCodes = new Set();
 let pttActive = false;
+
+// 🎵 Директория для кастомных звуков
+const SOUNDS_DIR = path.join(app.getPath('userData'), 'sounds');
+fs.ensureDirSync(SOUNDS_DIR);
+
+// 🎵 Маппинг типов звуков на имена файлов
+const SOUND_MAP = {
+    'message': 'message.mp3',
+    'user-join': 'user-join.mp3',
+    'user-leave': 'user-leave.mp3',
+    'mic-on': 'mic-on.mp3',
+    'mic-off': 'mic-off.mp3',
+    'pop-up-message': 'notification.mp3',
+    'room-join': 'room-join.mp3'
+};
 
 async function ensureGamePath() {
   logger.debug('[GAME_PATH] Checking game path validity...');
@@ -184,18 +199,135 @@ function getKeyName(code) {
   return names[code] || `K${code}`;
 }
 
+function setupWebviewHandlers(webContents) {
+  webviewWebContents = webContents;
+
+  const isExternalUrl = (url) => {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.origin !== 'https://ns.fiber-gate.ru';
+    } catch {
+      return false;
+    }
+  };
+
+  webContents.on('will-navigate', (e, url) => {
+    if (isExternalUrl(url)) {
+      e.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
+  webContents.setWindowOpenHandler(({ url }) => {
+    if (isExternalUrl(url)) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  webContents.on('did-fail-load', (e, code, desc) => {
+    logger.error(`[WEBVIEW] Failed: ${code} - ${desc}`);
+  });
+
+  webContents.on('ipc-message', (event, channel, ...args) => {
+    if (channel === 'play-sound') {
+      const soundType = args[0];
+      const fileName = SOUND_MAP[soundType];
+      if (!fileName) return;
+      
+      const soundPath = path.join(SOUNDS_DIR, fileName);
+      let finalPath = soundPath;
+      
+      if (!fs.existsSync(soundPath)) {
+        const resourcePath = app.isPackaged 
+          ? path.join(process.resourcesPath, 'sounds', fileName)
+          : path.join(__dirname, '..', 'sounds', fileName);
+        
+        if (fs.existsSync(resourcePath)) {
+          finalPath = resourcePath;
+        } else {
+          return;
+        }
+      }
+      
+      try {
+        if (process.platform === 'win32') {
+          exec(`powershell -c (New-Object Media.SoundPlayer '${finalPath}').PlaySync()`, (err) => {
+            if (err) logger.error(`[SOUND] Error: ${err.message}`);
+          });
+        } else if (process.platform === 'linux') {
+          exec(`which paplay > /dev/null 2>&1 && paplay '${finalPath}' || which aplay > /dev/null 2>&1 && aplay '${finalPath}' || which play > /dev/null 2>&1 && play '${finalPath}'`, (err) => {
+            if (err) logger.error(`[SOUND] Error: ${err.message}`);
+          });
+        } else if (process.platform === 'darwin') {
+          exec(`afplay '${finalPath}'`, (err) => {
+            if (err) logger.error(`[SOUND] Error: ${err.message}`);
+          });
+        }
+      } catch (error) {
+        logger.error(`[SOUND] Error: ${error.message}`);
+      }
+    }
+  });
+
+  webContents.on('did-finish-load', () => {
+    const injectCode = `
+      (function() {
+        let ipcRenderer = null;
+        try {
+          if (typeof require !== 'undefined') {
+            ipcRenderer = require('electron').ipcRenderer;
+          }
+        } catch (e) {}
+        
+        if (!ipcRenderer && window.ipcRenderer) {
+          ipcRenderer = window.ipcRenderer;
+        }
+        
+        window.ELECTRON_CUSTOM_SOUNDS_ENABLED = true;
+        
+        window.electronAPI = {
+          playSound: (soundType) => {
+            if (ipcRenderer) {
+              try {
+                ipcRenderer.sendToHost('play-sound', soundType);
+                return Promise.resolve(true);
+              } catch (e) {}
+            }
+            
+            window.postMessage({
+              type: 'ELECTRON_PLAY_SOUND',
+              soundType: soundType,
+              source: 'webview'
+            }, '*');
+            
+            return Promise.resolve(true);
+          }
+        };
+      })();
+    `;
+    
+    webContents.executeJavaScript(injectCode).catch(() => {});
+  });
+}
+
 function createWindow() {
   logger.info('[WINDOW] Creating BrowserWindow...');
   const nsSession = session.fromPartition('persist:ns');
   nsSession.setPermissionRequestHandler((webContents, permission, callback) => {
-  console.log(`[PERM] Request: ${permission} → ${['media', 'microphone', 'camera', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission) ? 'GRANTED' : 'DENIED'}`);
-  
-  if (['media', 'microphone', 'camera', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)) {
-    callback(true);
-    return;
-  }
-  callback(false);
-});
+    const allowedPermissions = [
+      'media', 
+      'microphone', 
+      'camera', 
+      'clipboard-read', 
+      'clipboard-sanitized-write',
+      'clipboard'
+    ];
+    
+    const granted = allowedPermissions.includes(permission);
+    logger.debug(`[PERM] Request: ${permission} → ${granted ? 'GRANTED' : 'DENIED'}`);
+    callback(granted);
+  });
 
   const applyCSP = (details, callback, isDefault) => {
     callback({
@@ -225,41 +357,25 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+  
+  // 👇 ОТКРЫВАЕМ DEVTOOLS ДЛЯ ОСНОВНОГО ОКНА
+  //mainWindow.webContents.openDevTools({ mode: 'detach' });
+  
   mainWindow.on('closed', () => {
     logger.info('[WINDOW] Closed');
     mainWindow = null;
   });
 
+  // 👇 Обработчик прикрепления webview
   mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
-    logger.info('[WEBVIEW] Attached');
-    webviewWebContents = webContents;
+    logger.info('[WEBVIEW] Attached (did-attach-webview)');
+    setupWebviewHandlers(webContents);
+  });
 
-    const isExternalUrl = (url) => {
-      try {
-        const urlObj = new URL(url);
-        return urlObj.origin !== 'https://ns.fiber-gate.ru';
-      } catch {
-        return false;
-      }
-    };
-
-    webContents.on('will-navigate', (e, url) => {
-      if (isExternalUrl(url)) {
-        e.preventDefault();
-        shell.openExternal(url);
-      }
-    });
-
-    webContents.setWindowOpenHandler(({ url }) => {
-      if (isExternalUrl(url)) {
-        shell.openExternal(url);
-      }
-      return { action: 'deny' };
-    });
-
-    webContents.on('did-fail-load', (e, code, desc) =>
-      logger.error(`[WEBVIEW] Failed: ${code} - ${desc}`)
-    );
+  // 👇 Обработчик создания webview (для случаев перезагрузки)
+  mainWindow.webContents.on('did-create-webview', (event, webContents) => {
+    logger.info('[WEBVIEW] Created (did-create-webview)');
+    setupWebviewHandlers(webContents);
   });
 
   mainWindow.webContents.on('did-finish-load', () =>
@@ -275,7 +391,8 @@ app.whenReady().then(async () => {
   const gamePathValid = await ensureGamePath();
   if (!gamePathValid) {
     logger.error('[APP] Invalid game path, quitting');
-    app.quit(); return;
+    app.quit();
+    return;
   }
 
   addonManager.setGamePath(settings.getGamePath());
@@ -286,6 +403,13 @@ app.whenReady().then(async () => {
   if (savedHotkey && Array.isArray(savedHotkey)) {
     currentPTTHotkeyCodes = savedHotkey;
     logger.info(`[PTT] Loaded saved hotkey: ${savedHotkey.join('+')}`);
+  }
+
+  try {
+    await addonManager.loadAddons();
+    logger.info('[APP] Addons loaded successfully');
+  } catch (err) {
+    logger.error('[APP] Failed to load addons:', err.message);
   }
 
   try {
@@ -476,33 +600,144 @@ ipcMain.handle('open-external', async (event, url) => {
   }
 });
 
-// 🆕 IPC Handler для копирования текста в буфер обмена
-// Заменить существующий обработчик copy-to-clipboard на:
-
 ipcMain.handle('copy-to-clipboard', (event, text) => {
-  console.log('[Main] copy-to-clipboard called');
-  console.log('[Main] Text type:', typeof text);
-  console.log('[Main] Text length:', text?.length);
-  console.log('[Main] Text preview:', text?.substring(0, 50));
-  
-  if (typeof text !== 'string') {
-    console.error('[Main] Invalid text type:', typeof text);
-    return false;
-  }
+  logger.debug(`[IPC] copy-to-clipboard: ${text?.substring(0, 50)}...`);
+  if (typeof text !== 'string') return false;
   
   try {
     clipboard.writeText(text);
-    console.log('[Main] clipboard.writeText SUCCESS');
-    
-    // Проверяем, что реально записалось
-    const written = clipboard.readText();
-    console.log('[Main] Clipboard verification - written length:', written?.length);
-    console.log('[Main] First 50 chars:', written?.substring(0, 50));
-    
+    logger.info('[IPC] copy-to-clipboard → SUCCESS');
     return true;
   } catch (error) {
-    console.error('[Main] clipboard.writeText ERROR:', error.message);
-    console.error('[Main] Stack:', error.stack);
+    logger.error('[IPC] copy-to-clipboard error:', error.message);
     return false;
   }
+});
+
+// 🎵 IPC Handler для воспроизведения звука
+ipcMain.handle('play-sound', async (event, soundType) => {
+  logger.info(`🔊🔊🔊 [IPC] play-sound CALLED with: ${soundType}`);
+  logger.debug(`[IPC] play-sound: ${soundType}`);
+  
+  const fileName = SOUND_MAP[soundType];
+  if (!fileName) {
+    logger.warn(`[SOUND] Unknown sound type: ${soundType}`);
+    return false;
+  }
+  
+  const soundPath = path.join(SOUNDS_DIR, fileName);
+  
+  let finalPath = soundPath;
+  if (!fs.existsSync(soundPath)) {
+    const resourcePath = app.isPackaged 
+      ? path.join(process.resourcesPath, 'sounds', fileName)
+      : path.join(__dirname, '..', 'sounds', fileName);
+    
+    if (fs.existsSync(resourcePath)) {
+      finalPath = resourcePath;
+      logger.debug(`[SOUND] Using built-in sound: ${resourcePath}`);
+    } else {
+      logger.debug(`[SOUND] No sound file for: ${soundType} (${fileName})`);
+      return false;
+    }
+  }
+  
+  try {
+    if (process.platform === 'win32') {
+      exec(`powershell -c (New-Object Media.SoundPlayer '${finalPath}').PlaySync()`, (err) => {
+        if (err) logger.error(`[SOUND] Windows playback error:`, err.message);
+        else logger.info(`[SOUND] ✓ Windows playback completed: ${soundType}`);
+      });
+    } else if (process.platform === 'linux') {
+      exec(`which paplay > /dev/null 2>&1 && paplay '${finalPath}' || which aplay > /dev/null 2>&1 && aplay '${finalPath}' || which play > /dev/null 2>&1 && play '${finalPath}'`, (err) => {
+        if (err) logger.error(`[SOUND] Linux playback error:`, err.message);
+        else logger.info(`[SOUND] ✓ Linux playback completed: ${soundType}`);
+      });
+    } else if (process.platform === 'darwin') {
+      exec(`afplay '${finalPath}'`, (err) => {
+        if (err) logger.error(`[SOUND] macOS playback error:`, err.message);
+        else logger.info(`[SOUND] ✓ macOS playback completed: ${soundType}`);
+      });
+    }
+    
+    logger.info(`[SOUND] Playing: ${soundType} → ${path.basename(finalPath)}`);
+    return true;
+  } catch (error) {
+    logger.error(`[SOUND] Error playing ${soundType}:`, error.message);
+    return false;
+  }
+});
+
+// 🎵 IPC Handler для выбора папки со звуками
+ipcMain.handle('select-sounds-folder', async () => {
+  logger.info('[IPC] select-sounds-folder');
+  const result = await dialog.showOpenDialog({
+    title: 'Выберите папку со звуками',
+    properties: ['openDirectory']
+  });
+  
+  if (result.canceled || !result.filePaths.length) {
+    logger.info('[IPC] select-sounds-folder → canceled');
+    return null;
+  }
+  
+  logger.info(`[IPC] select-sounds-folder → ${result.filePaths[0]}`);
+  return result.filePaths[0];
+});
+
+// 🎵 IPC Handler для импорта звуков из папки
+ipcMain.handle('import-sounds', async (event, sourceFolder) => {
+  logger.info(`[IPC] import-sounds from: ${sourceFolder}`);
+  
+  if (!sourceFolder || !fs.existsSync(sourceFolder)) {
+    logger.error('[IPC] import-sounds: source folder not found');
+    return { success: false, error: 'Папка не найдена' };
+  }
+  
+  const imported = [];
+  const missing = [];
+  
+  for (const [soundType, fileName] of Object.entries(SOUND_MAP)) {
+    const sourcePath = path.join(sourceFolder, fileName);
+    const destPath = path.join(SOUNDS_DIR, fileName);
+    
+    if (fs.existsSync(sourcePath)) {
+      try {
+        await fs.copy(sourcePath, destPath, { overwrite: true });
+        imported.push(soundType);
+        logger.debug(`[SOUND] Imported: ${fileName} for ${soundType}`);
+      } catch (err) {
+        missing.push({ soundType, error: err.message });
+        logger.error(`[SOUND] Failed to import ${fileName}:`, err.message);
+      }
+    } else {
+      missing.push({ soundType, error: 'Файл не найден' });
+      logger.debug(`[SOUND] Missing file: ${fileName}`);
+    }
+  }
+  
+  logger.info(`[IPC] import-sounds → imported: ${imported.length}, missing: ${missing.length}`);
+  return { success: true, imported, missing };
+});
+
+// 🎵 IPC Handler для получения списка доступных звуков и их статуса
+ipcMain.handle('get-sounds-status', async () => {
+  const status = {};
+  
+  for (const [soundType, fileName] of Object.entries(SOUND_MAP)) {
+    const soundPath = path.join(SOUNDS_DIR, fileName);
+    status[soundType] = {
+      fileName,
+      exists: fs.existsSync(soundPath),
+      path: soundPath
+    };
+  }
+  
+  return status;
+});
+
+// 🎵 IPC Handler для открытия папки со звуками
+ipcMain.on('open-sounds-folder', () => {
+  logger.info('[IPC] open-sounds-folder');
+  shell.openPath(SOUNDS_DIR);
 });
