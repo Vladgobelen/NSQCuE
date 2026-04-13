@@ -276,8 +276,21 @@ document.addEventListener('DOMContentLoaded', () => {
     isSoundsPanelOpen = true;
     soundsPanelContent.innerHTML = '<div class="sounds-loading">Загрузка конфигурации...</div>';
     try {
+      const customBtn = document.createElement('button');
+      customBtn.className = 'sounds-section-btn';
+      customBtn.textContent = '📁 Свои';
+      customBtn.title = 'Открыть папку с кастомными звуками';
+      customBtn.addEventListener('click', () => {
+        window.electronAPI.openSoundsFolder();
+      });
+      soundsPanelContent.appendChild(customBtn);
+      const divider = document.createElement('div');
+      divider.className = 'sounds-divider';
+      soundsPanelContent.appendChild(divider);
       const config = await window.electronAPI.fetchSoundsConfig();
       soundsPanelContent.innerHTML = '';
+      soundsPanelContent.appendChild(customBtn);
+      soundsPanelContent.appendChild(divider);
       if (!config?.sections) {
         soundsPanelContent.innerHTML = '<div class="sounds-error">Разделы не найдены</div>';
         return;
