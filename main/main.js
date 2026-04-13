@@ -6,7 +6,6 @@ const addonManager = require('./addonManager');
 const settings = require('./settings');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
-const player = require('play-sound')({ players: ['powershell'] });
 
 let mainWindow;
 let webviewWebContents = null;
@@ -31,6 +30,27 @@ const SOUND_MAP = {
   'pop-up-message': 'notification.mp3',
   'room-join': 'room-join.mp3'
 };
+
+/**
+ * Воспроизводит звук в фоне через Windows MediaPlayer (поддерживает MP3, без окон)
+ */
+function playSoundSilent(filePath) {
+  if (!fs.existsSync(filePath)) {
+    logger.warn(`[SOUND] File not found: ${filePath}`);
+    return;
+  }
+
+  // Конвертируем путь в URI-формат и экранируем пробелы
+  const uriPath = 'file:///' + filePath.replace(/\\/g, '/').replace(/ /g, '%20');
+
+  // Используем System.Windows.Media.MediaPlayer (встроен в Windows, поддерживает MP3)
+  // Start-Sleep держит процесс PowerShell живым, пока звук играет
+  const psCommand = `Add-Type -AssemblyName presentationCore; $player = New-Object System.Windows.Media.MediaPlayer; $player.Open('${uriPath}'); $player.Play(); Start-Sleep -Seconds 3; $player.Stop(); $player.Dispose()`;
+
+  exec(`powershell -NoProfile -WindowStyle Hidden -Command "${psCommand}"`, (err) => {
+    if (err) logger.error(`[SOUND] Playback error: ${err.message}`);
+  });
+}
 
 async function ensureGamePath() {
   logger.debug('[GAME_PATH] Checking game path validity...');
@@ -242,10 +262,8 @@ function setupWebviewHandlers(webContents) {
 
       if (!finalPath) return;
 
-      // ✅ Исправлено: используем play-sound вместо сломанного PowerShell SoundPlayer
-      player.play(finalPath, (err) => {
-        if (err) logger.error(`[SOUND] Error: ${err.message}`);
-      });
+      // ✅ Исправлено: фоновое воспроизведение через MediaPlayer
+      playSoundSilent(finalPath);
     }
   });
   webContents.on('did-finish-load', () => {
@@ -595,18 +613,9 @@ ipcMain.handle('play-sound', async (event, soundType) => {
     return false;
   }
 
-  // ✅ Исправлено: play-sound вместо exec/powershell
-  return new Promise((resolve) => {
-    player.play(finalPath, (err) => {
-      if (err) {
-        logger.error(`[SOUND] Windows playback error: ${err.message}`);
-        resolve(false);
-      } else {
-        logger.info(`[SOUND] ✓ Playback completed: ${soundType}`);
-        resolve(true);
-      }
-    });
-  });
+  // ✅ Исправлено: фоновое воспроизведение через MediaPlayer (без окон, поддержка MP3)
+  playSoundSilent(finalPath);
+  return true;
 });
 
 // 🎵 IPC Handler для выбора папки со звуками
