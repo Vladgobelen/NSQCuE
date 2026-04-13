@@ -1,155 +1,133 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-function log(channel, direction, data) {
-  console.log(`[PRELOAD] ${direction} ${channel}:`, data);
-}
-
-function sendToWebClient(channel, data) {
-  log(channel, '→', data);
-  const frame = document.getElementById('ns-webview');
-  if (!frame) {
-    console.warn(`[PRELOAD] WebView not found for channel: ${channel}`);
-    return;
-  }
-  if (channel === 'toggle-mic') {
-    ipcRenderer.invoke('execute-in-webview', {
-      code: 'if (window.voiceClient && typeof window.voiceClient.toggleMicrophone === "function") { window.voiceClient.toggleMicrophone(); }'
-    }).catch(err => console.error('[PRELOAD] execute-in-webview error:', err));
-  } else if (frame.contentWindow) {
-    frame.contentWindow.postMessage({ channel, data, source: 'electron' }, '*');
-  }
-}
-
-function listenFromWebClient(channel, callback) {
-  const handler = (event) => {
-    if (event.data?.channel === channel && event.data?.source === 'webclient') {
-      log(channel, '←', event.data.data);
-      callback(event.data.data);
-    }
-  };
-  window.addEventListener('message', handler);
-  return () => window.removeEventListener('message', handler);
-}
-
 contextBridge.exposeInMainWorld('electronAPI', {
   loadAddons: () => {
-    log('load-addons', '→', null);
     return ipcRenderer.invoke('load-addons');
   },
-  toggleAddon: (n, i) => {
-    log('toggle-addon', '→', { name: n, install: i });
-    return ipcRenderer.invoke('toggle-addon', n, i);
+  toggleAddon: (name, install) => {
+    return ipcRenderer.invoke('toggle-addon', name, install);
   },
   launchGame: () => {
-    log('launch-game', '→', null);
     return ipcRenderer.invoke('launch-game');
   },
   openLogsFolder: () => {
-    log('open-logs-folder', '→', null);
     ipcRenderer.send('open-logs-folder');
   },
   checkGame: () => {
-    log('check-game', '→', null);
     return ipcRenderer.invoke('check-game');
   },
   changeGamePath: () => {
-    log('change-game-path', '→', null);
     return ipcRenderer.invoke('change-game-path');
   },
   goBack: () => {
-    log('go-back', '→', null);
     ipcRenderer.send('go-back');
   },
   getPlatform: () => {
-    log('get-platform', '→', null);
     return ipcRenderer.invoke('get-platform');
   },
-  registerPTTHotkey: (h) => {
-    log('register-ptt-hotkey', '→', h);
-    return ipcRenderer.invoke('register-ptt-hotkey', h);
+  registerPTTHotkey: (hotkey) => {
+    return ipcRenderer.invoke('register-ptt-hotkey', hotkey);
   },
-  sendMicState: (s) => {
-    log('webclient-mic-state', '→', s);
-    ipcRenderer.send('webclient-mic-state', s);
+  sendMicState: (state) => {
+    ipcRenderer.send('webclient-mic-state', state);
   },
   clearWebviewCache: () => {
-    log('clear-session-cache', '→', 'persist:ns');
     return ipcRenderer.invoke('clear-session-cache', 'persist:ns');
   },
-  sendToWebClient: (ch, d) => sendToWebClient(ch, d),
-  onWebClientEvent: (ch, cb) => listenFromWebClient(ch, cb),
+  sendToWebClient: (channel, data) => {
+    const frame = document.getElementById('ns-webview');
+    if (!frame) {
+      console.warn('[PRELOAD] WebView not found');
+      return;
+    }
+    if (channel === 'toggle-mic') {
+      ipcRenderer.invoke('execute-in-webview', {
+        code: 'if (window.voiceClient && typeof window.voiceClient.toggleMicrophone === "function") { window.voiceClient.toggleMicrophone(); }'
+      }).catch(err => console.error('[PRELOAD] execute-in-webview error:', err));
+    } else if (frame.contentWindow) {
+      frame.contentWindow.postMessage({ channel, data, source: 'electron' }, '*');
+    }
+  },
+  onWebClientEvent: (channel, callback) => {
+    const handler = (event) => {
+      if (event.data?.channel === channel && event.data?.source === 'webclient') {
+        callback(event.data.data);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  },
   setPTTHotkey: (codes) => {
-    log('set-ptt-hotkey', '→', codes);
     return ipcRenderer.invoke('set-ptt-hotkey', codes);
   },
   getPTTHotkey: () => {
-    log('get-ptt-hotkey', '→', null);
     return ipcRenderer.invoke('get-ptt-hotkey');
   },
   startKeyCapture: () => {
-    log('start-key-capture', '→', null);
     return ipcRenderer.invoke('start-key-capture');
   },
   stopKeyCapture: () => {
-    log('stop-key-capture', '→', null);
     return ipcRenderer.invoke('stop-key-capture');
   },
-  onBlockLaunchGame: (cb) => {
-    const h = (e, blocked) => { log('block-launch-game', '←', blocked); cb(blocked); };
-    ipcRenderer.on('block-launch-game', h);
-    return () => ipcRenderer.off('block-launch-game', h);
+  onBlockLaunchGame: (callback) => {
+    const handler = (event, blocked) => callback(blocked);
+    ipcRenderer.on('block-launch-game', handler);
+    return () => ipcRenderer.off('block-launch-game', handler);
   },
-  onPTTPressed: (cb) => {
-    const h = () => { log('ptt-pressed', '←', null); cb(); };
-    ipcRenderer.on('ptt-pressed', h);
-    return () => ipcRenderer.off('ptt-pressed', h);
+  onPTTPressed: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('ptt-pressed', handler);
+    return () => ipcRenderer.off('ptt-pressed', handler);
   },
-  onPTTReleased: (cb) => {
-    const h = () => { log('ptt-released', '←', null); cb(); };
-    ipcRenderer.on('ptt-released', h);
-    return () => ipcRenderer.off('ptt-released', h);
+  onPTTReleased: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('ptt-released', handler);
+    return () => ipcRenderer.off('ptt-released', handler);
   },
-  onKeyCaptured: (cb) => {
-    const h = (e, code) => { log('key-captured', '←', code); cb(code); };
-    ipcRenderer.on('key-captured', h);
-    return () => ipcRenderer.off('key-captured', h);
+  onKeyCaptured: (callback) => {
+    const handler = (event, code) => callback(code);
+    ipcRenderer.on('key-captured', handler);
+    return () => ipcRenderer.off('key-captured', handler);
   },
-  onProgress: (cb) => {
-    const h = (e, n, p) => {
-      if (typeof n === 'string' && typeof p === 'number') {
-        log('progress', '←', { name: n, progress: p });
-        cb(n, p);
+  onProgress: (callback) => {
+    const handler = (event, name, progress) => {
+      if (typeof name === 'string' && typeof progress === 'number') {
+        callback(name, progress);
       }
     };
-    ipcRenderer.on('progress', h);
-    return () => ipcRenderer.off('progress', h);
+    ipcRenderer.on('progress', handler);
+    return () => ipcRenderer.off('progress', handler);
   },
-  onOperationFinished: (cb) => {
-    const h = (e, n, s) => { log('operation-finished', '←', { name: n, success: s }); cb(n, s); };
-    ipcRenderer.on('operation-finished', h);
-    return () => ipcRenderer.off('operation-finished', h);
+  onOperationFinished: (callback) => {
+    const handler = (event, name, success) => callback(name, success);
+    ipcRenderer.on('operation-finished', handler);
+    return () => ipcRenderer.off('operation-finished', handler);
   },
-  onError: (cb) => {
-    const h = (e, err) => { log('operation-error', '←', err); cb(err.message || err); };
-    ipcRenderer.on('operation-error', h);
-    return () => ipcRenderer.off('operation-error', h);
+  onError: (callback) => {
+    const handler = (event, err) => callback(err.message || err);
+    ipcRenderer.on('operation-error', handler);
+    return () => ipcRenderer.off('operation-error', handler);
   },
-  onAddonUpdateAvailable: (cb) => {
-    const h = (e, n) => { log('addon-update-available', '←', n); cb(n); };
-    ipcRenderer.on('addon-update-available', h);
-    return () => ipcRenderer.off('addon-update-available', h);
+  onAddonUpdateAvailable: (callback) => {
+    const handler = (event, name) => callback(name);
+    ipcRenderer.on('addon-update-available', handler);
+    return () => ipcRenderer.off('addon-update-available', handler);
   },
-  onPTTActivated: (cb) => {
-    const h = () => {
-      log('ptt-activated', '←', null);
-      sendToWebClient('ptt-activated', { pressed: true });
-      if (typeof cb === 'function') cb();
+  onPTTActivated: (callback) => {
+    const handler = () => {
+      const frame = document.getElementById('ns-webview');
+      if (frame?.contentWindow) {
+        frame.contentWindow.postMessage({ channel: 'ptt-activated', data: { pressed: true }, source: 'electron' }, '*');
+      }
+      if (typeof callback === 'function') callback();
     };
-    ipcRenderer.on('ptt-activated', h);
-    return () => ipcRenderer.off('ptt-activated', h);
+    ipcRenderer.on('ptt-activated', handler);
+    return () => ipcRenderer.off('ptt-activated', handler);
   },
   openExternal: (url) => {
-    log('open-external', '→', url);
     return ipcRenderer.invoke('open-external', url);
+  },
+  copyToClipboard: (text) => {
+    return ipcRenderer.invoke('copy-to-clipboard', text);
   }
 });

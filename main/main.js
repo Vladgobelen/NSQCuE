@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const { spawn } = require('child_process');
@@ -92,14 +92,12 @@ function startRustHook() {
         let code;
         let isDown;
 
-        // 1. Попытка распарсить JSON (основной формат от вашего бинарника)
         try {
           const json = JSON.parse(trimmed);
-          if (typeof json.code !== 'number') continue; // Пропускаем {"type":"init", ...}
+          if (typeof json.code !== 'number') continue;
           code = json.code;
           isDown = json.event === 'down';
         } catch (e) {
-          // 2. Fallback на legacy-формат: down:70 / up:70
           const [typeStr, codeStr] = trimmed.split(':');
           code = parseInt(codeStr, 10);
           isDown = typeStr.toLowerCase() === 'down';
@@ -243,7 +241,6 @@ function createWindow() {
       }
     };
 
-    // Перехват обычной навигации (клики по ссылкам <a href>)
     webContents.on('will-navigate', (e, url) => {
       if (isExternalUrl(url)) {
         e.preventDefault();
@@ -251,8 +248,6 @@ function createWindow() {
       }
     });
 
-    // Перехват открытия новых окон (target="_blank", window.open)
-    // Это на 100% блокирует создание второго окна Electron
     webContents.setWindowOpenHandler(({ url }) => {
       if (isExternalUrl(url)) {
         shell.openExternal(url);
@@ -475,6 +470,21 @@ ipcMain.handle('open-external', async (event, url) => {
     return true;
   } catch (err) {
     logger.error(`[IPC] open-external failed: ${err.message}`);
+    return false;
+  }
+});
+
+// 🆕 IPC Handler для копирования текста в буфер обмена
+ipcMain.handle('copy-to-clipboard', (event, text) => {
+  logger.debug(`[IPC] copy-to-clipboard: ${text?.substring(0, 50)}...`);
+  if (typeof text !== 'string') return false;
+  
+  try {
+    clipboard.writeText(text);
+    logger.info('[IPC] copy-to-clipboard → SUCCESS');
+    return true;
+  } catch (error) {
+    logger.error('[IPC] copy-to-clipboard error:', error.message);
     return false;
   }
 });
