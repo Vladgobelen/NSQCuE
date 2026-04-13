@@ -27,13 +27,12 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ]
     },
     "nsis": {
+      "artifactName": "NSQCuE-29.exe",
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
@@ -47,9 +46,7 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
       "category": "Utility",
