@@ -12,6 +12,7 @@
   "build": {
     "appId": "com.nsqcue.updater",
     "productName": "Ночная стража: установщик аддонов",
+    "executableName": "NSQCuE-29",
     "icon": "assets/icon.png",
     "extraResources": [
       {
@@ -32,7 +33,6 @@
       ]
     },
     "nsis": {
-      "artifactName": "NSQCuE-29.exe",
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
