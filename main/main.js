@@ -4,6 +4,7 @@ const fs = require('fs-extra');
 const { spawn, exec } = require('child_process');
 const addonManager = require('./addonManager');
 const settings = require('./settings');
+const soundsManager = require('./soundsManager');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
 
@@ -15,8 +16,8 @@ let currentPTTHotkeyCodes = null;
 let captureMode = false;
 const capturedCodes = new Set();
 let pttActive = false;
-
 const SOUNDS_DIR = path.join(app.getPath('userData'), 'sounds');
+
 fs.ensureDirSync(SOUNDS_DIR);
 
 const SOUND_MAP = {
@@ -30,30 +31,22 @@ const SOUND_MAP = {
 };
 
 function playSoundSilent(filePath) {
-  if (!fs.existsSync(filePath)) {
-    return;
-  }
-
+  if (!fs.existsSync(filePath)) return;
   const uriPath = 'file:///' + filePath.replace(/\\/g, '/').replace(/ /g, '%20');
   const psCommand = `Add-Type -AssemblyName presentationCore; $player = New-Object System.Windows.Media.MediaPlayer; $player.Open('${uriPath}'); $player.Play(); Start-Sleep -Seconds 3; $player.Stop(); $player.Dispose()`;
-
   exec(`powershell -NoProfile -WindowStyle Hidden -Command "${psCommand}"`, (err) => {
     if (err) logger.error(`[SOUND] Playback error: ${err.message}`);
   });
 }
 
 async function ensureGamePath() {
-  if (settings.isGamePathValid()) {
-    return true;
-  }
+  if (settings.isGamePathValid()) return true;
   const result = await dialog.showOpenDialog({
     title: 'Выберите файл Wow.exe',
     properties: ['openFile'],
     filters: [{ name: 'Executable files', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }]
   });
-  if (result.canceled || result.filePaths.length === 0) {
-    return false;
-  }
+  if (result.canceled || result.filePaths.length === 0) return false;
   const selectedPath = path.dirname(result.filePaths[0]);
   const wowPath = path.join(selectedPath, 'Wow.exe');
   if (!fs.existsSync(wowPath)) {
@@ -66,65 +59,50 @@ async function ensureGamePath() {
 }
 
 function startRustHook() {
-  if (hookProcess) {
-    return;
-  }
+  if (hookProcess) return;
   const exeName = process.platform === 'win32' ? 'global-mouse-hook.exe' : 'global-mouse-hook';
   const exePath = app.isPackaged
     ? path.join(process.resourcesPath, exeName)
     : path.join(__dirname, '..', exeName);
-  
   if (!fs.existsSync(exePath)) {
     logger.error(`[HOOK] Executable not found: ${exePath}`);
     dialog.showErrorBox('Ошибка', `Не найден файл хука: ${exeName}. Проверьте наличие в корне проекта или resources.`);
     return;
   }
-  
   try {
     hookProcess = spawn(exePath, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
       env: { ...process.env }
     });
-
     hookProcess.stdout.on('data', (data) => {
       const raw = data.toString();
       if (!raw.trim()) return;
-
       const lines = raw.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-
         let code;
         let isDown;
-
         try {
           const json = JSON.parse(trimmed);
           if (typeof json.code !== 'number') continue;
           code = json.code;
           isDown = json.event === 'down';
-        } catch (e) {
+        } catch {
           const [typeStr, codeStr] = trimmed.split(':');
           code = parseInt(codeStr, 10);
           isDown = typeStr.toLowerCase() === 'down';
         }
-
-        if (isNaN(code)) {
-          continue;
-        }
-
+        if (isNaN(code)) continue;
         pressedKeys.set(code, isDown);
-
         if (captureMode && isDown) {
           capturedCodes.add(code);
           mainWindow?.webContents?.send('key-captured', code);
         }
-
         if (currentPTTHotkeyCodes && currentPTTHotkeyCodes.length > 0) {
           const allPressed = currentPTTHotkeyCodes.every(c => pressedKeys.get(c) === true);
           const allReleased = currentPTTHotkeyCodes.every(c => pressedKeys.get(c) !== true);
-
           if (allPressed && !pttActive) {
             pttActive = true;
             mainWindow?.webContents?.send('ptt-pressed');
@@ -135,16 +113,11 @@ function startRustHook() {
         }
       }
     });
-
     hookProcess.stderr.on('data', (data) => {
       const err = data.toString().trim();
       if (err) logger.error(`[HOOK_STDERR] ${err}`);
     });
-
-    hookProcess.on('close', (code, signal) => {
-      hookProcess = null;
-    });
-
+    hookProcess.on('close', () => { hookProcess = null; });
     hookProcess.on('error', (err) => {
       logger.error(`[HOOK] Process error: ${err.message}`);
       hookProcess = null;
@@ -157,11 +130,7 @@ function startRustHook() {
 
 function stopRustHook() {
   if (hookProcess) {
-    try {
-      hookProcess.kill();
-    } catch (err) {
-      logger.error(`[HOOK] Kill failed: ${err.message}`);
-    }
+    try { hookProcess.kill(); } catch (err) { logger.error(`[HOOK] Kill failed: ${err.message}`); }
     hookProcess = null;
   }
 }
@@ -183,20 +152,13 @@ function setupWebviewHandlers(webContents) {
     try {
       const urlObj = new URL(url);
       return urlObj.origin !== 'https://ns.fiber-gate.ru';
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   };
   webContents.on('will-navigate', (e, url) => {
-    if (isExternalUrl(url)) {
-      e.preventDefault();
-      shell.openExternal(url);
-    }
+    if (isExternalUrl(url)) { e.preventDefault(); shell.openExternal(url); }
   });
   webContents.setWindowOpenHandler(({ url }) => {
-    if (isExternalUrl(url)) {
-      shell.openExternal(url);
-    }
+    if (isExternalUrl(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   webContents.on('did-fail-load', (e, code, desc) => {
@@ -206,57 +168,37 @@ function setupWebviewHandlers(webContents) {
     if (channel === 'play-sound') {
       const soundType = args[0];
       const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
-      
       const soundPath = path.join(SOUNDS_DIR, fileName);
       let finalPath = null;
-      
       if (fs.existsSync(soundPath)) {
         finalPath = soundPath;
       } else {
-        const resourcePath = app.isPackaged 
+        const resourcePath = app.isPackaged
           ? path.join(process.resourcesPath, 'sounds', fileName)
           : path.join(__dirname, '..', 'sounds', fileName);
-        
-        if (fs.existsSync(resourcePath)) {
-          finalPath = resourcePath;
-        }
+        if (fs.existsSync(resourcePath)) finalPath = resourcePath;
       }
-      
       if (!finalPath) return;
       playSoundSilent(finalPath);
     }
   });
   webContents.on('did-finish-load', () => {
     const injectCode = `
-      (function() {
-        let ipcRenderer = null;
-        try {
-          if (typeof require !== 'undefined') {
-            ipcRenderer = require('electron').ipcRenderer;
-          }
-        } catch (e) {}
-        if (!ipcRenderer && window.ipcRenderer) {
-          ipcRenderer = window.ipcRenderer;
-        }
-        window.ELECTRON_CUSTOM_SOUNDS_ENABLED = true;
-        window.electronAPI = {
-          playSound: (soundType) => {
-            if (ipcRenderer) {
-              try {
-                ipcRenderer.sendToHost('play-sound', soundType);
-                return Promise.resolve(true);
-              } catch (e) {}
-            }
-            window.postMessage({
-              type: 'ELECTRON_PLAY_SOUND',
-              soundType: soundType,
-              source: 'webview'
-            }, '*');
-            return Promise.resolve(true);
-          }
-        };
-      })();
-    `;
+(function() {
+  let ipcRenderer = null;
+  try { if (typeof require !== 'undefined') { ipcRenderer = require('electron').ipcRenderer; } } catch (e) {}
+  if (!ipcRenderer && window.ipcRenderer) ipcRenderer = window.ipcRenderer;
+  window.ELECTRON_CUSTOM_SOUNDS_ENABLED = true;
+  window.electronAPI = {
+    playSound: (soundType) => {
+      if (ipcRenderer) {
+        try { ipcRenderer.sendToHost('play-sound', soundType); return Promise.resolve(true); } catch (e) {}
+      }
+      window.postMessage({ type: 'ELECTRON_PLAY_SOUND', soundType: soundType, source: 'webview' }, '*');
+      return Promise.resolve(true);
+    }
+  };
+})();`;
     webContents.executeJavaScript(injectCode).catch(() => {});
   });
 }
@@ -264,14 +206,9 @@ function setupWebviewHandlers(webContents) {
 function createWindow() {
   const nsSession = session.fromPartition('persist:ns');
   nsSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowedPermissions = [
-      'media', 'microphone', 'camera',
-      'clipboard-read', 'clipboard-sanitized-write', 'clipboard'
-    ];
-    const granted = allowedPermissions.includes(permission);
-    callback(granted);
+    const allowedPermissions = ['media', 'microphone', 'camera', 'clipboard-read', 'clipboard-sanitized-write', 'clipboard'];
+    callback(allowedPermissions.includes(permission));
   });
-
   const applyCSP = (details, callback, isDefault) => {
     callback({
       responseHeaders: {
@@ -287,7 +224,6 @@ function createWindow() {
   };
   nsSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, false));
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, true));
-
   mainWindow = new BrowserWindow({
     width: 550, height: 650, minWidth: 300, minHeight: 500,
     title: 'Ночная стража: установщик аддонов',
@@ -298,18 +234,9 @@ function createWindow() {
     icon: path.join(__dirname, '../assets/icon.png')
   });
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-  
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
-  mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
-    setupWebviewHandlers(webContents);
-  });
-
-  mainWindow.webContents.on('did-create-webview', (event, webContents) => {
-    setupWebviewHandlers(webContents);
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.webContents.on('did-attach-webview', (event, webContents) => setupWebviewHandlers(webContents));
+  mainWindow.webContents.on('did-create-webview', (event, webContents) => setupWebviewHandlers(webContents));
 }
 
 app.whenReady().then(async () => {
@@ -324,46 +251,20 @@ app.whenReady().then(async () => {
   addonManager.setGamePath(settings.getGamePath());
   createWindow();
   startRustHook();
-
   const savedHotkey = settings.getPTTHotkey();
-  if (savedHotkey && Array.isArray(savedHotkey)) {
-    currentPTTHotkeyCodes = savedHotkey;
-  }
-
-  try {
-    await addonManager.loadAddons();
-  } catch (err) {
-    logger.error('[APP] Failed to load addons:', err.message);
-  }
-
-  try {
-    await addonManager.startupUpdateCheck(mainWindow);
-  } catch (err) {
-    logger.error('[STARTUP] Update check error:', err.message);
-  }
+  if (savedHotkey && Array.isArray(savedHotkey)) currentPTTHotkeyCodes = savedHotkey;
+  try { await addonManager.loadAddons(); } catch (err) { logger.error('[APP] Failed to load addons:', err.message); }
+  try { await addonManager.startupUpdateCheck(mainWindow); } catch (err) { logger.error('[STARTUP] Update check error:', err.message); }
   addonManager.startBackgroundChecker(mainWindow);
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  soundsManager.autoDownloadBaseSounds().catch(err => logger.error('[SOUNDS] Auto-download failed:', err.message));
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('will-quit', () => {
-  stopRustHook();
-  globalShortcut.unregisterAll();
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('will-quit', () => { stopRustHook(); globalShortcut.unregisterAll(); });
 
 ipcMain.handle('load-addons', async () => {
-  try {
-    return await addonManager.loadAddons();
-  } catch (error) {
-    logger.error('[IPC] load-addons error:', error.message);
-    return {};
-  }
+  try { return await addonManager.loadAddons(); } catch (error) { logger.error('[IPC] load-addons error:', error.message); return {}; }
 });
 
 ipcMain.handle('toggle-addon', async (event, name, install) => {
@@ -379,12 +280,7 @@ ipcMain.handle('toggle-addon', async (event, name, install) => {
 });
 
 ipcMain.handle('launch-game', async () => {
-  try {
-    return await addonManager.launchGame();
-  } catch (error) {
-    logger.error('[IPC] launch-game error:', error.message);
-    return false;
-  }
+  try { return await addonManager.launchGame(); } catch (error) { logger.error('[IPC] launch-game error:', error.message); return false; }
 });
 
 ipcMain.handle('check-game', async () => {
@@ -392,10 +288,7 @@ ipcMain.handle('check-game', async () => {
     const gamePath = settings.getGamePath();
     if (!gamePath) return false;
     return fs.existsSync(path.join(gamePath, 'Wow.exe'));
-  } catch (error) {
-    logger.error('[IPC] check-game error:', error.message);
-    return false;
-  }
+  } catch (error) { logger.error('[IPC] check-game error:', error.message); return false; }
 });
 
 ipcMain.handle('change-game-path', async () => {
@@ -403,9 +296,7 @@ ipcMain.handle('change-game-path', async () => {
     title: 'Выберите файл Wow.exe', properties: ['openFile'],
     filters: [{ name: 'Executable files', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }]
   });
-  if (result.canceled || result.filePaths.length === 0) {
-    return false;
-  }
+  if (result.canceled || result.filePaths.length === 0) return false;
   const selectedPath = path.dirname(result.filePaths[0]);
   if (!fs.existsSync(path.join(selectedPath, 'Wow.exe'))) {
     dialog.showErrorBox('Ошибка', 'Выбранный путь не содержит файл Wow.exe');
@@ -416,29 +307,11 @@ ipcMain.handle('change-game-path', async () => {
   return true;
 });
 
-ipcMain.on('open-logs-folder', () => {
-  shell.openPath(path.join(app.getPath('userData'), 'logs'));
-});
+ipcMain.on('open-logs-folder', () => { shell.openPath(path.join(app.getPath('userData'), 'logs')); });
+ipcMain.on('go-back', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(`file://${__dirname}/../renderer/index.html`); });
 
-ipcMain.on('go-back', () => {
-  if (mainWindow && !mainWindow.isDestroyed())
-    mainWindow.loadURL(`file://${__dirname}/../renderer/index.html`);
-});
-
-ipcMain.handle('start-key-capture', async () => {
-  captureMode = true;
-  capturedCodes.clear();
-  pressedKeys.clear();
-  return { success: true };
-});
-
-ipcMain.handle('stop-key-capture', async () => {
-  captureMode = false;
-  const codes = Array.from(capturedCodes);
-  capturedCodes.clear();
-  return { success: true, codes };
-});
-
+ipcMain.handle('start-key-capture', async () => { captureMode = true; capturedCodes.clear(); pressedKeys.clear(); return { success: true }; });
+ipcMain.handle('stop-key-capture', async () => { captureMode = false; const codes = Array.from(capturedCodes); capturedCodes.clear(); return { success: true, codes }; });
 ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
   if (!Array.isArray(codes)) return { success: false, message: 'Invalid hotkey format' };
   currentPTTHotkeyCodes = codes;
@@ -446,18 +319,9 @@ ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
   pttActive = false;
   return { success: true };
 });
-
-ipcMain.handle('get-ptt-hotkey', async () => {
-  return currentPTTHotkeyCodes;
-});
-
-ipcMain.handle('get-platform', async () => {
-  return process.platform;
-});
-
-ipcMain.handle('register-ptt-hotkey', async () => {
-  return { success: true, message: 'Use set-ptt-hotkey with array of codes instead' };
-});
+ipcMain.handle('get-ptt-hotkey', async () => currentPTTHotkeyCodes);
+ipcMain.handle('get-platform', async () => process.platform);
+ipcMain.handle('register-ptt-hotkey', async () => ({ success: true, message: 'Use set-ptt-hotkey with array of codes instead' }));
 
 ipcMain.on('webclient-mic-state', (event, state) => {});
 
@@ -473,70 +337,39 @@ ipcMain.handle('execute-in-webview', async (event, { code }) => {
     logger.error('[IPC] execute-in-webview: WebView not available');
     throw new Error('WebView webContents not available');
   }
-  try {
-    return await webviewWebContents.executeJavaScript(code);
-  } catch (error) {
-    logger.error('[IPC] execute-in-webview error:', error.message);
-    throw error;
-  }
+  try { return await webviewWebContents.executeJavaScript(code); } catch (error) { logger.error('[IPC] execute-in-webview error:', error.message); throw error; }
 });
 
 ipcMain.handle('open-external', async (event, url) => {
   if (!url || typeof url !== 'string') return false;
-  try {
-    await shell.openExternal(url);
-    return true;
-  } catch (err) {
-    logger.error(`[IPC] open-external failed: ${err.message}`);
-    return false;
-  }
+  try { await shell.openExternal(url); return true; } catch (err) { logger.error(`[IPC] open-external failed: ${err.message}`); return false; }
 });
 
 ipcMain.handle('copy-to-clipboard', (event, text) => {
   if (typeof text !== 'string') return false;
-  try {
-    clipboard.writeText(text);
-    return true;
-  } catch (error) {
-    logger.error('[IPC] copy-to-clipboard error:', error.message);
-    return false;
-  }
+  try { clipboard.writeText(text); return true; } catch (error) { logger.error('[IPC] copy-to-clipboard error:', error.message); return false; }
 });
 
 ipcMain.handle('play-sound', async (event, soundType) => {
   const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
-  
   const soundPath = path.join(SOUNDS_DIR, fileName);
   let finalPath = null;
-  
   if (fs.existsSync(soundPath)) {
     finalPath = soundPath;
   } else {
     const resourcePath = app.isPackaged
       ? path.join(process.resourcesPath, 'sounds', fileName)
       : path.join(__dirname, '..', 'sounds', fileName);
-    
-    if (fs.existsSync(resourcePath)) {
-      finalPath = resourcePath;
-    }
+    if (fs.existsSync(resourcePath)) finalPath = resourcePath;
   }
-  
-  if (!finalPath) {
-    return false;
-  }
-
+  if (!finalPath) return false;
   playSoundSilent(finalPath);
   return true;
 });
 
 ipcMain.handle('select-sounds-folder', async () => {
-  const result = await dialog.showOpenDialog({
-    title: 'Выберите папку со звуками',
-    properties: ['openDirectory']
-  });
-  if (result.canceled || !result.filePaths.length) {
-    return null;
-  }
+  const result = await dialog.showOpenDialog({ title: 'Выберите папку со звуками', properties: ['openDirectory'] });
+  if (result.canceled || !result.filePaths.length) return null;
   return result.filePaths[0];
 });
 
@@ -551,16 +384,8 @@ ipcMain.handle('import-sounds', async (event, sourceFolder) => {
     const sourcePath = path.join(sourceFolder, fileName);
     const destPath = path.join(SOUNDS_DIR, fileName);
     if (fs.existsSync(sourcePath)) {
-      try {
-        await fs.copy(sourcePath, destPath, { overwrite: true });
-        imported.push(soundType);
-      } catch (err) {
-        missing.push({ soundType, error: err.message });
-        logger.error(`[SOUND] Failed to import ${fileName}:`, err.message);
-      }
-    } else {
-      missing.push({ soundType, error: 'Файл не найден' });
-    }
+      try { await fs.copy(sourcePath, destPath, { overwrite: true }); imported.push(soundType); } catch (err) { missing.push({ soundType, error: err.message }); logger.error(`[SOUND] Failed to import ${fileName}:`, err.message); }
+    } else { missing.push({ soundType, error: 'Файл не найден' }); }
   }
   return { success: true, imported, missing };
 });
@@ -569,15 +394,32 @@ ipcMain.handle('get-sounds-status', async () => {
   const status = {};
   for (const [soundType, fileName] of Object.entries(SOUND_MAP)) {
     const soundPath = path.join(SOUNDS_DIR, fileName);
-    status[soundType] = {
-      fileName,
-      exists: fs.existsSync(soundPath),
-      path: soundPath
-    };
+    status[soundType] = { fileName, exists: fs.existsSync(soundPath), path: soundPath };
   }
   return status;
 });
 
-ipcMain.on('open-sounds-folder', () => {
-  shell.openPath(SOUNDS_DIR);
+ipcMain.on('open-sounds-folder', () => { shell.openPath(SOUNDS_DIR); });
+
+ipcMain.handle('fetch-sounds-config', async () => {
+  try { return await soundsManager.fetchSoundsConfig(); } catch (error) { logger.error('[SOUNDS] Fetch config failed:', error.message); throw error; }
+});
+
+ipcMain.handle('download-sounds-section', async (event, sectionName) => {
+  try {
+    const config = await soundsManager.fetchSoundsConfig();
+    await soundsManager.downloadSection(sectionName, config, (progress) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('sounds-download-progress', progress);
+      }
+    });
+    return { success: true };
+  } catch (error) {
+    logger.error('[SOUNDS] Download section failed:', error.message);
+    throw error;
+  }
+});
+
+ipcMain.handle('is-sounds-dir-empty', async () => {
+  return await soundsManager.isSoundsDirEmpty();
 });

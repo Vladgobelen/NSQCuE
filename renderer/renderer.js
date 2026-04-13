@@ -12,10 +12,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const panelMicBtn = document.getElementById('panel-mic-btn');
   const panelRefreshBtn = document.getElementById('panel-refresh-btn');
   const panelSettingsBtn = document.getElementById('panel-settings-btn');
+  const panelSoundsBtn = document.getElementById('panel-sounds-btn');
   const pttSettingsPanel = document.getElementById('ptt-settings-panel');
   const pttCaptureArea = document.getElementById('ptt-capture-area');
   const pttSaveBtn = document.getElementById('ptt-save-btn');
   const pttCancelBtn = document.getElementById('ptt-cancel-btn');
+  const soundsSectionsPanel = document.getElementById('sounds-sections-panel');
+  const soundsPanelContent = document.getElementById('sounds-panel-content');
+  const soundsCloseBtn = document.getElementById('sounds-close-btn');
   const topBar = document.getElementById('top-bar');
   const gamePanel = document.getElementById('game-panel');
   const divider = document.getElementById('divider');
@@ -26,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let isPanelMicActive = false;
   let capturedHotkey = new Set();
   let isSettingsOpen = false;
+  let isSoundsPanelOpen = false;
   let isMouseInCaptureZone = false;
   let isGameReady = false;
   let isLaunchBlocked = false;
@@ -80,60 +85,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = document.createElement('div');
     card.className = 'addon-card';
     card.dataset.name = name;
-
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'addon-content-wrapper';
-
     const overlay = document.createElement('div');
     overlay.className = 'progress-overlay hidden';
     card.overlay = overlay;
-
     const topRow = document.createElement('div');
     topRow.className = 'addon-top';
-
     const nameEl = document.createElement('span');
     nameEl.className = 'addon-name';
     nameEl.textContent = name;
-
     const updateLabel = document.createElement('span');
     updateLabel.className = 'update-label';
     updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
     updateLabel.textContent = 'Доступно обновление';
-
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.id = `checkbox-${name}`;
     checkbox.checked = addon.installed;
     checkbox.disabled = addon.being_processed || addon.updating;
-
     const label = document.createElement('label');
     label.htmlFor = `checkbox-${name}`;
     label.className = 'custom-checkbox';
-
     topRow.append(nameEl, updateLabel, checkbox, label);
-
     const description = document.createElement('div');
     description.className = 'addon-description';
     description.textContent = addon.description;
-
     card.checkbox = checkbox;
     card.updateLabel = updateLabel;
-
     card.appendChild(overlay);
     contentWrapper.append(topRow, description);
     card.appendChild(contentWrapper);
-
     if (addon.installed) {
       card.onmouseenter = () => card.classList.add('deleting-warning');
       card.onmouseleave = () => card.classList.remove('deleting-warning');
     }
-
     checkbox.addEventListener('change', () => {
       const willInstall = checkbox.checked;
       const originalState = !willInstall;
       checkbox.disabled = true;
       card.classList.remove('deleting-warning');
-
       window.electronAPI.toggleAddon(name, willInstall)
         .then(success => {
           if (!success) {
@@ -145,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
           checkbox.disabled = false;
         });
     });
-
     return card;
   }
 
@@ -172,7 +162,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(addons => {
         const addon = addons[name];
         if (!addon) return;
-
         const cards = document.querySelectorAll('.addon-card');
         for (const card of cards) {
           if (card.dataset.name === name) {
@@ -250,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
       addonsList.style.display = 'none';
       backPanel.style.display = 'flex';
       voiceBtn.style.display = 'none';
-
       try {
         const platform = await window.electronAPI.getPlatform();
         window.electronAPI.sendToWebClient('electron-ready', {
@@ -275,6 +263,44 @@ document.addEventListener('DOMContentLoaded', () => {
       backPanel.style.display = 'none';
       backPanel.classList.remove('visible');
       voiceBtn.style.display = 'block';
+    }
+  }
+
+  async function openSoundsPanel() {
+    if (isSoundsPanelOpen) {
+      soundsSectionsPanel.classList.remove('visible');
+      isSoundsPanelOpen = false;
+      return;
+    }
+    soundsSectionsPanel.classList.add('visible');
+    isSoundsPanelOpen = true;
+    soundsPanelContent.innerHTML = '<div class="sounds-loading">Загрузка конфигурации...</div>';
+    try {
+      const config = await window.electronAPI.fetchSoundsConfig();
+      soundsPanelContent.innerHTML = '';
+      if (!config?.sections) {
+        soundsPanelContent.innerHTML = '<div class="sounds-error">Разделы не найдены</div>';
+        return;
+      }
+      for (const sectionName of Object.keys(config.sections)) {
+        const btn = document.createElement('button');
+        btn.className = 'sounds-section-btn';
+        btn.textContent = sectionName;
+        btn.addEventListener('click', () => downloadSectionSounds(sectionName));
+        soundsPanelContent.appendChild(btn);
+      }
+    } catch (err) {
+      soundsPanelContent.innerHTML = `<div class="sounds-error">Ошибка: ${err.message}</div>`;
+    }
+  }
+
+  async function downloadSectionSounds(sectionName) {
+    soundsPanelContent.innerHTML = `<div class="sounds-loading">Загрузка раздела "${sectionName}"...</div>`;
+    try {
+      await window.electronAPI.downloadSoundsSection(sectionName);
+      soundsPanelContent.innerHTML = `<div class="sounds-success">✅ Раздел "${sectionName}" загружен</div>`;
+    } catch (err) {
+      soundsPanelContent.innerHTML = `<div class="sounds-error">❌ Ошибка: ${err.message}</div>`;
     }
   }
 
@@ -416,10 +442,29 @@ document.addEventListener('DOMContentLoaded', () => {
       backPanel.classList.add('visible');
     });
     backPanel.addEventListener('mouseleave', () => {
-      if (isSettingsOpen) return;
+      if (isSettingsOpen || isSoundsPanelOpen) return;
       hidePanelTimeout = setTimeout(() => {
         backPanel.classList.remove('visible');
       }, 500);
+    });
+  }
+
+  if (panelSoundsBtn) {
+    panelSoundsBtn.addEventListener('click', openSoundsPanel);
+  }
+
+  if (soundsCloseBtn) {
+    soundsCloseBtn.addEventListener('click', () => {
+      soundsSectionsPanel.classList.remove('visible');
+      isSoundsPanelOpen = false;
+    });
+  }
+
+  if (window.electronAPI?.onSoundsDownloadProgress) {
+    window.electronAPI.onSoundsDownloadProgress((progress) => {
+      if (soundsPanelContent && soundsPanelContent.querySelector('.sounds-loading')) {
+        soundsPanelContent.innerHTML = `<div class="sounds-loading">Загрузка: ${progress.current}/${progress.total} (${progress.sound})</div>`;
+      }
     });
   }
 
@@ -496,7 +541,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       window.electronAPI?.sendMicState(state);
     });
-
     window.electronAPI.onWebClientEvent('request-ptt-register', config => {
       if (window.electronAPI?.registerPTTHotkey && config?.hotkey) {
         window.electronAPI.registerPTTHotkey(config.hotkey)
@@ -515,65 +559,56 @@ document.addEventListener('DOMContentLoaded', () => {
         language: 'ru'
       });
     });
-
     nsWebview.addEventListener('did-fail-load', event => {
       showError('Не удалось загрузить веб-клиент: ' + (event.errorDescription || 'Unknown error'));
     });
-
-    // Обработка звуков из webview
-nsWebview.addEventListener('ipc-message', (event) => {
-  if (event.channel === 'play-sound') {
-    const soundType = event.args[0];
-    window.electronAPI.playSound(soundType).catch(() => {});
-  }
-});
-    
-nsWebview.addEventListener('dom-ready', () => {
-  nsWebview.executeJavaScript(`
-    (function() {
-      window.addEventListener('message', (event) => {
-        if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
-          if (window.ipcRenderer) {
-            window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-          }
+    nsWebview.addEventListener('ipc-message', (event) => {
+      if (event.channel === 'play-sound') {
+        const soundType = event.args[0];
+        window.electronAPI.playSound(soundType).catch(() => {});
+      }
+    });
+    nsWebview.addEventListener('dom-ready', () => {
+      nsWebview.executeJavaScript(`
+        (function() {
+          window.addEventListener('message', (event) => {
+            if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
+              if (window.ipcRenderer) {
+                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
+              }
+            }
+            if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
+              if (window.ipcRenderer) {
+                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
+              }
+            }
+          });
+        })();
+      `).catch(() => {});
+    });
+    nsWebview.addEventListener('console-message', (event) => {
+      const message = event.message;
+      let soundType = null;
+      if (message.includes('[WebView] ✓ Sent via postMessage:')) {
+        const match = message.match(/postMessage:\s*(\w+-\w+)/);
+        if (match) {
+          soundType = match[1];
         }
-        if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
-          if (window.ipcRenderer) {
-            window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-          }
+      } else if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
+        const match = message.match(/playSound called with:\s*(\w+-\w+)/);
+        if (match) {
+          soundType = match[1];
         }
-      });
-    })();
-  `).catch(() => {});
-});
-    
-nsWebview.addEventListener('console-message', (event) => {
-  const message = event.message;
-  let soundType = null;
-  
-  if (message.includes('[WebView] ✓ Sent via postMessage:')) {
-    const match = message.match(/postMessage:\s*(\w+-\w+)/);
-    if (match) {
-      soundType = match[1];
-    }
-  } else if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
-    const match = message.match(/playSound called with:\s*(\w+-\w+)/);
-    if (match) {
-      soundType = match[1];
-    }
-  }
-  
-  if (soundType) {
-    window.electronAPI.playSound(soundType).catch(() => {});
-  }
-});
+      }
+      if (soundType) {
+        window.electronAPI.playSound(soundType).catch(() => {});
+      }
+    });
   }
 
-  // Обработка копирования в буфер обмена
   window.addEventListener('message', (event) => {
     if (event.data?.type === 'COPY_TO_CLIPBOARD' && event.data?.text) {
       window.electronAPI?.copyToClipboard(event.data.text).catch(() => {});
     }
   });
-  
 });

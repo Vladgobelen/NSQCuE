@@ -172,7 +172,6 @@ class AddonManager {
         const targetPath = cfg.target_path || '';
         const isZip = cfg.is_zip !== undefined ? cfg.is_zip : !link.toLowerCase().endsWith('.mpq');
         const installed = this._checkInstalled(name, targetPath, gamePath);
-        logger.info(`[LOAD] Addon ${name}: installed=${installed}`);
 
         this.addons[name] = {
           name,
@@ -209,7 +208,6 @@ class AddonManager {
     if (!fs.existsSync(fullTarget)) return false;
     try {
       const items = fs.readdirSync(fullTarget, { withFileTypes: true });
-      // Совпадение по подстроке оставлено намеренно для захвата всех связанных файлов
       return items.some(item => item.name.toLowerCase().includes(name.toLowerCase()));
     } catch {
       return false;
@@ -217,7 +215,6 @@ class AddonManager {
   }
 
   async startupUpdateCheck(mainWindow) {
-    logger.info('[STARTUP_CHECK] Blocking launch, checking updates...');
     this._emitBlockLaunch(mainWindow, true);
 
     const gamePath = this.getGamePath();
@@ -239,7 +236,6 @@ class AddonManager {
       return false;
     }
 
-    logger.info(`[STARTUP_CHECK] Local version: '${localVersion}'`);
     const githubUrl = 'https://github.com/Vladgobelen/NSQC/blob/main/vers';
 
     try {
@@ -252,12 +248,10 @@ class AddonManager {
       const found = html.includes(localVersion) || html.includes(this._htmlEscape(localVersion));
 
       if (found) {
-        logger.info(`[STARTUP_CHECK] ✓ Version '${localVersion}' found - up to date`);
         this._emitBlockLaunch(mainWindow, false);
         return false;
       }
 
-      logger.warn(`[STARTUP_CHECK] ✗ Version '${localVersion}' NOT found - UPDATE REQUIRED!`);
       await this._forceReinstall(mainWindow);
     } catch (err) {
       logger.error('[STARTUP_CHECK] Fetch error:', err.message || err);
@@ -293,7 +287,6 @@ class AddonManager {
     } catch { return; }
 
     if (!localVersion) return;
-    logger.info(`[UPDATE_CHECK] Local version: '${localVersion}'`);
 
     const githubUrl = 'https://github.com/Vladgobelen/NSQC/blob/main/vers';
     try {
@@ -306,11 +299,9 @@ class AddonManager {
       const found = html.includes(localVersion) || html.includes(this._htmlEscape(localVersion));
 
       if (found) {
-        logger.info(`[UPDATE_CHECK] ✓ Up to date`);
         return;
       }
 
-      logger.warn(`[UPDATE_CHECK] ✗ Update required!`);
       await this._forceReinstall(mainWindow);
     } catch (e) {
       logger.error('[UPDATE_CHECK] Error:', e.message || e);
@@ -318,8 +309,6 @@ class AddonManager {
   }
 
   async _forceReinstall(mainWindow) {
-    logger.info('[REINSTALL] Starting forced reinstall: NSQC & NSQC3');
-    // 🔒 Блокируем запуск игры на время обновления
     this._emitBlockLaunch(mainWindow, true);
 
     const config = await this._fetchConfig();
@@ -347,12 +336,10 @@ class AddonManager {
       this._emitProgress(mainWindow, addonName, 0.1);
 
       try {
-        logger.info(`[REINSTALL] Uninstalling ${addonName}...`);
         await this._uninstallAddon(addon, mainWindow);
         this._emitProgress(mainWindow, addonName, 0.4);
         await new Promise(r => setTimeout(r, 200));
 
-        logger.info(`[REINSTALL] Installing ${addonName}...`);
         await this._installAddon(addon, mainWindow);
         this._emitProgress(mainWindow, addonName, 1.0);
 
@@ -365,7 +352,6 @@ class AddonManager {
           });
         }
 
-        // ✅ Отправляем событие в формате, который ожидает preload.js: (event, name, success)
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('operation-finished', addonName, true);
         }
@@ -380,9 +366,7 @@ class AddonManager {
     }
 
     await this.loadAddons();
-    logger.info('[REINSTALL] Reinstall completed');
 
-    // ⏱️ Разблокируем кнопку запуска через 3 секунды после полного завершения
     setTimeout(() => {
       this._emitBlockLaunch(mainWindow, false);
     }, 3000);
@@ -412,7 +396,6 @@ class AddonManager {
         await this._uninstallAddon(addon, mainWindow);
       }
       if (install && name === 'NSQC') {
-        logger.info('[TOGGLE] NSQC installed, triggering NSQC3 auto-update');
         await this._autoUpdateNSQC3(mainWindow);
       }
     } catch (error) {
@@ -434,21 +417,17 @@ class AddonManager {
   }
 
   async _autoUpdateNSQC3(mainWindow) {
-    logger.info('[AUTO_NSQC3] Checking NSQC3...');
     const nsqc3 = this.addons['NSQC3'];
     if (!nsqc3) return;
 
     const gamePath = this.getGamePath();
     if (this._checkInstalled('NSQC3', nsqc3.target_path, gamePath)) {
-      logger.info('[AUTO_NSQC3] NSQC3 installed, uninstalling first...');
       await this._uninstallAddon(nsqc3, mainWindow);
     }
-    logger.info('[AUTO_NSQC3] Installing fresh NSQC3...');
     await this._installAddon(nsqc3, mainWindow);
   }
 
   async _installAddon(addon, mainWindow) {
-    logger.info(`[INSTALL] Installing ${addon.name}`);
     this._emitProgress(mainWindow, addon.name, 0.15);
 
     const gamePath = this.getGamePath();
@@ -514,7 +493,6 @@ class AddonManager {
         await this._handleGithubStructure(tempDir, targetDir, addon.name);
       }
       this._emitProgress(mainWindow, addon.name, 1.0);
-      logger.info(`[INSTALL] Completed ${addon.name}`);
     } catch (error) {
       logger.error(`[INSTALL] Error ${addon.name}:`, error.message || error);
       throw new Error(`Failed to install ${addon.name}: ${error.message || 'Unknown error'}`);
@@ -535,7 +513,6 @@ class AddonManager {
           const expected = [`${addonName}-main`, `${addonName}-master`];
           if (expected.includes(dirName)) {
             const finalPath = path.join(targetDir, addonName);
-            logger.info(`[STRUCTURE] Renaming ${dirName} -> ${addonName}`);
             if (await fs.pathExists(finalPath)) await fs.remove(finalPath);
             await fs.move(path.join(tempDir, dirName), finalPath);
             return;
@@ -557,12 +534,10 @@ class AddonManager {
   }
 
   async _uninstallAddon(addon, mainWindow) {
-    logger.info(`[UNINSTALL] Uninstalling ${addon.name}`);
     const gamePath = this.getGamePath();
     const targetDir = path.join(gamePath, addon.target_path);
 
     if (!await fs.pathExists(targetDir)) {
-      logger.info(`[UNINSTALL] Target dir not exists, skipping`);
       this._emitProgress(mainWindow, addon.name, 1.0);
       return;
     }
@@ -577,7 +552,6 @@ class AddonManager {
       await fs.remove(itemPath);
     }
     this._emitProgress(mainWindow, addon.name, 1.0);
-    logger.info(`[UNINSTALL] Completed ${addon.name}`);
   }
 
   _emitProgress(mainWindow, name, progress) {

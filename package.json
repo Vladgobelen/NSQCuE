@@ -17,6 +17,10 @@
       {
         "from": "global-mouse-hook.exe",
         "to": "global-mouse-hook.exe"
+      },
+      {
+        "from": "baseSounds/",
+        "to": "baseSounds/"
       }
     ],
     "win": {

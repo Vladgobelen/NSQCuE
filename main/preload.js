@@ -1,44 +1,20 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  loadAddons: () => {
-    return ipcRenderer.invoke('load-addons');
-  },
-  toggleAddon: (name, install) => {
-    return ipcRenderer.invoke('toggle-addon', name, install);
-  },
-  launchGame: () => {
-    return ipcRenderer.invoke('launch-game');
-  },
-  openLogsFolder: () => {
-    ipcRenderer.send('open-logs-folder');
-  },
-  checkGame: () => {
-    return ipcRenderer.invoke('check-game');
-  },
-  changeGamePath: () => {
-    return ipcRenderer.invoke('change-game-path');
-  },
-  goBack: () => {
-    ipcRenderer.send('go-back');
-  },
-  getPlatform: () => {
-    return ipcRenderer.invoke('get-platform');
-  },
-  registerPTTHotkey: (hotkey) => {
-    return ipcRenderer.invoke('register-ptt-hotkey', hotkey);
-  },
-  sendMicState: (state) => {
-    ipcRenderer.send('webclient-mic-state', state);
-  },
-  clearWebviewCache: () => {
-    return ipcRenderer.invoke('clear-session-cache', 'persist:ns');
-  },
+  loadAddons: () => ipcRenderer.invoke('load-addons'),
+  toggleAddon: (name, install) => ipcRenderer.invoke('toggle-addon', name, install),
+  launchGame: () => ipcRenderer.invoke('launch-game'),
+  openLogsFolder: () => ipcRenderer.send('open-logs-folder'),
+  checkGame: () => ipcRenderer.invoke('check-game'),
+  changeGamePath: () => ipcRenderer.invoke('change-game-path'),
+  goBack: () => ipcRenderer.send('go-back'),
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
+  registerPTTHotkey: (hotkey) => ipcRenderer.invoke('register-ptt-hotkey', hotkey),
+  sendMicState: (state) => ipcRenderer.send('webclient-mic-state', state),
+  clearWebviewCache: () => ipcRenderer.invoke('clear-session-cache', 'persist:ns'),
   sendToWebClient: (channel, data) => {
     const frame = document.getElementById('ns-webview');
-    if (!frame) {
-      return;
-    }
+    if (!frame) return;
     if (channel === 'toggle-mic') {
       ipcRenderer.invoke('execute-in-webview', {
         code: 'if (window.voiceClient && typeof window.voiceClient.toggleMicrophone === "function") { window.voiceClient.toggleMicrophone(); }'
@@ -56,18 +32,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   },
-  setPTTHotkey: (codes) => {
-    return ipcRenderer.invoke('set-ptt-hotkey', codes);
-  },
-  getPTTHotkey: () => {
-    return ipcRenderer.invoke('get-ptt-hotkey');
-  },
-  startKeyCapture: () => {
-    return ipcRenderer.invoke('start-key-capture');
-  },
-  stopKeyCapture: () => {
-    return ipcRenderer.invoke('stop-key-capture');
-  },
+  setPTTHotkey: (codes) => ipcRenderer.invoke('set-ptt-hotkey', codes),
+  getPTTHotkey: () => ipcRenderer.invoke('get-ptt-hotkey'),
+  startKeyCapture: () => ipcRenderer.invoke('start-key-capture'),
+  stopKeyCapture: () => ipcRenderer.invoke('stop-key-capture'),
   onBlockLaunchGame: (callback) => {
     const handler = (event, blocked) => callback(blocked);
     ipcRenderer.on('block-launch-game', handler);
@@ -123,27 +91,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('ptt-activated', handler);
     return () => ipcRenderer.off('ptt-activated', handler);
   },
-  openExternal: (url) => {
-    return ipcRenderer.invoke('open-external', url);
-  },
-  copyToClipboard: (text) => {
-    return ipcRenderer.invoke('copy-to-clipboard', text);
-  },
-
-  // ========== НОВЫЕ МЕТОДЫ ДЛЯ КАСТОМНЫХ ЗВУКОВ ==========
-  playSound: (soundType) => {
-    return ipcRenderer.invoke('play-sound', soundType);
-  },
-  selectSoundsFolder: () => {
-    return ipcRenderer.invoke('select-sounds-folder');
-  },
-  importSounds: (sourceFolder) => {
-    return ipcRenderer.invoke('import-sounds', sourceFolder);
-  },
-  getSoundsStatus: () => {
-    return ipcRenderer.invoke('get-sounds-status');
-  },
-  openSoundsFolder: () => {
-    ipcRenderer.send('open-sounds-folder');
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
+  playSound: (soundType) => ipcRenderer.invoke('play-sound', soundType),
+  selectSoundsFolder: () => ipcRenderer.invoke('select-sounds-folder'),
+  importSounds: (sourceFolder) => ipcRenderer.invoke('import-sounds', sourceFolder),
+  getSoundsStatus: () => ipcRenderer.invoke('get-sounds-status'),
+  openSoundsFolder: () => ipcRenderer.send('open-sounds-folder'),
+  fetchSoundsConfig: () => ipcRenderer.invoke('fetch-sounds-config'),
+  downloadSoundsSection: (sectionName) => ipcRenderer.invoke('download-sounds-section', sectionName),
+  isSoundsDirEmpty: () => ipcRenderer.invoke('is-sounds-dir-empty'),
+  onSoundsDownloadProgress: (callback) => {
+    const handler = (event, progress) => callback(progress);
+    ipcRenderer.on('sounds-download-progress', handler);
+    return () => ipcRenderer.off('sounds-download-progress', handler);
   }
 });

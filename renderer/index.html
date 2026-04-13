@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Контейнер менеджера аддонов -->
   <div class="container">
     <div class="top-bar" id="top-bar">
       <h1>Менеджер аддонов</h1>
@@ -28,7 +27,6 @@
     <div class="addons-list" id="addons-list"></div>
   </div>
 
-  <!-- Контейнер веб-клиента -->
   <div id="webview-container" class="webview-container">
     <webview
       id="ns-webview"
@@ -40,22 +38,29 @@
     ></webview>
   </div>
 
-  <!-- Всплывающая панель управления (поверх веб-клиента) -->
   <div class="back-panel" id="back-panel">
     <button class="back-btn" id="back-btn">← Назад к аддонам</button>
     <div class="panel-divider"></div>
     <button class="panel-mic-btn" id="panel-mic-btn" title="Микрофон">🎤</button>
     <button class="panel-refresh-btn" id="panel-refresh-btn" title="Обновить веб-клиент (очистить кэш)">🔄</button>
     <button class="panel-settings-btn" id="panel-settings-btn" title="Настройки PTT">⚙️</button>
+    <button class="panel-sounds-btn" id="panel-sounds-btn" title="Звуки">🔊</button>
   </div>
 
-  <!-- Панель настроек хоткея PTT -->
   <div class="ptt-settings-panel" id="ptt-settings-panel">
     <div class="ptt-settings-header">Настройка PTT</div>
     <div class="ptt-capture-area" id="ptt-capture-area">Нажмите комбинацию клавиш...</div>
     <div class="ptt-buttons">
       <button id="ptt-save-btn">Сохранить</button>
       <button id="ptt-cancel-btn">Отмена</button>
+    </div>
+  </div>
+
+  <div class="sounds-sections-panel" id="sounds-sections-panel">
+    <div class="sounds-panel-header">Загрузка звуков</div>
+    <div class="sounds-panel-content" id="sounds-panel-content"></div>
+    <div class="sounds-panel-buttons">
+      <button id="sounds-close-btn">Закрыть</button>
     </div>
   </div>
 
