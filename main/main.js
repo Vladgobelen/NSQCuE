@@ -188,12 +188,14 @@ function createWindow() {
   logger.info('[WINDOW] Creating BrowserWindow...');
   const nsSession = session.fromPartition('persist:ns');
   nsSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    logger.debug(`[PERM] Request: ${permission} → ${['media', 'microphone', 'camera'].includes(permission) ? 'GRANTED' : 'DENIED'}`);
-    if (['media', 'microphone', 'camera'].includes(permission)) {
-      callback(true); return;
-    }
-    callback(false);
-  });
+  console.log(`[PERM] Request: ${permission} → ${['media', 'microphone', 'camera', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission) ? 'GRANTED' : 'DENIED'}`);
+  
+  if (['media', 'microphone', 'camera', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)) {
+    callback(true);
+    return;
+  }
+  callback(false);
+});
 
   const applyCSP = (details, callback, isDefault) => {
     callback({
@@ -475,16 +477,32 @@ ipcMain.handle('open-external', async (event, url) => {
 });
 
 // 🆕 IPC Handler для копирования текста в буфер обмена
+// Заменить существующий обработчик copy-to-clipboard на:
+
 ipcMain.handle('copy-to-clipboard', (event, text) => {
-  logger.debug(`[IPC] copy-to-clipboard: ${text?.substring(0, 50)}...`);
-  if (typeof text !== 'string') return false;
+  console.log('[Main] copy-to-clipboard called');
+  console.log('[Main] Text type:', typeof text);
+  console.log('[Main] Text length:', text?.length);
+  console.log('[Main] Text preview:', text?.substring(0, 50));
+  
+  if (typeof text !== 'string') {
+    console.error('[Main] Invalid text type:', typeof text);
+    return false;
+  }
   
   try {
     clipboard.writeText(text);
-    logger.info('[IPC] copy-to-clipboard → SUCCESS');
+    console.log('[Main] clipboard.writeText SUCCESS');
+    
+    // Проверяем, что реально записалось
+    const written = clipboard.readText();
+    console.log('[Main] Clipboard verification - written length:', written?.length);
+    console.log('[Main] First 50 chars:', written?.substring(0, 50));
+    
     return true;
   } catch (error) {
-    logger.error('[IPC] copy-to-clipboard error:', error.message);
+    console.error('[Main] clipboard.writeText ERROR:', error.message);
+    console.error('[Main] Stack:', error.stack);
     return false;
   }
 });

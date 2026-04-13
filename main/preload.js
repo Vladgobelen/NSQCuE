@@ -127,7 +127,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => {
     return ipcRenderer.invoke('open-external', url);
   },
-  copyToClipboard: (text) => {
-    return ipcRenderer.invoke('copy-to-clipboard', text);
-  }
+  // Внутри contextBridge.exposeInMainWorld, заменить copyToClipboard на:
+
+copyToClipboard: (text) => {
+  console.log('[Preload] copyToClipboard called, text length:', text?.length);
+  console.log('[Preload] Text preview:', text?.substring(0, 50));
+  
+  return ipcRenderer.invoke('copy-to-clipboard', text)
+    .then(result => {
+      console.log('[Preload] IPC result:', result);
+      return result;
+    })
+    .catch(err => {
+      console.error('[Preload] IPC error:', err);
+      throw err;
+    });
+}
 });

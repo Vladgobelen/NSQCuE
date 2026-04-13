@@ -521,15 +521,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  window.addEventListener('message', event => {
-    if (event.origin !== 'https://ns.fiber-gate.ru') {
+  // В конце DOMContentLoaded, заменить window.addEventListener('message', ...) на:
+
+window.addEventListener('message', event => {
+  console.log('[Renderer] Received postMessage:', {
+    origin: event.origin,
+    type: event.data?.type,
+    hasText: !!event.data?.text,
+    textLength: event.data?.text?.length
+  });
+  
+  if (event.origin !== 'https://ns.fiber-gate.ru') {
+    console.warn('[Renderer] Message from unexpected origin:', event.origin);
+    return;
+  }
+
+  if (event.data?.type === 'COPY_TO_CLIPBOARD' && event.data?.text) {
+    console.log('[Renderer] COPY_TO_CLIPBOARD message, text length:', event.data.text.length);
+    console.log('[Renderer] electronAPI available:', !!window.electronAPI);
+    console.log('[Renderer] copyToClipboard available:', !!window.electronAPI?.copyToClipboard);
+    
+    if (!window.electronAPI?.copyToClipboard) {
+      console.error('[Renderer] copyToClipboard method not available!');
       return;
     }
-
-    if (event.data?.type === 'COPY_TO_CLIPBOARD' && event.data?.text) {
-      window.electronAPI?.copyToClipboard(event.data.text).catch(err => {
-        console.warn('[Clipboard] Copy failed:', err);
+    
+    window.electronAPI.copyToClipboard(event.data.text)
+      .then(result => {
+        console.log('[Renderer] copyToClipboard result:', result);
+      })
+      .catch(err => {
+        console.error('[Renderer] copyToClipboard error:', err);
       });
-    }
-  });
+  }
+});
 });
