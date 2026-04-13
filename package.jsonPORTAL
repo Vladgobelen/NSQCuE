@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "build:win64": "electron-builder --win nsis --x64",
+    "build:win64": "electron-builder --win portable --x64",
     "build:linux": "electron-builder --linux AppImage --x64"
   },
   "build": {
@@ -26,21 +26,16 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
+          "target": "portable",
           "arch": [
             "x64"
           ]
         }
       ]
     },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "NSQC Installer",
-      "uninstallDisplayName": "Ночная стража: установщик аддонов",
+    "portable": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "unicode": true,
       "warningsAsErrors": false
     },
     "linux": {
