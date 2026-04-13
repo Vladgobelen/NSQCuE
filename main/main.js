@@ -16,11 +16,9 @@ let captureMode = false;
 const capturedCodes = new Set();
 let pttActive = false;
 
-// 🎵 Директория для кастомных звуков
 const SOUNDS_DIR = path.join(app.getPath('userData'), 'sounds');
 fs.ensureDirSync(SOUNDS_DIR);
 
-// 🎵 Маппинг типов звуков на имена файлов
 const SOUND_MAP = {
   'message': 'message.mp3',
   'user-join': 'user-join.mp3',
@@ -31,20 +29,12 @@ const SOUND_MAP = {
   'room-join': 'room-join.mp3'
 };
 
-/**
- * Воспроизводит звук в фоне через Windows MediaPlayer (поддерживает MP3, без окон)
- */
 function playSoundSilent(filePath) {
   if (!fs.existsSync(filePath)) {
-    logger.warn(`[SOUND] File not found: ${filePath}`);
     return;
   }
 
-  // Конвертируем путь в URI-формат и экранируем пробелы
   const uriPath = 'file:///' + filePath.replace(/\\/g, '/').replace(/ /g, '%20');
-
-  // Используем System.Windows.Media.MediaPlayer (встроен в Windows, поддерживает MP3)
-  // Start-Sleep держит процесс PowerShell живым, пока звук играет
   const psCommand = `Add-Type -AssemblyName presentationCore; $player = New-Object System.Windows.Media.MediaPlayer; $player.Open('${uriPath}'); $player.Play(); Start-Sleep -Seconds 3; $player.Stop(); $player.Dispose()`;
 
   exec(`powershell -NoProfile -WindowStyle Hidden -Command "${psCommand}"`, (err) => {
@@ -53,19 +43,15 @@ function playSoundSilent(filePath) {
 }
 
 async function ensureGamePath() {
-  logger.debug('[GAME_PATH] Checking game path validity...');
   if (settings.isGamePathValid()) {
-    logger.info(`[GAME_PATH] Valid: ${settings.getGamePath()}`);
     return true;
   }
-  logger.warn('[GAME_PATH] Invalid or not set, prompting user...');
   const result = await dialog.showOpenDialog({
     title: 'Выберите файл Wow.exe',
     properties: ['openFile'],
     filters: [{ name: 'Executable files', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }]
   });
   if (result.canceled || result.filePaths.length === 0) {
-    logger.warn('[GAME_PATH] User canceled path selection');
     return false;
   }
   const selectedPath = path.dirname(result.filePaths[0]);
@@ -76,43 +62,33 @@ async function ensureGamePath() {
     return false;
   }
   settings.setGamePath(selectedPath);
-  logger.info(`[GAME_PATH] Set to: ${selectedPath}`);
   return true;
 }
 
 function startRustHook() {
-  logger.info('[HOOK] === startRustHook() ===');
   if (hookProcess) {
-    logger.warn(`[HOOK] Hook process already running (PID: ${hookProcess.pid}). Skipping.`);
     return;
   }
   const exeName = process.platform === 'win32' ? 'global-mouse-hook.exe' : 'global-mouse-hook';
   const exePath = app.isPackaged
     ? path.join(process.resourcesPath, exeName)
     : path.join(__dirname, '..', exeName);
-  logger.debug(`[HOOK] Resolution context:`);
-  logger.debug(`app.isPackaged: ${app.isPackaged}`);
-  logger.debug(`process.resourcesPath: ${process.resourcesPath}`);
-  logger.debug(`__dirname: ${__dirname}`);
-  logger.info(`[HOOK] Resolved executable path: ${exePath}`);
+  
   if (!fs.existsSync(exePath)) {
-    logger.error(`[HOOK] ❌ Executable NOT FOUND: ${exePath}`);
+    logger.error(`[HOOK] Executable not found: ${exePath}`);
     dialog.showErrorBox('Ошибка', `Не найден файл хука: ${exeName}. Проверьте наличие в корне проекта или resources.`);
     return;
   }
-  logger.info(`[HOOK] ✓ Executable exists. Spawning process...`);
-  logger.debug(`[HOOK] Spawn options: { stdio: 'pipe', windowsHide: true, detached: false }`);
+  
   try {
     hookProcess = spawn(exePath, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
       env: { ...process.env }
     });
-    logger.info(`[HOOK] ✓ Process spawned successfully with PID: ${hookProcess.pid}`);
 
     hookProcess.stdout.on('data', (data) => {
       const raw = data.toString();
-      logger.debug(`[HOOK_RAW] ← STDOUT chunk (${raw.length} bytes): "${raw.trim()}"`);
       if (!raw.trim()) return;
 
       const lines = raw.split('\n');
@@ -135,16 +111,13 @@ function startRustHook() {
         }
 
         if (isNaN(code)) {
-          logger.warn(`[HOOK] Invalid payload format: "${trimmed}"`);
           continue;
         }
 
-        logger.info(`[HOOK_EVENT] Key ${code} (${getKeyName(code)}) ${isDown ? 'DOWN' : 'UP'}`);
         pressedKeys.set(code, isDown);
 
         if (captureMode && isDown) {
           capturedCodes.add(code);
-          logger.debug(`[CAPTURE] Added code ${code}, current set: [${Array.from(capturedCodes).join(', ')}]`);
           mainWindow?.webContents?.send('key-captured', code);
         }
 
@@ -154,11 +127,9 @@ function startRustHook() {
 
           if (allPressed && !pttActive) {
             pttActive = true;
-            logger.info('[PTT] >>> ACTIVATED <<<');
             mainWindow?.webContents?.send('ptt-pressed');
           } else if (allReleased && pttActive) {
             pttActive = false;
-            logger.info('[PTT] >>> RELEASED <<<');
             mainWindow?.webContents?.send('ptt-released');
           }
         }
@@ -167,40 +138,31 @@ function startRustHook() {
 
     hookProcess.stderr.on('data', (data) => {
       const err = data.toString().trim();
-      if (err) logger.error(`[HOOK_STDERR] → ${err}`);
+      if (err) logger.error(`[HOOK_STDERR] ${err}`);
     });
 
     hookProcess.on('close', (code, signal) => {
-      logger.info(`[HOOK] Process exited. Code: ${code}, Signal: ${signal || 'none'}`);
       hookProcess = null;
     });
 
     hookProcess.on('error', (err) => {
-      logger.error(`[HOOK] ❌ Process error: ${err.message}`);
-      logger.error(`[HOOK] Stack: ${err.stack}`);
+      logger.error(`[HOOK] Process error: ${err.message}`);
       hookProcess = null;
     });
-
-    logger.info('[HOOK] ✓ Listeners attached. Awaiting key events...');
   } catch (err) {
-    logger.error(`[HOOK] ❌ Spawn failed: ${err.message}\n${err.stack}`);
+    logger.error(`[HOOK] Spawn failed: ${err.message}\n${err.stack}`);
     hookProcess = null;
   }
 }
 
 function stopRustHook() {
-  logger.info('[HOOK] stopRustHook() called');
   if (hookProcess) {
     try {
-      logger.info(`[HOOK] Sending termination signal to PID: ${hookProcess.pid}`);
       hookProcess.kill();
-      logger.info('[HOOK] ✓ Kill signal sent successfully');
     } catch (err) {
-      logger.error(`[HOOK] ❌ Kill failed: ${err.message}`);
+      logger.error(`[HOOK] Kill failed: ${err.message}`);
     }
     hookProcess = null;
-  } else {
-    logger.info('[HOOK] No active process to stop.');
   }
 }
 
@@ -243,26 +205,24 @@ function setupWebviewHandlers(webContents) {
   webContents.on('ipc-message', (event, channel, ...args) => {
     if (channel === 'play-sound') {
       const soundType = args[0];
-      const fileName = SOUND_MAP[soundType];
-      if (!fileName) return;
-
+      const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
+      
       const soundPath = path.join(SOUNDS_DIR, fileName);
       let finalPath = null;
-
+      
       if (fs.existsSync(soundPath)) {
         finalPath = soundPath;
       } else {
-        const resourcePath = app.isPackaged
+        const resourcePath = app.isPackaged 
           ? path.join(process.resourcesPath, 'sounds', fileName)
           : path.join(__dirname, '..', 'sounds', fileName);
+        
         if (fs.existsSync(resourcePath)) {
           finalPath = resourcePath;
         }
       }
-
+      
       if (!finalPath) return;
-
-      // ✅ Исправлено: фоновое воспроизведение через MediaPlayer
       playSoundSilent(finalPath);
     }
   });
@@ -302,7 +262,6 @@ function setupWebviewHandlers(webContents) {
 }
 
 function createWindow() {
-  logger.info('[WINDOW] Creating BrowserWindow...');
   const nsSession = session.fromPartition('persist:ns');
   nsSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const allowedPermissions = [
@@ -310,7 +269,6 @@ function createWindow() {
       'clipboard-read', 'clipboard-sanitized-write', 'clipboard'
     ];
     const granted = allowedPermissions.includes(permission);
-    logger.debug(`[PERM] Request: ${permission} → ${granted ? 'GRANTED' : 'DENIED'}`);
     callback(granted);
   });
 
@@ -340,27 +298,21 @@ function createWindow() {
     icon: path.join(__dirname, '../assets/icon.png')
   });
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-  // mainWindow.webContents.openDevTools({ mode: 'detach' });
+  
   mainWindow.on('closed', () => {
-    logger.info('[WINDOW] Closed');
     mainWindow = null;
   });
 
   mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
-    logger.info('[WEBVIEW] Attached (did-attach-webview)');
     setupWebviewHandlers(webContents);
   });
 
   mainWindow.webContents.on('did-create-webview', (event, webContents) => {
-    logger.info('[WEBVIEW] Created (did-create-webview)');
     setupWebviewHandlers(webContents);
   });
-
-  mainWindow.webContents.on('did-finish-load', () => logger.info('[WINDOW] Finished load'));
 }
 
 app.whenReady().then(async () => {
-  logger.info('[APP] Ready');
   Menu.setApplicationMenu(null);
   fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
   const gamePathValid = await ensureGamePath();
@@ -376,12 +328,10 @@ app.whenReady().then(async () => {
   const savedHotkey = settings.getPTTHotkey();
   if (savedHotkey && Array.isArray(savedHotkey)) {
     currentPTTHotkeyCodes = savedHotkey;
-    logger.info(`[PTT] Loaded saved hotkey: ${savedHotkey.join('+')}`);
   }
 
   try {
     await addonManager.loadAddons();
-    logger.info('[APP] Addons loaded successfully');
   } catch (err) {
     logger.error('[APP] Failed to load addons:', err.message);
   }
@@ -399,23 +349,17 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  logger.info('[APP] All windows closed');
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('will-quit', () => {
-  logger.info('[APP] Will quit, cleaning up resources');
   stopRustHook();
   globalShortcut.unregisterAll();
 });
 
-// === IPC Handlers ===
 ipcMain.handle('load-addons', async () => {
-  logger.debug('[IPC] load-addons');
   try {
-    const result = await addonManager.loadAddons();
-    logger.debug(`[IPC] load-addons → ${Object.keys(result).length} addons`);
-    return result;
+    return await addonManager.loadAddons();
   } catch (error) {
     logger.error('[IPC] load-addons error:', error.message);
     return {};
@@ -423,11 +367,9 @@ ipcMain.handle('load-addons', async () => {
 });
 
 ipcMain.handle('toggle-addon', async (event, name, install) => {
-  logger.info(`[IPC] toggle-addon: ${name} → ${install ? 'INSTALL' : 'UNINSTALL'}`);
   try {
     if (!mainWindow || mainWindow.isDestroyed()) return false;
     await addonManager.toggleAddon(name, install, mainWindow);
-    logger.info(`[IPC] toggle-addon ${name} → SUCCESS`);
     return true;
   } catch (error) {
     logger.error(`[IPC] toggle-addon ${name} error:`, error.message);
@@ -437,11 +379,8 @@ ipcMain.handle('toggle-addon', async (event, name, install) => {
 });
 
 ipcMain.handle('launch-game', async () => {
-  logger.info('[IPC] launch-game');
   try {
-    const result = await addonManager.launchGame();
-    logger.info(`[IPC] launch-game → ${result ? 'OK' : 'FAIL'}`);
-    return result;
+    return await addonManager.launchGame();
   } catch (error) {
     logger.error('[IPC] launch-game error:', error.message);
     return false;
@@ -452,9 +391,7 @@ ipcMain.handle('check-game', async () => {
   try {
     const gamePath = settings.getGamePath();
     if (!gamePath) return false;
-    const exists = fs.existsSync(path.join(gamePath, 'Wow.exe'));
-    logger.debug(`[IPC] check-game → ${exists}`);
-    return exists;
+    return fs.existsSync(path.join(gamePath, 'Wow.exe'));
   } catch (error) {
     logger.error('[IPC] check-game error:', error.message);
     return false;
@@ -462,13 +399,11 @@ ipcMain.handle('check-game', async () => {
 });
 
 ipcMain.handle('change-game-path', async () => {
-  logger.info('[IPC] change-game-path');
   const result = await dialog.showOpenDialog({
     title: 'Выберите файл Wow.exe', properties: ['openFile'],
     filters: [{ name: 'Executable files', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }]
   });
   if (result.canceled || result.filePaths.length === 0) {
-    logger.warn('[IPC] change-game-path canceled');
     return false;
   }
   const selectedPath = path.dirname(result.filePaths[0]);
@@ -478,23 +413,19 @@ ipcMain.handle('change-game-path', async () => {
   }
   settings.setGamePath(selectedPath);
   addonManager.setGamePath(selectedPath);
-  logger.info(`[IPC] change-game-path → ${selectedPath}`);
   return true;
 });
 
 ipcMain.on('open-logs-folder', () => {
-  logger.info('[IPC] open-logs-folder');
   shell.openPath(path.join(app.getPath('userData'), 'logs'));
 });
 
 ipcMain.on('go-back', () => {
-  logger.debug('[IPC] go-back');
   if (mainWindow && !mainWindow.isDestroyed())
     mainWindow.loadURL(`file://${__dirname}/../renderer/index.html`);
 });
 
 ipcMain.handle('start-key-capture', async () => {
-  logger.info('[IPC] start-key-capture');
   captureMode = true;
   capturedCodes.clear();
   pressedKeys.clear();
@@ -502,7 +433,6 @@ ipcMain.handle('start-key-capture', async () => {
 });
 
 ipcMain.handle('stop-key-capture', async () => {
-  logger.info(`[IPC] stop-key-capture → ${Array.from(capturedCodes).join('+')}`);
   captureMode = false;
   const codes = Array.from(capturedCodes);
   capturedCodes.clear();
@@ -510,7 +440,6 @@ ipcMain.handle('stop-key-capture', async () => {
 });
 
 ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
-  logger.info(`[IPC] set-ptt-hotkey: ${codes?.join('+') || 'none'}`);
   if (!Array.isArray(codes)) return { success: false, message: 'Invalid hotkey format' };
   currentPTTHotkeyCodes = codes;
   settings.setPTTHotkey(codes);
@@ -519,43 +448,33 @@ ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
 });
 
 ipcMain.handle('get-ptt-hotkey', async () => {
-  logger.debug(`[IPC] get-ptt-hotkey → ${currentPTTHotkeyCodes?.join('+') || 'none'}`);
   return currentPTTHotkeyCodes;
 });
 
 ipcMain.handle('get-platform', async () => {
-  logger.debug(`[IPC] get-platform → ${process.platform}`);
   return process.platform;
 });
 
 ipcMain.handle('register-ptt-hotkey', async () => {
-  logger.warn('[IPC] register-ptt-hotkey deprecated, use set-ptt-hotkey');
   return { success: true, message: 'Use set-ptt-hotkey with array of codes instead' };
 });
 
-ipcMain.on('webclient-mic-state', (event, state) => {
-  logger.debug(`[IPC] webclient-mic-state: ${JSON.stringify(state)}`);
-});
+ipcMain.on('webclient-mic-state', (event, state) => {});
 
 ipcMain.handle('clear-session-cache', async (event, partition) => {
-  logger.info(`[IPC] clear-session-cache: ${partition}`);
   const sess = session.fromPartition(partition);
   await sess.clearCache();
   await sess.clearStorageData({ storages: ['cachestorage', 'serviceworkers', 'filesystem', 'indexeddb', 'localstorage'] });
-  logger.info('[IPC] clear-session-cache → DONE');
   return true;
 });
 
 ipcMain.handle('execute-in-webview', async (event, { code }) => {
-  logger.debug(`[IPC] execute-in-webview: ${code.substring(0, 50)}...`);
   if (!webviewWebContents || webviewWebContents.isDestroyed()) {
     logger.error('[IPC] execute-in-webview: WebView not available');
     throw new Error('WebView webContents not available');
   }
   try {
-    const result = await webviewWebContents.executeJavaScript(code);
-    logger.debug('[IPC] execute-in-webview → OK');
-    return result;
+    return await webviewWebContents.executeJavaScript(code);
   } catch (error) {
     logger.error('[IPC] execute-in-webview error:', error.message);
     throw error;
@@ -564,7 +483,6 @@ ipcMain.handle('execute-in-webview', async (event, { code }) => {
 
 ipcMain.handle('open-external', async (event, url) => {
   if (!url || typeof url !== 'string') return false;
-  logger.info(`[IPC] open-external: ${url}`);
   try {
     await shell.openExternal(url);
     return true;
@@ -575,11 +493,9 @@ ipcMain.handle('open-external', async (event, url) => {
 });
 
 ipcMain.handle('copy-to-clipboard', (event, text) => {
-  logger.debug(`[IPC] copy-to-clipboard: ${text?.substring(0, 50)}...`);
   if (typeof text !== 'string') return false;
   try {
     clipboard.writeText(text);
-    logger.info('[IPC] copy-to-clipboard → SUCCESS');
     return true;
   } catch (error) {
     logger.error('[IPC] copy-to-clipboard error:', error.message);
@@ -588,54 +504,43 @@ ipcMain.handle('copy-to-clipboard', (event, text) => {
 });
 
 ipcMain.handle('play-sound', async (event, soundType) => {
-  logger.info(`🔊 [IPC] play-sound CALLED with: ${soundType}`);
-  const fileName = SOUND_MAP[soundType];
-  if (!fileName) {
-    logger.warn(`[SOUND] Unknown sound type: ${soundType}`);
-    return false;
-  }
+  const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
+  
   const soundPath = path.join(SOUNDS_DIR, fileName);
   let finalPath = null;
+  
   if (fs.existsSync(soundPath)) {
     finalPath = soundPath;
-    logger.debug(`[SOUND] Using custom sound: ${soundPath}`);
   } else {
     const resourcePath = app.isPackaged
       ? path.join(process.resourcesPath, 'sounds', fileName)
       : path.join(__dirname, '..', 'sounds', fileName);
+    
     if (fs.existsSync(resourcePath)) {
       finalPath = resourcePath;
-      logger.debug(`[SOUND] Using built-in sound: ${resourcePath}`);
     }
   }
+  
   if (!finalPath) {
-    logger.debug(`[SOUND] No sound file for: ${soundType} (${fileName}) - SILENCE`);
     return false;
   }
 
-  // ✅ Исправлено: фоновое воспроизведение через MediaPlayer (без окон, поддержка MP3)
   playSoundSilent(finalPath);
   return true;
 });
 
-// 🎵 IPC Handler для выбора папки со звуками
 ipcMain.handle('select-sounds-folder', async () => {
-  logger.info('[IPC] select-sounds-folder');
   const result = await dialog.showOpenDialog({
     title: 'Выберите папку со звуками',
     properties: ['openDirectory']
   });
   if (result.canceled || !result.filePaths.length) {
-    logger.info('[IPC] select-sounds-folder → canceled');
     return null;
   }
-  logger.info(`[IPC] select-sounds-folder → ${result.filePaths[0]}`);
   return result.filePaths[0];
 });
 
-// 🎵 IPC Handler для импорта звуков из папки
 ipcMain.handle('import-sounds', async (event, sourceFolder) => {
-  logger.info(`[IPC] import-sounds from: ${sourceFolder}`);
   if (!sourceFolder || !fs.existsSync(sourceFolder)) {
     logger.error('[IPC] import-sounds: source folder not found');
     return { success: false, error: 'Папка не найдена' };
@@ -649,21 +554,17 @@ ipcMain.handle('import-sounds', async (event, sourceFolder) => {
       try {
         await fs.copy(sourcePath, destPath, { overwrite: true });
         imported.push(soundType);
-        logger.debug(`[SOUND] Imported: ${fileName} for ${soundType}`);
       } catch (err) {
         missing.push({ soundType, error: err.message });
         logger.error(`[SOUND] Failed to import ${fileName}:`, err.message);
       }
     } else {
       missing.push({ soundType, error: 'Файл не найден' });
-      logger.debug(`[SOUND] Missing file: ${fileName}`);
     }
   }
-  logger.info(`[IPC] import-sounds → imported: ${imported.length}, missing: ${missing.length}`);
   return { success: true, imported, missing };
 });
 
-// 🎵 IPC Handler для получения списка доступных звуков и их статуса
 ipcMain.handle('get-sounds-status', async () => {
   const status = {};
   for (const [soundType, fileName] of Object.entries(SOUND_MAP)) {
@@ -677,8 +578,6 @@ ipcMain.handle('get-sounds-status', async () => {
   return status;
 });
 
-// 🎵 IPC Handler для открытия папки со звуками
 ipcMain.on('open-sounds-folder', () => {
-  logger.info('[IPC] open-sounds-folder');
   shell.openPath(SOUNDS_DIR);
 });

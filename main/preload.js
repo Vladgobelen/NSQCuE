@@ -37,13 +37,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendToWebClient: (channel, data) => {
     const frame = document.getElementById('ns-webview');
     if (!frame) {
-      console.warn('[PRELOAD] WebView not found');
       return;
     }
     if (channel === 'toggle-mic') {
       ipcRenderer.invoke('execute-in-webview', {
         code: 'if (window.voiceClient && typeof window.voiceClient.toggleMicrophone === "function") { window.voiceClient.toggleMicrophone(); }'
-      }).catch(err => console.error('[PRELOAD] execute-in-webview error:', err));
+      }).catch(() => {});
     } else if (frame.contentWindow) {
       frame.contentWindow.postMessage({ channel, data, source: 'electron' }, '*');
     }
