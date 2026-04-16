@@ -105,5 +105,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (event, progress) => callback(progress);
     ipcRenderer.on('sounds-download-progress', handler);
     return () => ipcRenderer.off('sounds-download-progress', handler);
+  },
+  
+  // API для оверлея
+  sendTestToOverlay: () => ipcRenderer.invoke('send-test-to-overlay'),
+  sendMessageToOverlay: (text) => ipcRenderer.invoke('send-message-to-overlay', text),
+  onOverlayInput: (callback) => {
+    const handler = (event, text) => callback(text);
+    ipcRenderer.on('overlay-input-received', handler);
+    return () => ipcRenderer.off('overlay-input-received', handler);
   }
 });

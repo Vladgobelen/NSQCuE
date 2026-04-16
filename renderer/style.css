@@ -128,3 +128,24 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: var(
   background-color: var(--border);
   margin: 4px 0 8px 0;
 }
+
+.panel-test-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.panel-test-btn:hover {
+  background-color: #3d3d3d;
+  color: var(--text-primary);
+  border-color: #777777;
+}

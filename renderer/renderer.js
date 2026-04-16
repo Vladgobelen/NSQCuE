@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const panelRefreshBtn = document.getElementById('panel-refresh-btn');
   const panelSettingsBtn = document.getElementById('panel-settings-btn');
   const panelSoundsBtn = document.getElementById('panel-sounds-btn');
+  const panelTestBtn = document.getElementById('panel-test-btn');
   const pttSettingsPanel = document.getElementById('ptt-settings-panel');
   const pttCaptureArea = document.getElementById('ptt-capture-area');
   const pttSaveBtn = document.getElementById('ptt-save-btn');
@@ -317,6 +318,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Функция отправки сообщения в веб-чат
+  function sendMessageToWebChat(text) {
+    const webview = document.getElementById('ns-webview');
+    if (!webview) {
+      console.warn('[OVERLAY] WebView not found');
+      return;
+    }
+    
+    const escapedText = text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    
+    const code = `
+      (function() {
+        const selectors = [
+          'input[type="text"]',
+          'textarea',
+          '[contenteditable="true"]',
+          '.chat-input',
+          '#chat-input',
+          '.message-input'
+        ];
+        
+        let input = null;
+        for (const s of selectors) {
+          input = document.querySelector(s);
+          if (input) break;
+        }
+        
+        if (input) {
+          if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') {
+            input.value = '${escapedText}';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            const sendBtn = document.querySelector('button[type="submit"], .send-button, #send-button');
+            if (sendBtn) {
+              sendBtn.click();
+            } else {
+              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+            }
+            return true;
+          }
+        }
+        return false;
+      })();
+    `;
+    
+    webview.executeJavaScript(code).then(result => {
+      if (result) {
+        console.log('[OVERLAY] Message sent to web chat');
+      } else {
+        console.warn('[OVERLAY] Could not find chat input');
+      }
+    }).catch(err => {
+      console.error('[OVERLAY] Error sending to web chat:', err);
+    });
+  }
+
   loadAddons();
   checkGame();
 
@@ -473,6 +530,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ========== ОВЕРЛЕЙ ==========
+  if (panelTestBtn) {
+    panelTestBtn.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.sendTestToOverlay();
+        console.log('[OVERLAY] Test message sent');
+        
+        panelTestBtn.style.backgroundColor = '#4CAF50';
+        setTimeout(() => {
+          panelTestBtn.style.backgroundColor = '';
+        }, 200);
+      } catch (err) {
+        console.error('[OVERLAY] Failed to send test:', err);
+        panelTestBtn.style.backgroundColor = '#f44336';
+        setTimeout(() => {
+          panelTestBtn.style.backgroundColor = '';
+        }, 200);
+      }
+    });
+  }
+
+  if (window.electronAPI?.onOverlayInput) {
+    window.electronAPI.onOverlayInput((text) => {
+      console.log('[OVERLAY] Input received:', text);
+      
+      if (panelTestBtn) {
+        panelTestBtn.title = `Последнее: ${text}`;
+      }
+      
+      sendMessageToWebChat(text);
+    });
+  }
+
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'CHAT_MESSAGE' && event.data?.source === 'webview') {
+      const text = event.data.text;
+      console.log('[CHAT] Message from webview:', text);
+      
+      if (window.electronAPI?.sendMessageToOverlay) {
+        window.electronAPI.sendMessageToOverlay(text).catch(err => {
+          console.error('[OVERLAY] Failed to send to overlay:', err);
+        });
+      }
+    }
+  });
+
   if (window.electronAPI?.onSoundsDownloadProgress) {
     window.electronAPI.onSoundsDownloadProgress((progress) => {
       if (soundsPanelContent && soundsPanelContent.querySelector('.sounds-loading')) {
@@ -571,16 +674,54 @@ document.addEventListener('DOMContentLoaded', () => {
         theme: 'dark',
         language: 'ru'
       });
+      
+      // Добавляем наблюдатель за сообщениями чата
+      nsWebview.executeJavaScript(`
+        (function() {
+          console.log('[Overlay] Setting up chat observer');
+          
+          const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+              for (const node of mutation.addedNodes) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                  const messageSelectors = ['.message', '.chat-message', '.msg', '[data-message]'];
+                  for (const selector of messageSelectors) {
+                    if (node.matches && node.matches(selector)) {
+                      const text = node.textContent || '';
+                      if (text.trim()) {
+                        window.postMessage({ 
+                          type: 'CHAT_MESSAGE', 
+                          text: text, 
+                          source: 'webview' 
+                        }, '*');
+                      }
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          });
+          
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+        })();
+      `).catch(() => {});
     });
+    
     nsWebview.addEventListener('did-fail-load', event => {
       showError('Не удалось загрузить веб-клиент: ' + (event.errorDescription || 'Unknown error'));
     });
+    
     nsWebview.addEventListener('ipc-message', (event) => {
       if (event.channel === 'play-sound') {
         const soundType = event.args[0];
         window.electronAPI.playSound(soundType).catch(() => {});
       }
     });
+    
     nsWebview.addEventListener('dom-ready', () => {
       nsWebview.executeJavaScript(`
         (function() {
@@ -599,6 +740,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })();
       `).catch(() => {});
     });
+    
     nsWebview.addEventListener('console-message', (event) => {
       const message = event.message;
       let soundType = null;
