@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Men
 const path = require('path');
 const fs = require('fs-extra');
 const { spawn, exec } = require('child_process');
+const net = require('net');
 const addonManager = require('./addonManager');
 const settings = require('./settings');
 const soundsManager = require('./soundsManager');
@@ -11,6 +12,9 @@ const logger = setupLogging();
 let mainWindow;
 let webviewWebContents = null;
 let hookProcess = null;
+let overlayProcess = null;
+let pipeClient = null;
+let pipeReconnectTimer = null;
 const pressedKeys = new Map();
 let currentPTTHotkeyCodes = null;
 let captureMode = false;
@@ -135,6 +139,238 @@ function stopRustHook() {
   }
 }
 
+function startOverlay() {
+  if (overlayProcess) return;
+  
+  const exeName = 'chat-overlay.exe';
+  const exePath = app.isPackaged
+    ? path.join(process.resourcesPath, exeName)
+    : path.join(__dirname, '..', exeName);
+  
+  if (!fs.existsSync(exePath)) {
+    logger.warn(`[OVERLAY] Executable not found: ${exePath}`);
+    return;
+  }
+  
+  try {
+    overlayProcess = spawn(exePath, [], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: false,
+      detached: false
+    });
+    
+    overlayProcess.stdout.on('data', (data) => {
+      logger.info(`[OVERLAY_STDOUT] ${data.toString().trim()}`);
+    });
+    
+    overlayProcess.stderr.on('data', (data) => {
+      const err = data.toString().trim();
+      if (err) logger.error(`[OVERLAY_STDERR] ${err}`);
+    });
+    
+    overlayProcess.on('close', (code) => {
+      logger.info(`[OVERLAY] Process closed with code: ${code}`);
+      overlayProcess = null;
+      if (pipeClient) {
+        pipeClient.destroy();
+        pipeClient = null;
+      }
+    });
+    
+    overlayProcess.on('error', (err) => {
+      logger.error(`[OVERLAY] Process error: ${err.message}`);
+      overlayProcess = null;
+    });
+    
+    logger.info('[OVERLAY] Process started, connecting in 1 second...');
+    setTimeout(connectToOverlayPipe, 1000);
+  } catch (err) {
+    logger.error(`[OVERLAY] Failed to start overlay: ${err.message}`);
+    overlayProcess = null;
+  }
+}
+
+function stopOverlay() {
+  if (overlayProcess) {
+    try { overlayProcess.kill(); } catch (err) { logger.error(`[OVERLAY] Kill failed: ${err.message}`); }
+    overlayProcess = null;
+  }
+  if (pipeClient) {
+    pipeClient.destroy();
+    pipeClient = null;
+  }
+  if (pipeReconnectTimer) {
+    clearTimeout(pipeReconnectTimer);
+    pipeReconnectTimer = null;
+  }
+}
+
+function connectToOverlayPipe() {
+  if (pipeClient) {
+    pipeClient.destroy();
+  }
+  
+  const pipePath = '\\\\.\\pipe\\NSQCuE_Overlay_Pipe';
+  
+  pipeClient = net.createConnection(pipePath);
+  
+  pipeClient.on('connect', () => {
+    logger.info('[OVERLAY] Connected to overlay pipe');
+    
+    // Отправляем тестовое сообщение
+    sendToOverlay('message', { text: 'Electron connected!' });
+  });
+  
+  pipeClient.on('data', (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+      
+      if (msg.type === 'input') {
+        logger.info(`[OVERLAY] Received input: ${msg.text}`);
+        
+        // Отправляем в рендерер для отображения в тултипе
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('overlay-input-received', msg.text);
+        }
+        
+        // Отправляем в веб-чат
+        sendToWebClient(msg.text);
+      }
+    } catch (err) {
+      logger.error('[OVERLAY] Failed to parse message:', err.message);
+    }
+  });
+  
+  pipeClient.on('error', (err) => {
+    logger.error('[OVERLAY] Pipe error:', err.message);
+    schedulePipeReconnect();
+  });
+  
+  pipeClient.on('close', () => {
+    logger.info('[OVERLAY] Pipe closed');
+    schedulePipeReconnect();
+  });
+}
+
+function schedulePipeReconnect() {
+  if (pipeReconnectTimer) {
+    clearTimeout(pipeReconnectTimer);
+  }
+  
+  pipeReconnectTimer = setTimeout(() => {
+    logger.info('[OVERLAY] Reconnecting to pipe...');
+    connectToOverlayPipe();
+  }, 2000);
+}
+
+function sendToOverlay(type, data) {
+  if (!pipeClient || pipeClient.destroyed) {
+    logger.warn('[OVERLAY] Pipe not connected, cannot send');
+    return false;
+  }
+  
+  try {
+    const msg = JSON.stringify({ type, ...data });
+    pipeClient.write(msg);
+    logger.info(`[OVERLAY] Sent to overlay: ${msg}`);
+    return true;
+  } catch (err) {
+    logger.error('[OVERLAY] Failed to send to overlay:', err.message);
+    return false;
+  }
+}
+
+function sendToWebClient(text) {
+  if (!webviewWebContents || webviewWebContents.isDestroyed()) {
+    logger.warn('[OVERLAY] WebView not available, cannot send message');
+    return;
+  }
+  
+  try {
+    // Пытаемся найти поле ввода и вставить текст
+    const code = `
+      (function() {
+        console.log('[Overlay] Attempting to send message:', '${text.replace(/'/g, "\\'")}');
+        
+        // Ищем поле ввода чата
+        const selectors = [
+          'input[type="text"]',
+          'textarea',
+          '[contenteditable="true"]',
+          '.chat-input',
+          '#chat-input',
+          '.message-input',
+          '[data-testid="chat-input"]'
+        ];
+        
+        let inputField = null;
+        for (const selector of selectors) {
+          inputField = document.querySelector(selector);
+          if (inputField) break;
+        }
+        
+        if (inputField) {
+          if (inputField.tagName === 'INPUT' || inputField.tagName === 'TEXTAREA') {
+            inputField.value = '${text.replace(/'/g, "\\'")}';
+            
+            // Триггерим события для реактивных фреймворков
+            inputField.dispatchEvent(new Event('input', { bubbles: true }));
+            inputField.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // Ищем кнопку отправки
+            const sendSelectors = [
+              'button[type="submit"]',
+              '.send-button',
+              '#send-button',
+              '.chat-send',
+              '[data-testid="send-button"]'
+            ];
+            
+            let sendButton = null;
+            for (const selector of sendSelectors) {
+              sendButton = document.querySelector(selector);
+              if (sendButton) break;
+            }
+            
+            // Если нет кнопки, пробуем отправить по Enter
+            if (!sendButton) {
+              inputField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+              inputField.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
+            } else {
+              sendButton.click();
+            }
+            
+            return true;
+          } else if (inputField.getAttribute('contenteditable') === 'true') {
+            inputField.textContent = '${text.replace(/'/g, "\\'")}';
+            inputField.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            // Пробуем отправить по Enter
+            inputField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+            
+            return true;
+          }
+        }
+        
+        console.warn('[Overlay] Could not find chat input field');
+        return false;
+      })();
+    `;
+    
+    webviewWebContents.executeJavaScript(code).then(result => {
+      if (result) {
+        logger.info('[OVERLAY] Message sent to web client successfully');
+      } else {
+        logger.warn('[OVERLAY] Failed to send message to web client - input field not found');
+      }
+    }).catch(err => {
+      logger.error('[OVERLAY] Error sending to web client:', err.message);
+    });
+  } catch (err) {
+    logger.error('[OVERLAY] Failed to execute JavaScript in webview:', err.message);
+  }
+}
+
 function getKeyName(code) {
   const names = {
     16: 'Shift', 17: 'Ctrl', 18: 'Alt', 32: 'Space', 27: 'Esc', 13: 'Enter',
@@ -198,6 +434,48 @@ function setupWebviewHandlers(webContents) {
       return Promise.resolve(true);
     }
   };
+  
+  // Перехватываем сообщения чата для отправки в оверлей
+  const originalLog = console.log;
+  console.log = function(...args) {
+    originalLog.apply(console, args);
+    
+    // Ищем сообщения чата в консоли
+    const msg = args.join(' ');
+    if (msg.includes('[CHAT]') || msg.includes('[MESSAGE]')) {
+      window.postMessage({ type: 'CHAT_MESSAGE', text: msg, source: 'webview' }, '*');
+    }
+  };
+  
+  // Слушаем DOM на предмет новых сообщений
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          // Ищем элементы с сообщениями
+          const messageSelectors = ['.message', '.chat-message', '.msg', '[data-message]'];
+          for (const selector of messageSelectors) {
+            if (node.matches && node.matches(selector)) {
+              const text = node.textContent || '';
+              if (text.trim()) {
+                window.postMessage({ 
+                  type: 'CHAT_MESSAGE', 
+                  text: text, 
+                  source: 'webview' 
+                }, '*');
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
 })();`;
     webContents.executeJavaScript(injectCode).catch(() => {});
   });
@@ -251,6 +529,7 @@ app.whenReady().then(async () => {
   addonManager.setGamePath(settings.getGamePath());
   createWindow();
   startRustHook();
+  startOverlay(); // Запускаем оверлей
   const savedHotkey = settings.getPTTHotkey();
   if (savedHotkey && Array.isArray(savedHotkey)) currentPTTHotkeyCodes = savedHotkey;
   try { await addonManager.loadAddons(); } catch (err) { logger.error('[APP] Failed to load addons:', err.message); }
@@ -261,8 +540,13 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('will-quit', () => { stopRustHook(); globalShortcut.unregisterAll(); });
+app.on('will-quit', () => { 
+  stopRustHook(); 
+  stopOverlay(); // Останавливаем оверлей
+  globalShortcut.unregisterAll(); 
+});
 
+// Существующие IPC обработчики
 ipcMain.handle('load-addons', async () => {
   try { return await addonManager.loadAddons(); } catch (error) { logger.error('[IPC] load-addons error:', error.message); return {}; }
 });
@@ -422,4 +706,18 @@ ipcMain.handle('download-sounds-section', async (event, sectionName) => {
 
 ipcMain.handle('is-sounds-dir-empty', async () => {
   return await soundsManager.isSoundsDirEmpty();
+});
+
+// Новые IPC обработчики для оверлея
+ipcMain.handle('send-test-to-overlay', async () => {
+  return sendToOverlay('message', { text: 'Тест' });
+});
+
+ipcMain.handle('send-message-to-overlay', async (event, text) => {
+  return sendToOverlay('message', { text });
+});
+
+ipcMain.on('chat-message-from-webview', (event, text) => {
+  // Получаем сообщение из веб-чата и отправляем в оверлей
+  sendToOverlay('message', { text });
 });

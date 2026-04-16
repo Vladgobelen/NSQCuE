@@ -2,11 +2,13 @@
 ────────────────────────────────────────
 .github/
   workflows/build-win.yml
+  workflows/build-win.ymlPORTAL
 main/
   addonManager.js
   main.js
   preload.js
   settings.js
+  soundsManager.js
   utils.js
 renderer/
   index.html
@@ -24,41 +26,47 @@ renderer/
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "build:win64": "electron-builder --win portable --x64",
+    "build:win64": "electron-builder --win nsis --x64",
     "build:linux": "electron-builder --linux AppImage --x64"
   },
   "build": {
     "appId": "com.nsqcue.updater",
     "productName": "Ночная стража: установщик аддонов",
+    "executableName": "NSQCuE-29",
     "icon": "assets/icon.png",
     "extraResources": [
       {
         "from": "global-mouse-hook.exe",
         "to": "global-mouse-hook.exe"
+      },
+      {
+        "from": "baseSounds/",
+        "to": "baseSounds/"
       }
     ],
     "win": {
       "target": [
         {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "target": "nsis",
+          "arch": ["x64"]
         }
       ]
     },
-    "portable": {
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "unicode": true,
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NSQC Installer",
+      "uninstallDisplayName": "Ночная стража: установщик аддонов",
       "warningsAsErrors": false
     },
     "linux": {
       "target": [
         {
           "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
       "category": "Utility",
@@ -75,9 +83,61 @@ renderer/
     "electron-builder": "^24.13.3"
   }
 }
-
 ════════════════════════════════════════
 📄 FILE: .github/workflows/build-win.yml
+════════════════════════════════════════
+name: Build Windows Release
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify pre-compiled binary
+        run: |
+          if (-not (Test-Path "global-mouse-hook.exe")) {
+            Write-Error "❌ global-mouse-hook.exe not found in project root!"
+            exit 1
+          }
+          Write-Host "✓ Found: global-mouse-hook.exe"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron App (Windows NSIS Installer)
+        run: npm run build:win64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        if: success() && !startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: NSQCuE-Win64-Installer
+          path: dist/*.exe
+          retention-days: 14
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          generate_release_notes: true
+          draft: false
+════════════════════════════════════════
+📄 FILE: .github/workflows/build-win.ymlPORTAL
 ════════════════════════════════════════
 name: Build Windows Release
 on:
@@ -596,6 +656,7 @@ const fs = require('fs-extra');
 const { spawn, exec } = require('child_process');
 const addonManager = require('./addonManager');
 const settings = require('./settings');
+const soundsManager = require('./soundsManager');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
 
@@ -607,8 +668,8 @@ let currentPTTHotkeyCodes = null;
 let captureMode = false;
 const capturedCodes = new Set();
 let pttActive = false;
-
 const SOUNDS_DIR = path.join(app.getPath('userData'), 'sounds');
+
 fs.ensureDirSync(SOUNDS_DIR);
 
 const SOUND_MAP = {
@@ -622,30 +683,22 @@ const SOUND_MAP = {
 };
 
 function playSoundSilent(filePath) {
-  if (!fs.existsSync(filePath)) {
-    return;
-  }
-
+  if (!fs.existsSync(filePath)) return;
   const uriPath = 'file:///' + filePath.replace(/\\/g, '/').replace(/ /g, '%20');
   const psCommand = `Add-Type -AssemblyName presentationCore; $player = New-Object System.Windows.Media.MediaPlayer; $player.Open('${uriPath}'); $player.Play(); Start-Sleep -Seconds 3; $player.Stop(); $player.Dispose()`;
-
   exec(`powershell -NoProfile -WindowStyle Hidden -Command "${psCommand}"`, (err) => {
     if (err) logger.error(`[SOUND] Playback error: ${err.message}`);
   });
 }
 
 async function ensureGamePath() {
-  if (settings.isGamePathValid()) {
-    return true;
-  }
+  if (settings.isGamePathValid()) return true;
   const result = await dialog.showOpenDialog({
     title: 'Выберите файл Wow.exe',
     properties: ['openFile'],
     filters: [{ name: 'Executable files', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }]
   });
-  if (result.canceled || result.filePaths.length === 0) {
-    return false;
-  }
+  if (result.canceled || result.filePaths.length === 0) return false;
   const selectedPath = path.dirname(result.filePaths[0]);
   const wowPath = path.join(selectedPath, 'Wow.exe');
   if (!fs.existsSync(wowPath)) {
@@ -658,65 +711,50 @@ async function ensureGamePath() {
 }
 
 function startRustHook() {
-  if (hookProcess) {
-    return;
-  }
+  if (hookProcess) return;
   const exeName = process.platform === 'win32' ? 'global-mouse-hook.exe' : 'global-mouse-hook';
   const exePath = app.isPackaged
     ? path.join(process.resourcesPath, exeName)
     : path.join(__dirname, '..', exeName);
-  
   if (!fs.existsSync(exePath)) {
     logger.error(`[HOOK] Executable not found: ${exePath}`);
     dialog.showErrorBox('Ошибка', `Не найден файл хука: ${exeName}. Проверьте наличие в корне проекта или resources.`);
     return;
   }
-  
   try {
     hookProcess = spawn(exePath, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
       env: { ...process.env }
     });
-
     hookProcess.stdout.on('data', (data) => {
       const raw = data.toString();
       if (!raw.trim()) return;
-
       const lines = raw.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-
         let code;
         let isDown;
-
         try {
           const json = JSON.parse(trimmed);
           if (typeof json.code !== 'number') continue;
           code = json.code;
           isDown = json.event === 'down';
-        } catch (e) {
+        } catch {
           const [typeStr, codeStr] = trimmed.split(':');
           code = parseInt(codeStr, 10);
           isDown = typeStr.toLowerCase() === 'down';
         }
-
-        if (isNaN(code)) {
-          continue;
-        }
-
+        if (isNaN(code)) continue;
         pressedKeys.set(code, isDown);
-
         if (captureMode && isDown) {
           capturedCodes.add(code);
           mainWindow?.webContents?.send('key-captured', code);
         }
-
         if (currentPTTHotkeyCodes && currentPTTHotkeyCodes.length > 0) {
           const allPressed = currentPTTHotkeyCodes.every(c => pressedKeys.get(c) === true);
           const allReleased = currentPTTHotkeyCodes.every(c => pressedKeys.get(c) !== true);
-
           if (allPressed && !pttActive) {
             pttActive = true;
             mainWindow?.webContents?.send('ptt-pressed');
@@ -727,16 +765,11 @@ function startRustHook() {
         }
       }
     });
-
     hookProcess.stderr.on('data', (data) => {
       const err = data.toString().trim();
       if (err) logger.error(`[HOOK_STDERR] ${err}`);
     });
-
-    hookProcess.on('close', (code, signal) => {
-      hookProcess = null;
-    });
-
+    hookProcess.on('close', () => { hookProcess = null; });
     hookProcess.on('error', (err) => {
       logger.error(`[HOOK] Process error: ${err.message}`);
       hookProcess = null;
@@ -749,11 +782,7 @@ function startRustHook() {
 
 function stopRustHook() {
   if (hookProcess) {
-    try {
-      hookProcess.kill();
-    } catch (err) {
-      logger.error(`[HOOK] Kill failed: ${err.message}`);
-    }
+    try { hookProcess.kill(); } catch (err) { logger.error(`[HOOK] Kill failed: ${err.message}`); }
     hookProcess = null;
   }
 }
@@ -775,20 +804,13 @@ function setupWebviewHandlers(webContents) {
     try {
       const urlObj = new URL(url);
       return urlObj.origin !== 'https://ns.fiber-gate.ru';
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   };
   webContents.on('will-navigate', (e, url) => {
-    if (isExternalUrl(url)) {
-      e.preventDefault();
-      shell.openExternal(url);
-    }
+    if (isExternalUrl(url)) { e.preventDefault(); shell.openExternal(url); }
   });
   webContents.setWindowOpenHandler(({ url }) => {
-    if (isExternalUrl(url)) {
-      shell.openExternal(url);
-    }
+    if (isExternalUrl(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   webContents.on('did-fail-load', (e, code, desc) => {
@@ -798,57 +820,37 @@ function setupWebviewHandlers(webContents) {
     if (channel === 'play-sound') {
       const soundType = args[0];
       const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
-      
       const soundPath = path.join(SOUNDS_DIR, fileName);
       let finalPath = null;
-      
       if (fs.existsSync(soundPath)) {
         finalPath = soundPath;
       } else {
-        const resourcePath = app.isPackaged 
+        const resourcePath = app.isPackaged
           ? path.join(process.resourcesPath, 'sounds', fileName)
           : path.join(__dirname, '..', 'sounds', fileName);
-        
-        if (fs.existsSync(resourcePath)) {
-          finalPath = resourcePath;
-        }
+        if (fs.existsSync(resourcePath)) finalPath = resourcePath;
       }
-      
       if (!finalPath) return;
       playSoundSilent(finalPath);
     }
   });
   webContents.on('did-finish-load', () => {
     const injectCode = `
-      (function() {
-        let ipcRenderer = null;
-        try {
-          if (typeof require !== 'undefined') {
-            ipcRenderer = require('electron').ipcRenderer;
-          }
-        } catch (e) {}
-        if (!ipcRenderer && window.ipcRenderer) {
-          ipcRenderer = window.ipcRenderer;
-        }
-        window.ELECTRON_CUSTOM_SOUNDS_ENABLED = true;
-        window.electronAPI = {
-          playSound: (soundType) => {
-            if (ipcRenderer) {
-              try {
-                ipcRenderer.sendToHost('play-sound', soundType);
-                return Promise.resolve(true);
-              } catch (e) {}
-            }
-            window.postMessage({
-              type: 'ELECTRON_PLAY_SOUND',
-              soundType: soundType,
-              source: 'webview'
-            }, '*');
-            return Promise.resolve(true);
-          }
-        };
-      })();
-    `;
+(function() {
+  let ipcRenderer = null;
+  try { if (typeof require !== 'undefined') { ipcRenderer = require('electron').ipcRenderer; } } catch (e) {}
+  if (!ipcRenderer && window.ipcRenderer) ipcRenderer = window.ipcRenderer;
+  window.ELECTRON_CUSTOM_SOUNDS_ENABLED = true;
+  window.electronAPI = {
+    playSound: (soundType) => {
+      if (ipcRenderer) {
+        try { ipcRenderer.sendToHost('play-sound', soundType); return Promise.resolve(true); } catch (e) {}
+      }
+      window.postMessage({ type: 'ELECTRON_PLAY_SOUND', soundType: soundType, source: 'webview' }, '*');
+      return Promise.resolve(true);
+    }
+  };
+})();`;
     webContents.executeJavaScript(injectCode).catch(() => {});
   });
 }
@@ -856,14 +858,9 @@ function setupWebviewHandlers(webContents) {
 function createWindow() {
   const nsSession = session.fromPartition('persist:ns');
   nsSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowedPermissions = [
-      'media', 'microphone', 'camera',
-      'clipboard-read', 'clipboard-sanitized-write', 'clipboard'
-    ];
-    const granted = allowedPermissions.includes(permission);
-    callback(granted);
+    const allowedPermissions = ['media', 'microphone', 'camera', 'clipboard-read', 'clipboard-sanitized-write', 'clipboard'];
+    callback(allowedPermissions.includes(permission));
   });
-
   const applyCSP = (details, callback, isDefault) => {
     callback({
       responseHeaders: {
@@ -879,7 +876,6 @@ function createWindow() {
   };
   nsSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, false));
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, true));
-
   mainWindow = new BrowserWindow({
     width: 550, height: 650, minWidth: 300, minHeight: 500,
     title: 'Ночная стража: установщик аддонов',
@@ -890,18 +886,9 @@ function createWindow() {
     icon: path.join(__dirname, '../assets/icon.png')
   });
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-  
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
-  mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
-    setupWebviewHandlers(webContents);
-  });
-
-  mainWindow.webContents.on('did-create-webview', (event, webContents) => {
-    setupWebviewHandlers(webContents);
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.webContents.on('did-attach-webview', (event, webContents) => setupWebviewHandlers(webContents));
+  mainWindow.webContents.on('did-create-webview', (event, webContents) => setupWebviewHandlers(webContents));
 }
 
 app.whenReady().then(async () => {
@@ -916,46 +903,20 @@ app.whenReady().then(async () => {
   addonManager.setGamePath(settings.getGamePath());
   createWindow();
   startRustHook();
-
   const savedHotkey = settings.getPTTHotkey();
-  if (savedHotkey && Array.isArray(savedHotkey)) {
-    currentPTTHotkeyCodes = savedHotkey;
-  }
-
-  try {
-    await addonManager.loadAddons();
-  } catch (err) {
-    logger.error('[APP] Failed to load addons:', err.message);
-  }
-
-  try {
-    await addonManager.startupUpdateCheck(mainWindow);
-  } catch (err) {
-    logger.error('[STARTUP] Update check error:', err.message);
-  }
+  if (savedHotkey && Array.isArray(savedHotkey)) currentPTTHotkeyCodes = savedHotkey;
+  try { await addonManager.loadAddons(); } catch (err) { logger.error('[APP] Failed to load addons:', err.message); }
+  try { await addonManager.startupUpdateCheck(mainWindow); } catch (err) { logger.error('[STARTUP] Update check error:', err.message); }
   addonManager.startBackgroundChecker(mainWindow);
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  soundsManager.autoDownloadBaseSounds().catch(err => logger.error('[SOUNDS] Auto-download failed:', err.message));
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('will-quit', () => {
-  stopRustHook();
-  globalShortcut.unregisterAll();
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('will-quit', () => { stopRustHook(); globalShortcut.unregisterAll(); });
 
 ipcMain.handle('load-addons', async () => {
-  try {
-    return await addonManager.loadAddons();
-  } catch (error) {
-    logger.error('[IPC] load-addons error:', error.message);
-    return {};
-  }
+  try { return await addonManager.loadAddons(); } catch (error) { logger.error('[IPC] load-addons error:', error.message); return {}; }
 });
 
 ipcMain.handle('toggle-addon', async (event, name, install) => {
@@ -971,12 +932,7 @@ ipcMain.handle('toggle-addon', async (event, name, install) => {
 });
 
 ipcMain.handle('launch-game', async () => {
-  try {
-    return await addonManager.launchGame();
-  } catch (error) {
-    logger.error('[IPC] launch-game error:', error.message);
-    return false;
-  }
+  try { return await addonManager.launchGame(); } catch (error) { logger.error('[IPC] launch-game error:', error.message); return false; }
 });
 
 ipcMain.handle('check-game', async () => {
@@ -984,10 +940,7 @@ ipcMain.handle('check-game', async () => {
     const gamePath = settings.getGamePath();
     if (!gamePath) return false;
     return fs.existsSync(path.join(gamePath, 'Wow.exe'));
-  } catch (error) {
-    logger.error('[IPC] check-game error:', error.message);
-    return false;
-  }
+  } catch (error) { logger.error('[IPC] check-game error:', error.message); return false; }
 });
 
 ipcMain.handle('change-game-path', async () => {
@@ -995,9 +948,7 @@ ipcMain.handle('change-game-path', async () => {
     title: 'Выберите файл Wow.exe', properties: ['openFile'],
     filters: [{ name: 'Executable files', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }]
   });
-  if (result.canceled || result.filePaths.length === 0) {
-    return false;
-  }
+  if (result.canceled || result.filePaths.length === 0) return false;
   const selectedPath = path.dirname(result.filePaths[0]);
   if (!fs.existsSync(path.join(selectedPath, 'Wow.exe'))) {
     dialog.showErrorBox('Ошибка', 'Выбранный путь не содержит файл Wow.exe');
@@ -1008,29 +959,11 @@ ipcMain.handle('change-game-path', async () => {
   return true;
 });
 
-ipcMain.on('open-logs-folder', () => {
-  shell.openPath(path.join(app.getPath('userData'), 'logs'));
-});
+ipcMain.on('open-logs-folder', () => { shell.openPath(path.join(app.getPath('userData'), 'logs')); });
+ipcMain.on('go-back', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(`file://${__dirname}/../renderer/index.html`); });
 
-ipcMain.on('go-back', () => {
-  if (mainWindow && !mainWindow.isDestroyed())
-    mainWindow.loadURL(`file://${__dirname}/../renderer/index.html`);
-});
-
-ipcMain.handle('start-key-capture', async () => {
-  captureMode = true;
-  capturedCodes.clear();
-  pressedKeys.clear();
-  return { success: true };
-});
-
-ipcMain.handle('stop-key-capture', async () => {
-  captureMode = false;
-  const codes = Array.from(capturedCodes);
-  capturedCodes.clear();
-  return { success: true, codes };
-});
-
+ipcMain.handle('start-key-capture', async () => { captureMode = true; capturedCodes.clear(); pressedKeys.clear(); return { success: true }; });
+ipcMain.handle('stop-key-capture', async () => { captureMode = false; const codes = Array.from(capturedCodes); capturedCodes.clear(); return { success: true, codes }; });
 ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
   if (!Array.isArray(codes)) return { success: false, message: 'Invalid hotkey format' };
   currentPTTHotkeyCodes = codes;
@@ -1038,18 +971,9 @@ ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
   pttActive = false;
   return { success: true };
 });
-
-ipcMain.handle('get-ptt-hotkey', async () => {
-  return currentPTTHotkeyCodes;
-});
-
-ipcMain.handle('get-platform', async () => {
-  return process.platform;
-});
-
-ipcMain.handle('register-ptt-hotkey', async () => {
-  return { success: true, message: 'Use set-ptt-hotkey with array of codes instead' };
-});
+ipcMain.handle('get-ptt-hotkey', async () => currentPTTHotkeyCodes);
+ipcMain.handle('get-platform', async () => process.platform);
+ipcMain.handle('register-ptt-hotkey', async () => ({ success: true, message: 'Use set-ptt-hotkey with array of codes instead' }));
 
 ipcMain.on('webclient-mic-state', (event, state) => {});
 
@@ -1065,70 +989,39 @@ ipcMain.handle('execute-in-webview', async (event, { code }) => {
     logger.error('[IPC] execute-in-webview: WebView not available');
     throw new Error('WebView webContents not available');
   }
-  try {
-    return await webviewWebContents.executeJavaScript(code);
-  } catch (error) {
-    logger.error('[IPC] execute-in-webview error:', error.message);
-    throw error;
-  }
+  try { return await webviewWebContents.executeJavaScript(code); } catch (error) { logger.error('[IPC] execute-in-webview error:', error.message); throw error; }
 });
 
 ipcMain.handle('open-external', async (event, url) => {
   if (!url || typeof url !== 'string') return false;
-  try {
-    await shell.openExternal(url);
-    return true;
-  } catch (err) {
-    logger.error(`[IPC] open-external failed: ${err.message}`);
-    return false;
-  }
+  try { await shell.openExternal(url); return true; } catch (err) { logger.error(`[IPC] open-external failed: ${err.message}`); return false; }
 });
 
 ipcMain.handle('copy-to-clipboard', (event, text) => {
   if (typeof text !== 'string') return false;
-  try {
-    clipboard.writeText(text);
-    return true;
-  } catch (error) {
-    logger.error('[IPC] copy-to-clipboard error:', error.message);
-    return false;
-  }
+  try { clipboard.writeText(text); return true; } catch (error) { logger.error('[IPC] copy-to-clipboard error:', error.message); return false; }
 });
 
 ipcMain.handle('play-sound', async (event, soundType) => {
   const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
-  
   const soundPath = path.join(SOUNDS_DIR, fileName);
   let finalPath = null;
-  
   if (fs.existsSync(soundPath)) {
     finalPath = soundPath;
   } else {
     const resourcePath = app.isPackaged
       ? path.join(process.resourcesPath, 'sounds', fileName)
       : path.join(__dirname, '..', 'sounds', fileName);
-    
-    if (fs.existsSync(resourcePath)) {
-      finalPath = resourcePath;
-    }
+    if (fs.existsSync(resourcePath)) finalPath = resourcePath;
   }
-  
-  if (!finalPath) {
-    return false;
-  }
-
+  if (!finalPath) return false;
   playSoundSilent(finalPath);
   return true;
 });
 
 ipcMain.handle('select-sounds-folder', async () => {
-  const result = await dialog.showOpenDialog({
-    title: 'Выберите папку со звуками',
-    properties: ['openDirectory']
-  });
-  if (result.canceled || !result.filePaths.length) {
-    return null;
-  }
+  const result = await dialog.showOpenDialog({ title: 'Выберите папку со звуками', properties: ['openDirectory'] });
+  if (result.canceled || !result.filePaths.length) return null;
   return result.filePaths[0];
 });
 
@@ -1143,16 +1036,8 @@ ipcMain.handle('import-sounds', async (event, sourceFolder) => {
     const sourcePath = path.join(sourceFolder, fileName);
     const destPath = path.join(SOUNDS_DIR, fileName);
     if (fs.existsSync(sourcePath)) {
-      try {
-        await fs.copy(sourcePath, destPath, { overwrite: true });
-        imported.push(soundType);
-      } catch (err) {
-        missing.push({ soundType, error: err.message });
-        logger.error(`[SOUND] Failed to import ${fileName}:`, err.message);
-      }
-    } else {
-      missing.push({ soundType, error: 'Файл не найден' });
-    }
+      try { await fs.copy(sourcePath, destPath, { overwrite: true }); imported.push(soundType); } catch (err) { missing.push({ soundType, error: err.message }); logger.error(`[SOUND] Failed to import ${fileName}:`, err.message); }
+    } else { missing.push({ soundType, error: 'Файл не найден' }); }
   }
   return { success: true, imported, missing };
 });
@@ -1161,17 +1046,34 @@ ipcMain.handle('get-sounds-status', async () => {
   const status = {};
   for (const [soundType, fileName] of Object.entries(SOUND_MAP)) {
     const soundPath = path.join(SOUNDS_DIR, fileName);
-    status[soundType] = {
-      fileName,
-      exists: fs.existsSync(soundPath),
-      path: soundPath
-    };
+    status[soundType] = { fileName, exists: fs.existsSync(soundPath), path: soundPath };
   }
   return status;
 });
 
-ipcMain.on('open-sounds-folder', () => {
-  shell.openPath(SOUNDS_DIR);
+ipcMain.on('open-sounds-folder', () => { shell.openPath(SOUNDS_DIR); });
+
+ipcMain.handle('fetch-sounds-config', async () => {
+  try { return await soundsManager.fetchSoundsConfig(); } catch (error) { logger.error('[SOUNDS] Fetch config failed:', error.message); throw error; }
+});
+
+ipcMain.handle('download-sounds-section', async (event, sectionName) => {
+  try {
+    const config = await soundsManager.fetchSoundsConfig();
+    await soundsManager.downloadSection(sectionName, config, (progress) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('sounds-download-progress', progress);
+      }
+    });
+    return { success: true };
+  } catch (error) {
+    logger.error('[SOUNDS] Download section failed:', error.message);
+    throw error;
+  }
+});
+
+ipcMain.handle('is-sounds-dir-empty', async () => {
+  return await soundsManager.isSoundsDirEmpty();
 });
 ════════════════════════════════════════
 📄 FILE: main/preload.js
@@ -1179,44 +1081,20 @@ ipcMain.on('open-sounds-folder', () => {
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  loadAddons: () => {
-    return ipcRenderer.invoke('load-addons');
-  },
-  toggleAddon: (name, install) => {
-    return ipcRenderer.invoke('toggle-addon', name, install);
-  },
-  launchGame: () => {
-    return ipcRenderer.invoke('launch-game');
-  },
-  openLogsFolder: () => {
-    ipcRenderer.send('open-logs-folder');
-  },
-  checkGame: () => {
-    return ipcRenderer.invoke('check-game');
-  },
-  changeGamePath: () => {
-    return ipcRenderer.invoke('change-game-path');
-  },
-  goBack: () => {
-    ipcRenderer.send('go-back');
-  },
-  getPlatform: () => {
-    return ipcRenderer.invoke('get-platform');
-  },
-  registerPTTHotkey: (hotkey) => {
-    return ipcRenderer.invoke('register-ptt-hotkey', hotkey);
-  },
-  sendMicState: (state) => {
-    ipcRenderer.send('webclient-mic-state', state);
-  },
-  clearWebviewCache: () => {
-    return ipcRenderer.invoke('clear-session-cache', 'persist:ns');
-  },
+  loadAddons: () => ipcRenderer.invoke('load-addons'),
+  toggleAddon: (name, install) => ipcRenderer.invoke('toggle-addon', name, install),
+  launchGame: () => ipcRenderer.invoke('launch-game'),
+  openLogsFolder: () => ipcRenderer.send('open-logs-folder'),
+  checkGame: () => ipcRenderer.invoke('check-game'),
+  changeGamePath: () => ipcRenderer.invoke('change-game-path'),
+  goBack: () => ipcRenderer.send('go-back'),
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
+  registerPTTHotkey: (hotkey) => ipcRenderer.invoke('register-ptt-hotkey', hotkey),
+  sendMicState: (state) => ipcRenderer.send('webclient-mic-state', state),
+  clearWebviewCache: () => ipcRenderer.invoke('clear-session-cache', 'persist:ns'),
   sendToWebClient: (channel, data) => {
     const frame = document.getElementById('ns-webview');
-    if (!frame) {
-      return;
-    }
+    if (!frame) return;
     if (channel === 'toggle-mic') {
       ipcRenderer.invoke('execute-in-webview', {
         code: 'if (window.voiceClient && typeof window.voiceClient.toggleMicrophone === "function") { window.voiceClient.toggleMicrophone(); }'
@@ -1234,18 +1112,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   },
-  setPTTHotkey: (codes) => {
-    return ipcRenderer.invoke('set-ptt-hotkey', codes);
-  },
-  getPTTHotkey: () => {
-    return ipcRenderer.invoke('get-ptt-hotkey');
-  },
-  startKeyCapture: () => {
-    return ipcRenderer.invoke('start-key-capture');
-  },
-  stopKeyCapture: () => {
-    return ipcRenderer.invoke('stop-key-capture');
-  },
+  setPTTHotkey: (codes) => ipcRenderer.invoke('set-ptt-hotkey', codes),
+  getPTTHotkey: () => ipcRenderer.invoke('get-ptt-hotkey'),
+  startKeyCapture: () => ipcRenderer.invoke('start-key-capture'),
+  stopKeyCapture: () => ipcRenderer.invoke('stop-key-capture'),
   onBlockLaunchGame: (callback) => {
     const handler = (event, blocked) => callback(blocked);
     ipcRenderer.on('block-launch-game', handler);
@@ -1301,28 +1171,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('ptt-activated', handler);
     return () => ipcRenderer.off('ptt-activated', handler);
   },
-  openExternal: (url) => {
-    return ipcRenderer.invoke('open-external', url);
-  },
-  copyToClipboard: (text) => {
-    return ipcRenderer.invoke('copy-to-clipboard', text);
-  },
-
-  // ========== НОВЫЕ МЕТОДЫ ДЛЯ КАСТОМНЫХ ЗВУКОВ ==========
-  playSound: (soundType) => {
-    return ipcRenderer.invoke('play-sound', soundType);
-  },
-  selectSoundsFolder: () => {
-    return ipcRenderer.invoke('select-sounds-folder');
-  },
-  importSounds: (sourceFolder) => {
-    return ipcRenderer.invoke('import-sounds', sourceFolder);
-  },
-  getSoundsStatus: () => {
-    return ipcRenderer.invoke('get-sounds-status');
-  },
-  openSoundsFolder: () => {
-    ipcRenderer.send('open-sounds-folder');
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
+  playSound: (soundType) => ipcRenderer.invoke('play-sound', soundType),
+  selectSoundsFolder: () => ipcRenderer.invoke('select-sounds-folder'),
+  importSounds: (sourceFolder) => ipcRenderer.invoke('import-sounds', sourceFolder),
+  getSoundsStatus: () => ipcRenderer.invoke('get-sounds-status'),
+  openSoundsFolder: () => ipcRenderer.send('open-sounds-folder'),
+  fetchSoundsConfig: () => ipcRenderer.invoke('fetch-sounds-config'),
+  downloadSoundsSection: (sectionName) => ipcRenderer.invoke('download-sounds-section', sectionName),
+  isSoundsDirEmpty: () => ipcRenderer.invoke('is-sounds-dir-empty'),
+  onSoundsDownloadProgress: (callback) => {
+    const handler = (event, progress) => callback(progress);
+    ipcRenderer.on('sounds-download-progress', handler);
+    return () => ipcRenderer.off('sounds-download-progress', handler);
   }
 });
 ════════════════════════════════════════
@@ -1365,6 +1227,155 @@ class Settings {
 }
 
 module.exports = new Settings();
+════════════════════════════════════════
+📄 FILE: main/soundsManager.js
+════════════════════════════════════════
+const axios = require('axios');
+const fs = require('fs-extra');
+const path = require('path');
+const { app } = require('electron');
+
+const SOUNDS_CONFIG_URL = 'https://raw.githubusercontent.com/Vladgobelen/NSQCu/main/sounds.json';
+const SOUNDS_DIR = path.join(app.getPath('userData'), 'sounds');
+
+/**
+ * Проверка: пуста ли папка кастомных звуков (нет .mp3 файлов)
+ */
+async function isSoundsDirEmpty() {
+  try {
+    await fs.ensureDir(SOUNDS_DIR);
+    const files = await fs.readdir(SOUNDS_DIR);
+    const mp3Files = files.filter(f => f.toLowerCase().endsWith('.mp3'));
+    return mp3Files.length === 0;
+  } catch (error) {
+    console.error('[SOUNDS] Error checking sounds dir:', error.message);
+    return true; // Treat errors as "empty" to trigger download
+  }
+}
+
+/**
+ * Скачивание файла по URL в указанную папку
+ */
+async function downloadFileFromUrl(url, destPath) {
+  const response = await axios.get(url, {
+    responseType: 'stream',
+    timeout: 30000,
+    maxRedirects: 5,
+    headers: { 'User-Agent': 'NSQCuE-Sounds/1.0' }
+  });
+  
+  const writer = fs.createWriteStream(destPath);
+  return new Promise((resolve, reject) => {
+    response.data.pipe(writer);
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+  });
+}
+
+/**
+ * Получение конфигурации звуков (парсинг sounds.json)
+ */
+async function fetchSoundsConfig() {
+  try {
+    const response = await axios.get(SOUNDS_CONFIG_URL, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'NSQCuE-Sounds/1.0' }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('[SOUNDS] Failed to fetch config:', error.message);
+    throw new Error(`Не удалось загрузить конфигурацию звуков: ${error.message}`);
+  }
+}
+
+/**
+ * Получение списка доступных разделов
+ */
+function getSections(config) {
+  if (!config?.sections) return [];
+  return Object.keys(config.sections);
+}
+
+/**
+ * Скачивание всех файлов из указанного раздела
+ * @param {string} sectionName - имя раздела (например, "Стандартные")
+ * @param {object} config - конфигурация из sounds.json
+ * @param {function} onProgress - колбэк для прогресса (optional)
+ */
+async function downloadSection(sectionName, config, onProgress = null) {
+  const section = config.sections?.[sectionName];
+  if (!section) {
+    throw new Error(`Раздел "${sectionName}" не найден в конфигурации`);
+  }
+
+  await fs.ensureDir(SOUNDS_DIR);
+  
+  const entries = Object.entries(section);
+  const total = entries.length;
+  
+  for (let i = 0; i < total; i++) {
+    const [soundKey, url] = entries[i];
+    const fileName = `${soundKey}.mp3`;
+    const destPath = path.join(SOUNDS_DIR, fileName);
+    
+    try {
+      await downloadFileFromUrl(url, destPath);
+      if (onProgress) {
+        onProgress({ 
+          current: i + 1, 
+          total, 
+          sound: soundKey, 
+          success: true 
+        });
+      }
+    } catch (error) {
+      console.error(`[SOUNDS] Failed to download ${soundKey}:`, error.message);
+      if (onProgress) {
+        onProgress({ 
+          current: i + 1, 
+          total, 
+          sound: soundKey, 
+          success: false, 
+          error: error.message 
+        });
+      }
+      // Continue with other files even if one fails
+    }
+  }
+}
+
+/**
+ * Авто-загрузка базовых звуков при первом запуске
+ * Скачивает раздел "Стандартные" если папка пуста
+ */
+async function autoDownloadBaseSounds() {
+  if (!await isSoundsDirEmpty()) {
+    return { skipped: true, reason: 'sounds_dir_not_empty' };
+  }
+  
+  try {
+    const config = await fetchSoundsConfig();
+    if (!config.sections?.['Стандартные']) {
+      return { skipped: true, reason: 'no_standard_section' };
+    }
+    
+    await downloadSection('Стандартные', config);
+    return { success: true, section: 'Стандартные' };
+  } catch (error) {
+    console.error('[SOUNDS] Auto-download failed:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+module.exports = {
+  SOUNDS_DIR,
+  isSoundsDirEmpty,
+  fetchSoundsConfig,
+  getSections,
+  downloadSection,
+  downloadFileFromUrl,
+  autoDownloadBaseSounds
+};
 ════════════════════════════════════════
 📄 FILE: main/utils.js
 ════════════════════════════════════════
@@ -1411,7 +1422,6 @@ module.exports = { setupLogging };
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Контейнер менеджера аддонов -->
   <div class="container">
     <div class="top-bar" id="top-bar">
       <h1>Менеджер аддонов</h1>
@@ -1432,7 +1442,6 @@ module.exports = { setupLogging };
     <div class="addons-list" id="addons-list"></div>
   </div>
 
-  <!-- Контейнер веб-клиента -->
   <div id="webview-container" class="webview-container">
     <webview
       id="ns-webview"
@@ -1444,22 +1453,29 @@ module.exports = { setupLogging };
     ></webview>
   </div>
 
-  <!-- Всплывающая панель управления (поверх веб-клиента) -->
   <div class="back-panel" id="back-panel">
     <button class="back-btn" id="back-btn">← Назад к аддонам</button>
     <div class="panel-divider"></div>
     <button class="panel-mic-btn" id="panel-mic-btn" title="Микрофон">🎤</button>
     <button class="panel-refresh-btn" id="panel-refresh-btn" title="Обновить веб-клиент (очистить кэш)">🔄</button>
     <button class="panel-settings-btn" id="panel-settings-btn" title="Настройки PTT">⚙️</button>
+    <button class="panel-sounds-btn" id="panel-sounds-btn" title="Звуки">🔊</button>
   </div>
 
-  <!-- Панель настроек хоткея PTT -->
   <div class="ptt-settings-panel" id="ptt-settings-panel">
     <div class="ptt-settings-header">Настройка PTT</div>
     <div class="ptt-capture-area" id="ptt-capture-area">Нажмите комбинацию клавиш...</div>
     <div class="ptt-buttons">
       <button id="ptt-save-btn">Сохранить</button>
       <button id="ptt-cancel-btn">Отмена</button>
+    </div>
+  </div>
+
+  <div class="sounds-sections-panel" id="sounds-sections-panel">
+    <div class="sounds-panel-header">Загрузка звуков</div>
+    <div class="sounds-panel-content" id="sounds-panel-content"></div>
+    <div class="sounds-panel-buttons">
+      <button id="sounds-close-btn">Закрыть</button>
     </div>
   </div>
 
@@ -1483,10 +1499,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const panelMicBtn = document.getElementById('panel-mic-btn');
   const panelRefreshBtn = document.getElementById('panel-refresh-btn');
   const panelSettingsBtn = document.getElementById('panel-settings-btn');
+  const panelSoundsBtn = document.getElementById('panel-sounds-btn');
   const pttSettingsPanel = document.getElementById('ptt-settings-panel');
   const pttCaptureArea = document.getElementById('ptt-capture-area');
   const pttSaveBtn = document.getElementById('ptt-save-btn');
   const pttCancelBtn = document.getElementById('ptt-cancel-btn');
+  const soundsSectionsPanel = document.getElementById('sounds-sections-panel');
+  const soundsPanelContent = document.getElementById('sounds-panel-content');
+  const soundsCloseBtn = document.getElementById('sounds-close-btn');
   const topBar = document.getElementById('top-bar');
   const gamePanel = document.getElementById('game-panel');
   const divider = document.getElementById('divider');
@@ -1497,6 +1517,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let isPanelMicActive = false;
   let capturedHotkey = new Set();
   let isSettingsOpen = false;
+  let isSoundsPanelOpen = false;
   let isMouseInCaptureZone = false;
   let isGameReady = false;
   let isLaunchBlocked = false;
@@ -1551,60 +1572,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = document.createElement('div');
     card.className = 'addon-card';
     card.dataset.name = name;
-
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'addon-content-wrapper';
-
     const overlay = document.createElement('div');
     overlay.className = 'progress-overlay hidden';
     card.overlay = overlay;
-
     const topRow = document.createElement('div');
     topRow.className = 'addon-top';
-
     const nameEl = document.createElement('span');
     nameEl.className = 'addon-name';
     nameEl.textContent = name;
-
     const updateLabel = document.createElement('span');
     updateLabel.className = 'update-label';
     updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
     updateLabel.textContent = 'Доступно обновление';
-
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.id = `checkbox-${name}`;
     checkbox.checked = addon.installed;
     checkbox.disabled = addon.being_processed || addon.updating;
-
     const label = document.createElement('label');
     label.htmlFor = `checkbox-${name}`;
     label.className = 'custom-checkbox';
-
     topRow.append(nameEl, updateLabel, checkbox, label);
-
     const description = document.createElement('div');
     description.className = 'addon-description';
     description.textContent = addon.description;
-
     card.checkbox = checkbox;
     card.updateLabel = updateLabel;
-
     card.appendChild(overlay);
     contentWrapper.append(topRow, description);
     card.appendChild(contentWrapper);
-
     if (addon.installed) {
       card.onmouseenter = () => card.classList.add('deleting-warning');
       card.onmouseleave = () => card.classList.remove('deleting-warning');
     }
-
     checkbox.addEventListener('change', () => {
       const willInstall = checkbox.checked;
       const originalState = !willInstall;
       checkbox.disabled = true;
       card.classList.remove('deleting-warning');
-
       window.electronAPI.toggleAddon(name, willInstall)
         .then(success => {
           if (!success) {
@@ -1616,7 +1623,6 @@ document.addEventListener('DOMContentLoaded', () => {
           checkbox.disabled = false;
         });
     });
-
     return card;
   }
 
@@ -1643,7 +1649,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(addons => {
         const addon = addons[name];
         if (!addon) return;
-
         const cards = document.querySelectorAll('.addon-card');
         for (const card of cards) {
           if (card.dataset.name === name) {
@@ -1721,7 +1726,6 @@ document.addEventListener('DOMContentLoaded', () => {
       addonsList.style.display = 'none';
       backPanel.style.display = 'flex';
       voiceBtn.style.display = 'none';
-
       try {
         const platform = await window.electronAPI.getPlatform();
         window.electronAPI.sendToWebClient('electron-ready', {
@@ -1746,6 +1750,57 @@ document.addEventListener('DOMContentLoaded', () => {
       backPanel.style.display = 'none';
       backPanel.classList.remove('visible');
       voiceBtn.style.display = 'block';
+    }
+  }
+
+  async function openSoundsPanel() {
+    if (isSoundsPanelOpen) {
+      soundsSectionsPanel.classList.remove('visible');
+      isSoundsPanelOpen = false;
+      return;
+    }
+    soundsSectionsPanel.classList.add('visible');
+    isSoundsPanelOpen = true;
+    soundsPanelContent.innerHTML = '<div class="sounds-loading">Загрузка конфигурации...</div>';
+    try {
+      const customBtn = document.createElement('button');
+      customBtn.className = 'sounds-section-btn';
+      customBtn.textContent = '📁 Свои';
+      customBtn.title = 'Открыть папку с кастомными звуками';
+      customBtn.addEventListener('click', () => {
+        window.electronAPI.openSoundsFolder();
+      });
+      soundsPanelContent.appendChild(customBtn);
+      const divider = document.createElement('div');
+      divider.className = 'sounds-divider';
+      soundsPanelContent.appendChild(divider);
+      const config = await window.electronAPI.fetchSoundsConfig();
+      soundsPanelContent.innerHTML = '';
+      soundsPanelContent.appendChild(customBtn);
+      soundsPanelContent.appendChild(divider);
+      if (!config?.sections) {
+        soundsPanelContent.innerHTML = '<div class="sounds-error">Разделы не найдены</div>';
+        return;
+      }
+      for (const sectionName of Object.keys(config.sections)) {
+        const btn = document.createElement('button');
+        btn.className = 'sounds-section-btn';
+        btn.textContent = sectionName;
+        btn.addEventListener('click', () => downloadSectionSounds(sectionName));
+        soundsPanelContent.appendChild(btn);
+      }
+    } catch (err) {
+      soundsPanelContent.innerHTML = `<div class="sounds-error">Ошибка: ${err.message}</div>`;
+    }
+  }
+
+  async function downloadSectionSounds(sectionName) {
+    soundsPanelContent.innerHTML = `<div class="sounds-loading">Загрузка раздела "${sectionName}"...</div>`;
+    try {
+      await window.electronAPI.downloadSoundsSection(sectionName);
+      soundsPanelContent.innerHTML = `<div class="sounds-success">✅ Раздел "${sectionName}" загружен</div>`;
+    } catch (err) {
+      soundsPanelContent.innerHTML = `<div class="sounds-error">❌ Ошибка: ${err.message}</div>`;
     }
   }
 
@@ -1887,10 +1942,29 @@ document.addEventListener('DOMContentLoaded', () => {
       backPanel.classList.add('visible');
     });
     backPanel.addEventListener('mouseleave', () => {
-      if (isSettingsOpen) return;
+      if (isSettingsOpen || isSoundsPanelOpen) return;
       hidePanelTimeout = setTimeout(() => {
         backPanel.classList.remove('visible');
       }, 500);
+    });
+  }
+
+  if (panelSoundsBtn) {
+    panelSoundsBtn.addEventListener('click', openSoundsPanel);
+  }
+
+  if (soundsCloseBtn) {
+    soundsCloseBtn.addEventListener('click', () => {
+      soundsSectionsPanel.classList.remove('visible');
+      isSoundsPanelOpen = false;
+    });
+  }
+
+  if (window.electronAPI?.onSoundsDownloadProgress) {
+    window.electronAPI.onSoundsDownloadProgress((progress) => {
+      if (soundsPanelContent && soundsPanelContent.querySelector('.sounds-loading')) {
+        soundsPanelContent.innerHTML = `<div class="sounds-loading">Загрузка: ${progress.current}/${progress.total} (${progress.sound})</div>`;
+      }
     });
   }
 
@@ -1967,7 +2041,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       window.electronAPI?.sendMicState(state);
     });
-
     window.electronAPI.onWebClientEvent('request-ptt-register', config => {
       if (window.electronAPI?.registerPTTHotkey && config?.hotkey) {
         window.electronAPI.registerPTTHotkey(config.hotkey)
@@ -1986,67 +2059,58 @@ document.addEventListener('DOMContentLoaded', () => {
         language: 'ru'
       });
     });
-
     nsWebview.addEventListener('did-fail-load', event => {
       showError('Не удалось загрузить веб-клиент: ' + (event.errorDescription || 'Unknown error'));
     });
-
-    // Обработка звуков из webview
-nsWebview.addEventListener('ipc-message', (event) => {
-  if (event.channel === 'play-sound') {
-    const soundType = event.args[0];
-    window.electronAPI.playSound(soundType).catch(() => {});
-  }
-});
-    
-nsWebview.addEventListener('dom-ready', () => {
-  nsWebview.executeJavaScript(`
-    (function() {
-      window.addEventListener('message', (event) => {
-        if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
-          if (window.ipcRenderer) {
-            window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-          }
+    nsWebview.addEventListener('ipc-message', (event) => {
+      if (event.channel === 'play-sound') {
+        const soundType = event.args[0];
+        window.electronAPI.playSound(soundType).catch(() => {});
+      }
+    });
+    nsWebview.addEventListener('dom-ready', () => {
+      nsWebview.executeJavaScript(`
+        (function() {
+          window.addEventListener('message', (event) => {
+            if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
+              if (window.ipcRenderer) {
+                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
+              }
+            }
+            if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
+              if (window.ipcRenderer) {
+                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
+              }
+            }
+          });
+        })();
+      `).catch(() => {});
+    });
+    nsWebview.addEventListener('console-message', (event) => {
+      const message = event.message;
+      let soundType = null;
+      if (message.includes('[WebView] ✓ Sent via postMessage:')) {
+        const match = message.match(/postMessage:\s*(\w+-\w+)/);
+        if (match) {
+          soundType = match[1];
         }
-        if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
-          if (window.ipcRenderer) {
-            window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-          }
+      } else if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
+        const match = message.match(/playSound called with:\s*(\w+-\w+)/);
+        if (match) {
+          soundType = match[1];
         }
-      });
-    })();
-  `).catch(() => {});
-});
-    
-nsWebview.addEventListener('console-message', (event) => {
-  const message = event.message;
-  let soundType = null;
-  
-  if (message.includes('[WebView] ✓ Sent via postMessage:')) {
-    const match = message.match(/postMessage:\s*(\w+-\w+)/);
-    if (match) {
-      soundType = match[1];
-    }
-  } else if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
-    const match = message.match(/playSound called with:\s*(\w+-\w+)/);
-    if (match) {
-      soundType = match[1];
-    }
-  }
-  
-  if (soundType) {
-    window.electronAPI.playSound(soundType).catch(() => {});
-  }
-});
+      }
+      if (soundType) {
+        window.electronAPI.playSound(soundType).catch(() => {});
+      }
+    });
   }
 
-  // Обработка копирования в буфер обмена
   window.addEventListener('message', (event) => {
     if (event.data?.type === 'COPY_TO_CLIPBOARD' && event.data?.text) {
       window.electronAPI?.copyToClipboard(event.data.text).catch(() => {});
     }
   });
-  
 });
 ════════════════════════════════════════
 📄 FILE: renderer/style.css
@@ -2066,7 +2130,6 @@ nsWebview.addEventListener('console-message', (event) => {
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: var(--bg-primary); }
 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: var(--text-primary); line-height: 1.6; }
-
 .container { width: 100%; height: 100vh; padding: 10px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
 .webview-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 9999; display: none; }
 .webview-container.active { display: block; }
@@ -2090,162 +2153,70 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: var(
 .panel-refresh-btn:hover { background-color: #3d3d3d; color: var(--text-primary); border-color: #777777; transform: rotate(90deg); }
 .panel-refresh-btn:active { transform: scale(0.95) rotate(90deg); }
 
-/* 🔌 Кнопка настроек PTT */
-.panel-settings-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  color: var(--text-secondary);
-  font-size: 16px;
-  width: 36px;
-  height: 36px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-.panel-settings-btn:hover {
-  background-color: #3d3d3d;
-  color: var(--text-primary);
-  border-color: #777777;
-  transform: rotate(45deg);
-}
+.panel-settings-btn { background: transparent; border: 1px solid var(--border); border-radius: 50%; color: var(--text-secondary); font-size: 16px; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.panel-settings-btn:hover { background-color: #3d3d3d; color: var(--text-primary); border-color: #777777; transform: rotate(45deg); }
 
-/* 🔌 Панель настроек PTT */
+.panel-sounds-btn { background: transparent; border: 1px solid var(--border); border-radius: 50%; color: var(--text-secondary); font-size: 16px; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.panel-sounds-btn:hover { background-color: #3d3d3d; color: var(--text-primary); border-color: #777777; }
+
 .ptt-settings-panel {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) scale(0.95);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 15px;
-  z-index: 10002;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: all 0.2s ease;
-  width: 320px;
-  max-width: 90vw;
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.95);
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px;
+  padding: 15px; z-index: 10002; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  opacity: 0; visibility: hidden; pointer-events: none; transition: all 0.2s ease;
+  width: 320px; max-width: 90vw;
 }
+.ptt-settings-panel.visible { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+.ptt-settings-header { font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 10px; text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.ptt-capture-area { background: #1a1a1a; border: 1px dashed var(--border); border-radius: 6px; padding: 12px; min-height: 40px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; margin-bottom: 12px; transition: all 0.2s; user-select: none; }
+.ptt-capture-area.active { border-color: var(--accent); background: rgba(42, 130, 218, 0.1); color: var(--text-primary); border-style: solid; }
+.panel-settings-btn[title]:hover::after { content: attr(title); position: absolute; bottom: -35px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: var(--text-primary); padding: 4px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 10003; pointer-events: none; animation: fadeIn 0.15s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(5px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.ptt-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+.ptt-buttons button { padding: 6px 12px; border-radius: 5px; border: 1px solid var(--border); background: #3d3d3d; color: var(--text-primary); cursor: pointer; font-size: 13px; transition: background 0.2s; }
+.ptt-buttons button:hover { background: #4d4d4d; }
+.ptt-buttons button#ptt-save-btn { background: var(--accent); border-color: var(--accent); }
+.ptt-buttons button#ptt-save-btn:hover { background: #1a6bb5; }
 
-.ptt-settings-panel.visible {
-  opacity: 1;
-  visibility: visible;
-  transform: translate(-50%, -50%) scale(1);
-  pointer-events: auto;
+.sounds-sections-panel {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.95);
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px;
+  padding: 15px; z-index: 10002; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  opacity: 0; visibility: hidden; pointer-events: none; transition: all 0.2s ease;
+  width: 320px; max-width: 90vw;
 }
-
-.ptt-settings-header {
-  font-size: 14px;
-  font-weight: bold;
-  color: var(--text-primary);
-  margin-bottom: 10px;
-  text-align: center;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
-}
-
-.ptt-capture-area {
-  background: #1a1a1a;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  padding: 12px;
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 13px;
-  margin-bottom: 12px;
-  transition: all 0.2s;
-  user-select: none;
-}
-.ptt-capture-area.active {
-  border-color: var(--accent);
-  background: rgba(42, 130, 218, 0.1);
-  color: var(--text-primary);
-  border-style: solid;
-}
-/* 🔌 Кастомная подсказка для кнопки настроек */
-.panel-settings-btn[title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    bottom: -35px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1a1a1a;
-    color: var(--text-primary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    white-space: nowrap;
-    border: 1px solid var(--border);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    z-index: 10003;
-    pointer-events: none;
-    animation: fadeIn 0.15s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateX(-50%) translateY(5px); }
-    to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-.ptt-buttons {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.ptt-buttons button {
-  padding: 6px 12px;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  background: #3d3d3d;
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 13px;
-  transition: background 0.2s;
-}
-.ptt-buttons button:hover {
-  background: #4d4d4d;
-}
-.ptt-buttons button#ptt-save-btn {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.ptt-buttons button#ptt-save-btn:hover {
-  background: #1a6bb5;
-}
+.sounds-sections-panel.visible { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+.sounds-panel-header { font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 10px; text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.sounds-panel-content { min-height: 50px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.sounds-section-btn { padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: #3d3d3d; color: var(--text-primary); cursor: pointer; font-size: 13px; transition: background 0.2s, transform 0.1s; }
+.sounds-section-btn:hover { background: #4d4d4d; border-color: var(--accent); }
+.sounds-section-btn:active { transform: scale(0.98); }
+.sounds-panel-buttons { display: flex; justify-content: flex-end; }
+.sounds-panel-buttons button { padding: 6px 12px; border-radius: 5px; border: 1px solid var(--border); background: #3d3d3d; color: var(--text-primary); cursor: pointer; font-size: 13px; transition: background 0.2s; }
+.sounds-panel-buttons button:hover { background: #4d4d4d; }
+.sounds-loading { color: var(--text-secondary); text-align: center; padding: 10px; font-size: 13px; }
+.sounds-success { color: var(--success); text-align: center; padding: 10px; font-size: 13px; }
+.sounds-error { color: var(--danger); text-align: center; padding: 10px; font-size: 13px; }
 
 .top-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background-color: #252525; border-radius: 8px; margin-bottom: 15px; flex-shrink: 0; }
 .top-bar h1 { font-size: 18px; font-weight: bold; color: var(--text-primary); }
-
 .voice-btn { background-color: #252525; border: 1px solid var(--border); border-radius: 20px; color: white; font-size: 16px; width: 40px; height: 40px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
 .voice-btn:hover { background-color: #3d3d3d; border-color: #777777; }
 .voice-btn.speaking { animation: pulse 1s infinite; background-color: rgba(46, 204, 113, 0.15); border-color: #2ecc71; color: #2ecc71; }
 .voice-btn.muted { background-color: rgba(231, 76, 60, 0.15); border-color: #e74c3c; color: #e74c3c; }
-
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-
 .back-btn { background: transparent; border: 1px solid var(--border); color: var(--text-primary); font-size: 14px; font-weight: bold; cursor: pointer; padding: 6px 16px; border-radius: 6px; transition: all 0.2s; white-space: nowrap; }
 .back-btn:hover { background: #3d3d3d; border-color: #777777; }
-
 .game-panel { background-color: #252525; border-radius: 10px; padding: 10px 15px; margin: 0 10px 15px 10px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 #game-status { font-size: 14px; color: var(--text-secondary); }
 #launch-btn { background-color: var(--success); border: none; border-radius: 5px; color: white; font-weight: bold; padding: 8px 15px; cursor: pointer; transition: background-color 0.2s; height: 36px; min-width: 120px; }
 #launch-btn:hover:not(:disabled) { background-color: #27ae60; }
 #launch-btn:disabled { background-color: #7f8c8d; cursor: not-allowed; }
-
 .divider { height: 1px; background-color: var(--border); margin: 0 10px 10px 10px; flex-shrink: 0; }
 .addons-header { display: flex; justify-content: space-between; align-items: center; padding: 0 10px 5px 10px; margin-bottom: 5px; flex-shrink: 0; }
 .addons-header h2 { font-size: 16px; font-weight: bold; color: var(--text-primary); }
 .logs-btn { background: none; border: 1px solid var(--border); color: var(--text-secondary); padding: 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
 .logs-btn:hover { background-color: #3d3d3d; color: var(--text-primary); }
-
 #addons-list { flex-grow: 1; overflow-y: auto; min-height: 0; }
 .addon-card { background-color: var(--bg-secondary); border-radius: 10px; margin: 0 10px 10px 10px; position: relative; z-index: 1; transition: background-color 0.2s ease; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
 .addon-card:hover { background-color: #353535; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); transform: translateY(-1px); transition: transform 0.2s; }
@@ -2254,22 +2225,23 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: var(
 .addon-name { font-weight: bold; font-size: 14px; color: var(--text-primary); }
 .update-label { color: #8BC34A; font-style: italic; background-color: rgba(139, 195, 74, 0.1); padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-right: 8px; }
 .addon-description { color: var(--text-secondary); font-size: 13px; margin-bottom: 8px; line-height: 1.4; z-index: 2; position: relative; }
-
 .progress-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, rgba(0, 0, 0, 0.8) var(--progress), rgba(0, 0, 0, 0.8) var(--progress), transparent var(--progress), transparent 100%); z-index: 1; pointer-events: none; opacity: 1; transition: opacity 0.3s ease; }
 .progress-overlay.hidden { opacity: 0; }
-
 .addon-card.deleting-warning { background-color: #ff4444 !important; }
 .addon-card.deleting-warning .addon-content-wrapper::after { content: "ВНИМАНИЕ: БУДЕТ УДАЛЕН"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.85); color: #ff4444; padding: 8px 16px; border-radius: 4px; font-weight: bold; font-size: 14px; white-space: nowrap; z-index: 10; pointer-events: none; }
-
 .addon-top > input[type="checkbox"] { position: absolute; right: 0; top: 0; width: 30px; height: 30px; opacity: 0; cursor: pointer; z-index: 5; margin: 0; }
 .addon-top > input[type="checkbox"] + .custom-checkbox { position: absolute; right: 0; top: 0; width: 18px; height: 18px; border: 2px solid #555555; border-radius: 3px; background-color: #333333; cursor: pointer; z-index: 2; transition: all 0.2s ease; }
 .addon-top > input[type="checkbox"]:checked + .custom-checkbox { background-color: #2A82DA; border-color: #2A82DA; }
 .addon-top > input[type="checkbox"]:checked + .custom-checkbox:after { content: ''; position: absolute; top: 3px; left: 6px; width: 4px; height: 8px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .addon-top > input[type="checkbox"]:disabled + .custom-checkbox { opacity: 0.5; cursor: not-allowed; }
 .addon-top > input[type="checkbox"]:hover + .custom-checkbox { border-color: #777777; }
-
 #addons-list::-webkit-scrollbar { width: 8px; }
 #addons-list::-webkit-scrollbar-track { background: #2d2d2d; border-radius: 4px; }
 #addons-list::-webkit-scrollbar-thumb { background: #555555; border-radius: 4px; }
 #addons-list::-webkit-scrollbar-thumb:hover { background: #777777; }
 #addons-list { scrollbar-width: thin; scrollbar-color: #555555 #2d2d2d; }
+.sounds-divider {
+  height: 1px;
+  background-color: var(--border);
+  margin: 4px 0 8px 0;
+}
