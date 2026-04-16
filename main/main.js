@@ -35,12 +35,30 @@ const SOUND_MAP = {
 };
 
 function playSoundSilent(filePath) {
-  if (!fs.existsSync(filePath)) return;
+  if (!fs.existsSync(filePath)) {
+    logger.error(`[SOUND] File not found: ${filePath}`);
+    return;
+  }
+  
+  logger.info(`[SOUND] Playing: ${filePath}`);
   const uriPath = 'file:///' + filePath.replace(/\\/g, '/').replace(/ /g, '%20');
-  const psCommand = `Add-Type -AssemblyName presentationCore; $player = New-Object System.Windows.Media.MediaPlayer; $player.Open('${uriPath}'); $player.Play(); Start-Sleep -Seconds 3; $player.Stop(); $player.Dispose()`;
-  exec(`powershell -NoProfile -WindowStyle Hidden -Command "${psCommand}"`, (err) => {
-    if (err) logger.error(`[SOUND] Playback error: ${err.message}`);
-  });
+  
+  if (process.platform === 'win32') {
+    const psCommand = `Add-Type -AssemblyName presentationCore; $player = New-Object System.Windows.Media.MediaPlayer; $player.Open('${uriPath}'); $player.Play(); Start-Sleep -Seconds 3; $player.Stop(); $player.Dispose()`;
+    exec(`powershell -NoProfile -WindowStyle Hidden -Command "${psCommand}"`, (err, stdout, stderr) => {
+      if (err) {
+        logger.error(`[SOUND] PowerShell error: ${err.message}`);
+        if (stderr) logger.error(`[SOUND] stderr: ${stderr}`);
+      } else {
+        logger.info(`[SOUND] Playback completed`);
+      }
+    });
+  } else {
+    const player = process.platform === 'darwin' ? 'afplay' : 'play';
+    exec(`${player} "${filePath}"`, (err) => {
+      if (err) logger.error(`[SOUND] Playback error: ${err.message}`);
+    });
+  }
 }
 
 async function ensureGamePath() {
@@ -152,6 +170,8 @@ function startOverlay() {
     return;
   }
   
+  logger.info(`[OVERLAY] Found at: ${exePath}`);
+  
   try {
     overlayProcess = spawn(exePath, [], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -216,8 +236,6 @@ function connectToOverlayPipe() {
   
   pipeClient.on('connect', () => {
     logger.info('[OVERLAY] Connected to overlay pipe');
-    
-    // Отправляем тестовое сообщение
     sendToOverlay('message', { text: 'Electron connected!' });
   });
   
@@ -228,12 +246,10 @@ function connectToOverlayPipe() {
       if (msg.type === 'input') {
         logger.info(`[OVERLAY] Received input: ${msg.text}`);
         
-        // Отправляем в рендерер для отображения в тултипе
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('overlay-input-received', msg.text);
         }
         
-        // Отправляем в веб-чат
         sendToWebClient(msg.text);
       }
     } catch (err) {
@@ -287,12 +303,12 @@ function sendToWebClient(text) {
   }
   
   try {
-    // Пытаемся найти поле ввода и вставить текст
+    const escapedText = text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    
     const code = `
       (function() {
-        console.log('[Overlay] Attempting to send message:', '${text.replace(/'/g, "\\'")}');
+        console.log('[Overlay] Attempting to send message:', '${escapedText}');
         
-        // Ищем поле ввода чата
         const selectors = [
           'input[type="text"]',
           'textarea',
@@ -311,13 +327,10 @@ function sendToWebClient(text) {
         
         if (inputField) {
           if (inputField.tagName === 'INPUT' || inputField.tagName === 'TEXTAREA') {
-            inputField.value = '${text.replace(/'/g, "\\'")}';
-            
-            // Триггерим события для реактивных фреймворков
+            inputField.value = '${escapedText}';
             inputField.dispatchEvent(new Event('input', { bubbles: true }));
             inputField.dispatchEvent(new Event('change', { bubbles: true }));
             
-            // Ищем кнопку отправки
             const sendSelectors = [
               'button[type="submit"]',
               '.send-button',
@@ -332,7 +345,6 @@ function sendToWebClient(text) {
               if (sendButton) break;
             }
             
-            // Если нет кнопки, пробуем отправить по Enter
             if (!sendButton) {
               inputField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
               inputField.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
@@ -342,12 +354,9 @@ function sendToWebClient(text) {
             
             return true;
           } else if (inputField.getAttribute('contenteditable') === 'true') {
-            inputField.textContent = '${text.replace(/'/g, "\\'")}';
+            inputField.textContent = '${escapedText}';
             inputField.dispatchEvent(new Event('input', { bubbles: true }));
-            
-            // Пробуем отправить по Enter
             inputField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-            
             return true;
           }
         }
@@ -384,25 +393,37 @@ function getKeyName(code) {
 
 function setupWebviewHandlers(webContents) {
   webviewWebContents = webContents;
+  
+  // ПРИНУДИТЕЛЬНО ОТКРЫВАЕМ КОНСОЛЬ ВЕБ-КЛИЕНТА
+  webContents.openDevTools({ mode: 'detach' });
+  logger.info('[WEBVIEW] DevTools opened');
+  
   const isExternalUrl = (url) => {
     try {
       const urlObj = new URL(url);
       return urlObj.origin !== 'https://ns.fiber-gate.ru';
     } catch { return false; }
   };
+  
   webContents.on('will-navigate', (e, url) => {
     if (isExternalUrl(url)) { e.preventDefault(); shell.openExternal(url); }
   });
+  
   webContents.setWindowOpenHandler(({ url }) => {
     if (isExternalUrl(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  
   webContents.on('did-fail-load', (e, code, desc) => {
     logger.error(`[WEBVIEW] Failed: ${code} - ${desc}`);
   });
+  
   webContents.on('ipc-message', (event, channel, ...args) => {
+    logger.info(`[WEBVIEW_IPC] Channel: ${channel}, Args: ${JSON.stringify(args)}`);
+    
     if (channel === 'play-sound') {
       const soundType = args[0];
+      logger.info(`[WEBVIEW] Play sound requested: ${soundType}`);
       const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
       const soundPath = path.join(SOUNDS_DIR, fileName);
       let finalPath = null;
@@ -414,10 +435,14 @@ function setupWebviewHandlers(webContents) {
           : path.join(__dirname, '..', 'sounds', fileName);
         if (fs.existsSync(resourcePath)) finalPath = resourcePath;
       }
-      if (!finalPath) return;
+      if (!finalPath) {
+        logger.error(`[WEBVIEW] Sound file not found: ${fileName}`);
+        return;
+      }
       playSoundSilent(finalPath);
     }
   });
+  
   webContents.on('did-finish-load', () => {
     const injectCode = `
 (function() {
@@ -435,24 +460,12 @@ function setupWebviewHandlers(webContents) {
     }
   };
   
-  // Перехватываем сообщения чата для отправки в оверлей
-  const originalLog = console.log;
-  console.log = function(...args) {
-    originalLog.apply(console, args);
-    
-    // Ищем сообщения чата в консоли
-    const msg = args.join(' ');
-    if (msg.includes('[CHAT]') || msg.includes('[MESSAGE]')) {
-      window.postMessage({ type: 'CHAT_MESSAGE', text: msg, source: 'webview' }, '*');
-    }
-  };
+  console.log('[Overlay] Setting up chat observer');
   
-  // Слушаем DOM на предмет новых сообщений
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node.nodeType === Node.ELEMENT_NODE) {
-          // Ищем элементы с сообщениями
           const messageSelectors = ['.message', '.chat-message', '.msg', '[data-message]'];
           for (const selector of messageSelectors) {
             if (node.matches && node.matches(selector)) {
@@ -487,6 +500,7 @@ function createWindow() {
     const allowedPermissions = ['media', 'microphone', 'camera', 'clipboard-read', 'clipboard-sanitized-write', 'clipboard'];
     callback(allowedPermissions.includes(permission));
   });
+  
   const applyCSP = (details, callback, isDefault) => {
     callback({
       responseHeaders: {
@@ -500,8 +514,10 @@ function createWindow() {
       }
     });
   };
+  
   nsSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, false));
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, true));
+  
   mainWindow = new BrowserWindow({
     width: 550, height: 650, minWidth: 300, minHeight: 500,
     title: 'Ночная стража: установщик аддонов',
@@ -511,15 +527,34 @@ function createWindow() {
     },
     icon: path.join(__dirname, '../assets/icon.png')
   });
+  
+  // ПРИНУДИТЕЛЬНО ОТКРЫВАЕМ КОНСОЛЬ MAIN WINDOW
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
+  
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   mainWindow.on('closed', () => { mainWindow = null; });
-  mainWindow.webContents.on('did-attach-webview', (event, webContents) => setupWebviewHandlers(webContents));
-  mainWindow.webContents.on('did-create-webview', (event, webContents) => setupWebviewHandlers(webContents));
+  mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
+    setupWebviewHandlers(webContents);
+  });
+  mainWindow.webContents.on('did-create-webview', (event, webContents) => {
+    setupWebviewHandlers(webContents);
+  });
 }
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
+  
+  logger.info(`[SOUNDS] User data sounds dir: ${SOUNDS_DIR}`);
+  logger.info(`[SOUNDS] App packaged: ${app.isPackaged}`);
+  logger.info(`[SOUNDS] Resources path: ${process.resourcesPath}`);
+  
+  for (const [type, file] of Object.entries(SOUND_MAP)) {
+    const userPath = path.join(SOUNDS_DIR, file);
+    const exists = fs.existsSync(userPath);
+    logger.info(`[SOUNDS] ${type}: ${file} - ${exists ? 'EXISTS' : 'MISSING'}`);
+  }
+  
   const gamePathValid = await ensureGamePath();
   if (!gamePathValid) {
     logger.error('[APP] Invalid game path, quitting');
@@ -529,7 +564,7 @@ app.whenReady().then(async () => {
   addonManager.setGamePath(settings.getGamePath());
   createWindow();
   startRustHook();
-  startOverlay(); // Запускаем оверлей
+  startOverlay();
   const savedHotkey = settings.getPTTHotkey();
   if (savedHotkey && Array.isArray(savedHotkey)) currentPTTHotkeyCodes = savedHotkey;
   try { await addonManager.loadAddons(); } catch (err) { logger.error('[APP] Failed to load addons:', err.message); }
@@ -542,11 +577,10 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('will-quit', () => { 
   stopRustHook(); 
-  stopOverlay(); // Останавливаем оверлей
+  stopOverlay();
   globalShortcut.unregisterAll(); 
 });
 
-// Существующие IPC обработчики
 ipcMain.handle('load-addons', async () => {
   try { return await addonManager.loadAddons(); } catch (error) { logger.error('[IPC] load-addons error:', error.message); return {}; }
 });
@@ -635,18 +669,25 @@ ipcMain.handle('copy-to-clipboard', (event, text) => {
 });
 
 ipcMain.handle('play-sound', async (event, soundType) => {
+  logger.info(`[SOUND] Requested sound type: ${soundType}`);
   const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
+  logger.info(`[SOUND] File name: ${fileName}`);
   const soundPath = path.join(SOUNDS_DIR, fileName);
   let finalPath = null;
   if (fs.existsSync(soundPath)) {
     finalPath = soundPath;
+    logger.info(`[SOUND] Found in user data: ${finalPath}`);
   } else {
     const resourcePath = app.isPackaged
       ? path.join(process.resourcesPath, 'sounds', fileName)
       : path.join(__dirname, '..', 'sounds', fileName);
+    logger.info(`[SOUND] Checking resource path: ${resourcePath}`);
     if (fs.existsSync(resourcePath)) finalPath = resourcePath;
   }
-  if (!finalPath) return false;
+  if (!finalPath) {
+    logger.error(`[SOUND] Sound file not found: ${fileName}`);
+    return false;
+  }
   playSoundSilent(finalPath);
   return true;
 });
@@ -708,7 +749,6 @@ ipcMain.handle('is-sounds-dir-empty', async () => {
   return await soundsManager.isSoundsDirEmpty();
 });
 
-// Новые IPC обработчики для оверлея
 ipcMain.handle('send-test-to-overlay', async () => {
   return sendToOverlay('message', { text: 'Тест' });
 });
@@ -718,6 +758,5 @@ ipcMain.handle('send-message-to-overlay', async (event, text) => {
 });
 
 ipcMain.on('chat-message-from-webview', (event, text) => {
-  // Получаем сообщение из веб-чата и отправляем в оверлей
   sendToOverlay('message', { text });
 });
