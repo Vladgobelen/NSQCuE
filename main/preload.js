@@ -110,9 +110,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API для оверлея
   sendTestToOverlay: () => ipcRenderer.invoke('send-test-to-overlay'),
   sendMessageToOverlay: (text) => ipcRenderer.invoke('send-message-to-overlay', text),
-  onOverlayInput: (callback) => {
+    onOverlayInput: (callback) => {
     const handler = (event, text) => callback(text);
     ipcRenderer.on('overlay-input-received', handler);
     return () => ipcRenderer.off('overlay-input-received', handler);
-  }
+  },
+  
+  // Уведомления и счетчик в трее
+  showNotification: (title, body) => ipcRenderer.send('show-notification', { title, body }),
+  updateTrayBadge: (count) => ipcRenderer.send('update-tray-badge', count)
 });

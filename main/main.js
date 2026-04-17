@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu, clipboard, Tray } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu, clipboard, Tray, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const { spawn, exec } = require('child_process');
@@ -7,12 +7,13 @@ const settings = require('./settings');
 const soundsManager = require('./soundsManager');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
-
+const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu, clipboard, Tray, Notification } = require('electron');
 let mainWindow;
 let overlayWindow = null;
 let webviewWebContents = null;
 let hookProcess = null;
 let tray = null;
+let unreadMessagesCount = 0;
 const pressedKeys = new Map();
 let currentPTTHotkeyCodes = null;
 let captureMode = false;
@@ -577,6 +578,53 @@ tray.on('click', () => {
 
   logger.info('[TRAY] System tray created successfully');
 }
+/**
+ * Показывает системное уведомление
+ * @param {string} title - Заголовок
+ * @param {string} body - Текст уведомления
+ */
+function showSystemNotification(title, body) {
+    if (Notification.isSupported()) {
+        const notification = new Notification({
+            title: title,
+            body: body,
+            icon: path.join(__dirname, '../assets/icon.png'), // Убедитесь что иконка существует
+            silent: false,
+        });
+
+        notification.on('click', () => {
+            // Разворачиваем окно при клике на уведомление
+            if (mainWindow) {
+                if (mainWindow.isMinimized()) mainWindow.restore();
+                mainWindow.show();
+                mainWindow.focus();
+            }
+        });
+
+        notification.show();
+    } else {
+        logger.warn('Системные уведомления не поддерживаются');
+    }
+}
+/**
+ * Обновляет счетчик непрочитанных сообщений в трее
+ * @param {number} count - Количество непрочитанных сообщений
+ */
+function updateTrayBadge(count) {
+    if (!tray) return;
+    
+    unreadMessagesCount = count;
+    
+    if (count > 0) {
+        // Устанавливаем текст счетчика поверх иконки
+        tray.setTitle(count.toString());
+        tray.setToolTip(`Ночная стража (непрочитано: ${count})`);
+    } else {
+        // Убираем текст, если все прочитано
+        tray.setTitle('');
+        tray.setToolTip('Ночная стража');
+    }
+}
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
@@ -624,6 +672,19 @@ ipcMain.on('overlay-ping', (event) => {
     overlayWindow.webContents.send('overlay-pong');
   }
 });
+
+// Обработчик для обновления значка в трее (счетчик непрочитанных)
+ipcMain.on('update-tray-badge', (event, count) => {
+    logger.info(`[TRAY] Получен запрос на обновление счетчика: ${count}`);
+    updateTrayBadge(count);
+});
+
+// Обработчик для показа уведомления
+ipcMain.on('show-notification', (event, { title, body }) => {
+    logger.info(`[NOTIFICATION] Получен запрос на показ уведомления: ${title}`);
+    showSystemNotification(title, body);
+});
+
 app.on('window-all-closed', (event) => {
   // На Windows и Linux не выходим, а остаемся в трее
   if (process.platform !== 'darwin') {
