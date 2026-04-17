@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background: rgba(30, 30, 30, 0.95);
+      border: 1px solid #444;
+      border-radius: 4px;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    .drag-handle {
+      height: 8px;
+      background: transparent;
+      -webkit-app-region: drag;
+      transition: background 0.15s ease;
+    }
+    
+    body:hover .drag-handle {
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    #messages {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 4px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.3;
+      -webkit-app-region: no-drag;
+    }
+    
+    .message {
+      padding: 1px 4px;
+      word-wrap: break-word;
+      border-bottom: 1px solid #3a3a3a;
+    }
+    
+    .message:last-child {
+      border-bottom: none;
+    }
+    
+    .own-message {
+      color: #8bc34a;
+    }
+    
+    .debug-message {
+      color: #ffaa00;
+      font-style: italic;
+    }
+    
+    #input {
+      width: 100%;
+      padding: 4px 6px;
+      background: rgba(0, 0, 0, 0.3);
+      border: none;
+      border-top: 1px solid #444;
+      color: white;
+      font-size: 12px;
+      outline: none;
+      -webkit-app-region: no-drag;
+    }
+    
+    #input:focus {
+      background: rgba(0, 0, 0, 0.5);
+    }
+    
+    #status-bar {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 6px;
+      background: rgba(0, 0, 0, 0.3);
+      font-size: 10px;
+      color: #888;
+      border-top: 1px solid #444;
+      -webkit-app-region: no-drag;
+    }
+    
+    #status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4caf50;
+      transition: background 0.3s;
+    }
+    
+    #status-dot.warning {
+      background: #ff9800;
+    }
+    
+    #status-dot.error {
+      background: #f44336;
+    }
+    
+    #messages::-webkit-scrollbar {
+      width: 4px;
+    }
+    
+    #messages::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    #messages::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 2px;
+    }
+    
+    .close-btn {
+      cursor: pointer;
+      padding: 0 4px;
+      color: #888;
+    }
+    
+    .close-btn:hover {
+      color: #f44336;
+    }
+  </style>
+</head>
+<body>
+  <div class="drag-handle"></div>
+  <div id="messages"></div>
+  <input type="text" id="input" placeholder="Сообщение..." autofocus>
+  <div id="status-bar">
+    <div id="status-indicator">
+      <span id="status-dot"></span>
+      <span id="status-text">Готов</span>
+    </div>
+    <div>
+      <span id="msg-count">0</span> сообщ. | 
+      <span id="ping-time">0ms</span> |
+      <span class="close-btn" onclick="hideWindow()">✕</span>
+    </div>
+  </div>
+  
+  <script>
+    const { ipcRenderer } = require('electron');
+    const messagesDiv = document.getElementById('messages');
+    const input = document.getElementById('input');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const msgCountSpan = document.getElementById('msg-count');
+    const pingTimeSpan = document.getElementById('ping-time');
+    
+    // Статистика
+    let messageCount = 0;
+    let lastActivity = Date.now();
+    let pingStart = 0;
+    
+    // Отладка
+    const DEBUG = true;
+    
+    function debugLog(message, isWarning = false, isError = false) {
+      if (!DEBUG) return;
+      
+      const timestamp = new Date().toLocaleTimeString();
+      console.log(`[OVERLAY ${timestamp}]`, message);
+      
+      // Визуально в окне (первые 5 секунд)
+      if (Date.now() - startTime < 5000) {
+        const msg = document.createElement('div');
+        msg.className = 'message debug-message';
+        msg.textContent = `🔧 ${message}`;
+        messagesDiv.appendChild(msg);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+    }
+    
+    const startTime = Date.now();
+    debugLog('Оверлей запущен');
+    
+    // Проверка связи с main процессом
+    let pingInterval = setInterval(() => {
+      pingStart = Date.now();
+      ipcRenderer.send('overlay-ping');
+      
+      // Проверка зависания
+      const inactiveTime = Date.now() - lastActivity;
+      if (inactiveTime > 5000) {
+        statusDot.className = 'warning';
+        statusText.textContent = 'Нет активности';
+        debugLog(`Нет активности ${Math.round(inactiveTime/1000)}с`, true);
+      } else if (inactiveTime > 10000) {
+        statusDot.className = 'error';
+        statusText.textContent = 'Зависание!';
+        debugLog(`КРИТИЧЕСКОЕ зависание ${Math.round(inactiveTime/1000)}с`, false, true);
+      } else {
+        statusDot.className = '';
+        statusText.textContent = 'Активен';
+      }
+    }, 2000);
+    
+    // Ответ на пинг от main процесса
+    ipcRenderer.on('overlay-pong', () => {
+      const pingTime = Date.now() - pingStart;
+      pingTimeSpan.textContent = pingTime + 'ms';
+      lastActivity = Date.now();
+      
+      // Обновляем цвет индикатора
+      if (pingTime > 100) {
+        pingTimeSpan.style.color = '#ff9800';
+      } else {
+        pingTimeSpan.style.color = '#888';
+      }
+    });
+    
+    function addMessage(text, isOwn = false) {
+      const msg = document.createElement('div');
+      msg.className = 'message' + (isOwn ? ' own-message' : '');
+      msg.textContent = text;
+      messagesDiv.appendChild(msg);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      
+      messageCount++;
+      msgCountSpan.textContent = messageCount;
+      
+      // Очистка старых сообщений
+      while (messagesDiv.children.length > 100) {
+        messagesDiv.removeChild(messagesDiv.firstChild);
+      }
+      
+      lastActivity = Date.now();
+      debugLog(`Получено сообщение (всего: ${messageCount})`);
+    }
+    
+    // Получение сообщений из чата
+    ipcRenderer.on('overlay-message', (event, text) => {
+      debugLog(`overlay-message: "${text.substring(0, 50)}..."`);
+      
+      // Определяем своё или чужое
+      const isOwn = text.startsWith('1111:'); // Замените на ваше имя
+      addMessage(text, isOwn);
+    });
+    
+    ipcRenderer.on('focus-input', () => {
+      debugLog('Фокус на ввод');
+      input.focus();
+      lastActivity = Date.now();
+    });
+    
+    function sendMessage() {
+      const text = input.value.trim();
+      if (text) {
+        debugLog(`Отправка: "${text}"`);
+        ipcRenderer.send('overlay-input', text);
+        input.value = '';
+        lastActivity = Date.now();
+      }
+    }
+    
+function hideWindow() {
+  debugLog('Скрытие окна');
+  ipcRenderer.send('hide-overlay');
+}
+    
+    // Обработчики событий
+    input.addEventListener('keydown', (e) => {
+      lastActivity = Date.now();
+      
+      if (e.key === 'Enter') {
+        sendMessage();
+      } else if (e.key === 'Escape') {
+        hideWindow();
+      }
+    });
+    
+    input.addEventListener('input', () => {
+      lastActivity = Date.now();
+    });
+    
+    document.addEventListener('mousemove', () => {
+      lastActivity = Date.now();
+    });
+    
+    document.addEventListener('click', () => {
+      lastActivity = Date.now();
+    });
+    
+    // Защита от потери фокуса
+    window.addEventListener('blur', () => {
+      debugLog('Окно потеряло фокус', true);
+    });
+    
+    window.addEventListener('focus', () => {
+      debugLog('Окно получило фокус');
+      lastActivity = Date.now();
+    });
+    
+    // Перехват ошибок
+    window.addEventListener('error', (e) => {
+      debugLog(`Ошибка: ${e.message}`, false, true);
+      console.error('Overlay error:', e.error);
+    });
+    
+    window.addEventListener('unhandledrejection', (e) => {
+      debugLog(`Promise rejection: ${e.reason}`, false, true);
+      console.error('Unhandled rejection:', e.reason);
+    });
+    
+    // Принудительный фокус при старте
+    setTimeout(() => {
+      input.focus();
+      debugLog('Автофокус установлен');
+    }, 100);
+    
+    debugLog('Инициализация завершена');
+  </script>
+</body>
+</html>

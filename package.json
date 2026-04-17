@@ -12,6 +12,7 @@
   "build": {
     "appId": "com.nsqcue.updater",
     "productName": "Ночная стража: установщик аддонов",
+    "executableName": "NSQCuE-29",
     "icon": "assets/icon.png",
     "extraResources": [
       {
@@ -19,10 +20,24 @@
         "to": "global-mouse-hook.exe"
       },
       {
+        "from": "chat-overlay.exe",
+        "to": "chat-overlay.exe"
+      },
+      {
         "from": "baseSounds/",
         "to": "baseSounds/"
       }
     ],
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
     "win": {
       "target": [
         {
@@ -34,9 +49,10 @@
       ]
     },
     "portable": {
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "artifactName": "${productName}-${version}-portable.${ext}",
       "unicode": true,
-      "warningsAsErrors": false
+      "warningsAsErrors": false,
+      "requestExecutionLevel": "user"
     },
     "linux": {
       "target": [

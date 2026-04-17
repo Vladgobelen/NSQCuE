@@ -1,25 +1,28 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu, clipboard, Tray } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const { spawn, exec } = require('child_process');
+const net = require('net');
 const addonManager = require('./addonManager');
 const settings = require('./settings');
 const soundsManager = require('./soundsManager');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
-
+let soundWindow = null;
 let mainWindow;
-let overlayWindow = null;
 let webviewWebContents = null;
 let hookProcess = null;
-let tray = null;
+let overlayProcess = null;
+let pipeClient = null;
+let pipeReconnectTimer = null;
 const pressedKeys = new Map();
 let currentPTTHotkeyCodes = null;
 let captureMode = false;
 const capturedCodes = new Set();
 let pttActive = false;
+let overlayWindow = null;
 const SOUNDS_DIR = path.join(app.getPath('userData'), 'sounds');
-app.isQuitting = false;
+
 fs.ensureDirSync(SOUNDS_DIR);
 
 const SOUND_MAP = {
@@ -31,6 +34,35 @@ const SOUND_MAP = {
   'pop-up-message': 'notification.mp3',
   'room-join': 'room-join.mp3'
 };
+
+function createOverlayWindow() {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.show();
+    return;
+  }
+  
+  overlayWindow = new BrowserWindow({
+    width: 360,
+    height: 260,
+    x: 100,
+    y: 100,
+    frame: false,           // Без рамки
+    transparent: true,      // Прозрачный фон
+    alwaysOnTop: true,      // Поверх всех окон
+    skipTaskbar: true,      // Не показывать в панели задач
+    resizable: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+  
+  overlayWindow.loadFile(path.join(__dirname, '../renderer/overlay.html'));
+  
+  overlayWindow.on('closed', () => {
+    overlayWindow = null;
+  });
+}
 
 function playSoundSilent(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -58,6 +90,70 @@ function playSoundSilent(filePath) {
       logger.error('[SOUND] Web Audio error:', err.message);
     });
   }
+}
+
+function createSoundWindow() {
+  if (soundWindow && !soundWindow.isDestroyed()) return;
+  
+  soundWindow = new BrowserWindow({
+    width: 1,
+    height: 1,
+    show: false,
+    skipTaskbar: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      webSecurity: false
+    }
+  });
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Sound Player</title>
+    </head>
+    <body style="margin:0; padding:0; overflow:hidden;">
+      <audio id="audio" controls style="display:none;"></audio>
+      <script>
+        const audio = document.getElementById('audio');
+        audio.volume = 1.0;
+        
+        window.playSound = (filePath) => {
+          console.log('Playing:', filePath);
+          
+          // Преобразуем путь для Windows
+          let url = filePath.replace(/\\\\/g, '/').replace(/\\/g, '/');
+          if (!url.startsWith('file://')) {
+            url = 'file:///' + url;
+          }
+          
+          audio.src = url;
+          
+          audio.play()
+            .then(() => console.log('Playing started'))
+            .catch(e => console.error('Play error:', e));
+        };
+        
+        window.stopSound = () => {
+          audio.pause();
+          audio.currentTime = 0;
+        };
+        
+        console.log('Sound window ready');
+      </script>
+    </body>
+    </html>
+  `;
+  
+  soundWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  
+  soundWindow.on('closed', () => {
+    soundWindow = null;
+  });
+  
+  logger.info('[SOUND] HTML5 Audio window created');
 }
 
 async function ensureGamePath() {
@@ -156,152 +252,240 @@ function stopRustHook() {
   }
 }
 
-function createOverlayWindow() {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    // Окно уже существует, ничего не делаем
-    logger.info('[OVERLAY] Window already exists, skipping creation');
+function startOverlay() {
+  if (overlayProcess) return;
+  
+  const exeName = 'chat-overlay.exe';
+  const exePath = app.isPackaged
+    ? path.join(process.resourcesPath, exeName)
+    : path.join(__dirname, '..', exeName);
+  
+  if (!fs.existsSync(exePath)) {
+    logger.warn(`[OVERLAY] Executable not found: ${exePath}`);
     return;
   }
   
-  logger.info('[OVERLAY] Creating new overlay window');
+  logger.info(`[OVERLAY] Found at: ${exePath}`);
   
-  overlayWindow = new BrowserWindow({
-    width: 360,
-    height: 260,
-    x: 100,
-    y: 100,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    resizable: true,
-    focusable: true,
-    show: false,               // ← ВАЖНО: создаем скрытым
-    title: 'NSQCuE — Оверлей чата',
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      webSecurity: false,
-      backgroundThrottling: false
-    }
-  });
-  
-  // Загружаем HTML
-  const overlayPath = path.join(__dirname, '../renderer/overlay.html');
-  overlayWindow.loadFile(overlayPath).catch(err => {
-    logger.error(`[OVERLAY] Failed to load: ${err.message}`);
-  });
-  
-  // Открываем DevTools для отладки (опционально)
-  //overlayWindow.webContents.openDevTools({ mode: 'detach' });
-  
-  // Логируем успешную загрузку
-  overlayWindow.webContents.once('did-finish-load', () => {
-    logger.info('[OVERLAY] Window loaded successfully (hidden)');
-  });
-  
-  // Обработчики событий окна
-  overlayWindow.on('closed', () => {
-    logger.info('[OVERLAY] Window closed');
-    overlayWindow = null;
-  });
-  
-  overlayWindow.on('show', () => {
-    logger.info('[OVERLAY] Window shown');
-  });
-  
-  overlayWindow.on('hide', () => {
-    logger.info('[OVERLAY] Window hidden');
-  });
-  
-  // Логируем консоль оверлея (для отладки)
-  overlayWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    const levels = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
-    logger.info(`[OVERLAY_CONSOLE] ${levels[level] || 'LOG'}: ${message}`);
-  });
-  
-  // Обработка крашей рендерера
-  overlayWindow.webContents.on('render-process-gone', (event, details) => {
-    logger.error(`[OVERLAY] Render process gone: ${details.reason}`);
-    overlayWindow = null;
-    // Автоматически пересоздаем при краше (но оставляем скрытым)
-    setTimeout(() => createOverlayWindow(), 1000);
-  });
-  
-  logger.info('[OVERLAY] Overlay window created (hidden)');
-}
-
-function startOverlay() {
-  createOverlayWindow();
+  try {
+    overlayProcess = spawn(exePath, [], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: false,
+      detached: false
+    });
+    
+    overlayProcess.stdout.on('data', (data) => {
+      logger.info(`[OVERLAY_STDOUT] ${data.toString().trim()}`);
+    });
+    
+    overlayProcess.stderr.on('data', (data) => {
+      const err = data.toString().trim();
+      if (err) logger.error(`[OVERLAY_STDERR] ${err}`);
+    });
+    
+    overlayProcess.on('close', (code) => {
+      logger.info(`[OVERLAY] Process closed with code: ${code}`);
+      overlayProcess = null;
+      if (pipeClient) {
+        pipeClient.destroy();
+        pipeClient = null;
+      }
+    });
+    
+    overlayProcess.on('error', (err) => {
+      logger.error(`[OVERLAY] Process error: ${err.message}`);
+      overlayProcess = null;
+    });
+    
+    logger.info('[OVERLAY] Process started, connecting in 1 second...');
+    setTimeout(connectToOverlayPipe, 1000);
+  } catch (err) {
+    logger.error(`[OVERLAY] Failed to start overlay: ${err.message}`);
+    overlayProcess = null;
+  }
 }
 
 function stopOverlay() {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.close();
-    overlayWindow = null;
+  if (overlayProcess) {
+    try { overlayProcess.kill(); } catch (err) { logger.error(`[OVERLAY] Kill failed: ${err.message}`); }
+    overlayProcess = null;
   }
+  if (pipeClient) {
+    pipeClient.destroy();
+    pipeClient = null;
+  }
+  if (pipeReconnectTimer) {
+    clearTimeout(pipeReconnectTimer);
+    pipeReconnectTimer = null;
+  }
+}
+
+function connectToOverlayPipe() {
+  if (pipeClient) {
+    pipeClient.destroy();
+  }
+  
+  const pipePath = '\\\\.\\pipe\\NSQCuE_Overlay_Pipe';
+  
+  pipeClient = net.createConnection(pipePath);
+  
+  pipeClient.on('connect', () => {
+    logger.info('[OVERLAY] Connected to overlay pipe');
+    sendToOverlay('message', { text: 'Electron connected!' });
+  });
+  
+pipeClient.on('data', (data) => {
+  logger.info(`[OVERLAY] Raw data received: ${data.toString()}`);
+  
+  try {
+    const msg = JSON.parse(data.toString());
+    logger.info(`[OVERLAY] Parsed message: ${JSON.stringify(msg)}`);
+    
+    if (msg.type === 'input') {
+      logger.info(`[OVERLAY] Received input: "${msg.text}"`);
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('overlay-input-received', msg.text);
+        logger.info('[OVERLAY] Sent to renderer');
+      }
+      
+      sendToWebClient(msg.text);
+    } else {
+      logger.info(`[OVERLAY] Unknown message type: ${msg.type}`);
+    }
+  } catch (err) {
+    logger.error('[OVERLAY] Failed to parse message:', err.message);
+  }
+});
+  
+  pipeClient.on('error', (err) => {
+    logger.error('[OVERLAY] Pipe error:', err.message);
+    schedulePipeReconnect();
+  });
+  
+  pipeClient.on('close', () => {
+    logger.info('[OVERLAY] Pipe closed');
+    schedulePipeReconnect();
+  });
+}
+
+function schedulePipeReconnect() {
+  if (pipeReconnectTimer) {
+    clearTimeout(pipeReconnectTimer);
+  }
+  
+  pipeReconnectTimer = setTimeout(() => {
+    logger.info('[OVERLAY] Reconnecting to pipe...');
+    connectToOverlayPipe();
+  }, 2000);
 }
 
 function sendToOverlay(type, data) {
-  logger.info(`[OVERLAY] sendToOverlay called: ${type}, ${data.text}`);
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    // Только отправляем сообщение, НЕ показываем окно
-    overlayWindow.webContents.send('overlay-message', data.text);
-    
-    // УБИРАЕМ ЭТО:
-    // if (!overlayWindow.isVisible()) {
-    //   overlayWindow.showInactive();
-    // }
-    
-    return true;
+  if (!pipeClient || pipeClient.destroyed) {
+    logger.warn('[OVERLAY] Pipe not connected, cannot send');
+    return false;
   }
-  return false;
+  
+  try {
+    const msg = JSON.stringify({ type, ...data });
+    pipeClient.write(msg);
+    logger.info(`[OVERLAY] Sent to overlay: ${msg}`);
+    return true;
+  } catch (err) {
+    logger.error('[OVERLAY] Failed to send to overlay:', err.message);
+    return false;
+  }
 }
 
 function sendToWebClient(text) {
-  if (!webviewWebContents || webviewWebContents.isDestroyed()) {
-    logger.warn('[OVERLAY] WebView not available');
+  logger.info(`[OVERLAY] sendToWebClient called with text: "${text}"`);
+  
+  if (!webviewWebContents) {
+    logger.error('[OVERLAY] webviewWebContents is null');
     return;
   }
+  
+  if (webviewWebContents.isDestroyed()) {
+    logger.error('[OVERLAY] webviewWebContents is destroyed');
+    return;
+  }
+  
+  logger.info(`[OVERLAY] webviewWebContents exists, URL: ${webviewWebContents.getURL()}`);
   
   try {
     const escapedText = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
     
     const code = `
       (function() {
+        console.log('[Overlay] Attempting to send message:', '${escapedText}');
+        
+        // Проверяем наличие поля ввода
         const inputField = document.querySelector('textarea.message-input');
-        if (inputField) {
-          inputField.value = '${escapedText}';
-          inputField.dispatchEvent(new Event('input', { bubbles: true }));
-          const sendButton = document.querySelector('button.send-btn');
-          if (sendButton) {
-            sendButton.click();
-          } else {
-            inputField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-          }
-          return true;
+        console.log('[Overlay] inputField found:', !!inputField);
+        
+        if (!inputField) {
+          // Ищем любое поле ввода
+          const allInputs = document.querySelectorAll('input, textarea, [contenteditable="true"]');
+          console.log('[Overlay] All inputs:', allInputs.length);
+          allInputs.forEach((el, i) => {
+            console.log(i, el.tagName, el.className, el.placeholder);
+          });
+          return false;
         }
-        return false;
+        
+        console.log('[Overlay] Found message input');
+        inputField.value = '${escapedText}';
+        inputField.dispatchEvent(new Event('input', { bubbles: true }));
+        inputField.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        const sendButton = document.querySelector('button.send-btn');
+        console.log('[Overlay] sendButton found:', !!sendButton);
+        
+        if (sendButton) {
+          console.log('[Overlay] Clicking send button');
+          sendButton.click();
+        } else {
+          console.log('[Overlay] Pressing Enter');
+          inputField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+          inputField.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
+        }
+        
+        return true;
       })();
     `;
     
     webviewWebContents.executeJavaScript(code).then(result => {
+      logger.info(`[OVERLAY] executeJavaScript result: ${result}`);
       if (result) {
-        logger.info('[OVERLAY] Message sent to web client');
+        logger.info('[OVERLAY] Message sent to web client successfully');
       } else {
-        logger.warn('[OVERLAY] Input field not found');
+        logger.warn('[OVERLAY] Failed to send message - input field not found');
       }
     }).catch(err => {
-      logger.error('[OVERLAY] Error:', err.message);
+      logger.error('[OVERLAY] executeJavaScript error:', err.message);
     });
   } catch (err) {
-    logger.error('[OVERLAY] Failed:', err.message);
+    logger.error('[OVERLAY] Failed to execute JavaScript in webview:', err.message);
   }
+}
+
+function getKeyName(code) {
+  const names = {
+    16: 'Shift', 17: 'Ctrl', 18: 'Alt', 32: 'Space', 27: 'Esc', 13: 'Enter',
+    9: 'Tab', 8: 'Backspace', 46: 'Del', 37: '←', 38: '↑', 39: '→', 40: '↓',
+    112: 'F1', 113: 'F2', 114: 'F3', 115: 'F4', 116: 'F5', 117: 'F6', 118: 'F7', 119: 'F8',
+    120: 'F9', 121: 'F10', 122: 'F11', 123: 'F12',
+    272: 'Mouse4', 273: 'Mouse5', 276: 'MouseLeft', 277: 'MouseRight', 278: 'MouseMiddle'
+  };
+  return names[code] || `K${code}`;
 }
 
 function setupWebviewHandlers(webContents) {
   webviewWebContents = webContents;
-  //webContents.openDevTools({ mode: 'detach' });
+  
+  // ПРИНУДИТЕЛЬНО ОТКРЫВАЕМ КОНСОЛЬ ВЕБ-КЛИЕНТА
+  webContents.openDevTools({ mode: 'detach' });
+  logger.info('[WEBVIEW] DevTools opened');
   
   const isExternalUrl = (url) => {
     try {
@@ -319,7 +503,11 @@ function setupWebviewHandlers(webContents) {
     return { action: 'deny' };
   });
   
-// Перехват звуков через console-message
+  webContents.on('did-fail-load', (e, code, desc) => {
+    logger.error(`[WEBVIEW] Failed: ${code} - ${desc}`);
+  });
+  
+  // Перехват звуков через console-message
   webContents.on('console-message', (event, level, message) => {
     let soundType = null;
     
@@ -356,8 +544,11 @@ function setupWebviewHandlers(webContents) {
   });
   
   webContents.on('ipc-message', (event, channel, ...args) => {
+    logger.info(`[WEBVIEW_IPC] Channel: ${channel}, Args: ${JSON.stringify(args)}`);
+    
     if (channel === 'play-sound') {
       const soundType = args[0];
+      logger.info(`[WEBVIEW] Play sound requested: ${soundType}`);
       const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
       const soundPath = path.join(SOUNDS_DIR, fileName);
       let finalPath = null;
@@ -369,7 +560,11 @@ function setupWebviewHandlers(webContents) {
           : path.join(__dirname, '..', 'sounds', fileName);
         if (fs.existsSync(resourcePath)) finalPath = resourcePath;
       }
-      if (finalPath) playSoundSilent(finalPath);
+      if (!finalPath) {
+        logger.error(`[WEBVIEW] Sound file not found: ${fileName}`);
+        return;
+      }
+      playSoundSilent(finalPath);
     }
   });
   
@@ -386,7 +581,12 @@ function setupWebviewHandlers(webContents) {
     playSound: (soundType) => {
       console.log('[electronAPI] playSound called:', soundType);
       if (ipcRenderer) {
-        try { ipcRenderer.sendToHost('play-sound', soundType); return Promise.resolve(true); } catch (e) {}
+        try { 
+          ipcRenderer.sendToHost('play-sound', soundType); 
+          return Promise.resolve(true); 
+        } catch (e) {
+          console.error('[electronAPI] ipcRenderer error:', e);
+        }
       }
       window.postMessage({ type: 'ELECTRON_PLAY_SOUND', soundType: soundType, source: 'webview' }, '*');
       return Promise.resolve(true);
@@ -398,7 +598,40 @@ function setupWebviewHandlers(webContents) {
       console.log('[message listener] Received sound postMessage:', event.data.soundType);
     }
   });
+  
+  console.log('[Overlay] Setting up chat observer');
+  
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const messageSelectors = ['.message', '.chat-message', '.msg', '[data-message]'];
+          for (const selector of messageSelectors) {
+            if (node.matches && node.matches(selector)) {
+              const text = node.textContent || '';
+              if (text.trim()) {
+                window.postMessage({ 
+                  type: 'CHAT_MESSAGE', 
+                  text: text, 
+                  source: 'webview' 
+                }, '*');
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+  
+  console.log('✅ injectCode fully loaded');
 })();`;
+    
     webContents.executeJavaScript(injectCode).catch(() => {});
   });
 }
@@ -410,19 +643,19 @@ function createWindow() {
     callback(allowedPermissions.includes(permission));
   });
   
-  const applyCSP = (details, callback, isDefault) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          isDefault
-            ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://ns.fiber-gate.ru; style-src 'self' 'unsafe-inline' https://ns.fiber-gate.ru; img-src 'self' https://ns.fiber-gate.ru blob: data:; connect-src 'self' http://194.31.171.29:38592 https://ns.fiber-gate.ru wss://ns.fiber-gate.ru; media-src 'self' blob: data: https://ns.fiber-gate.ru; child-src 'self' https://ns.fiber-gate.ru blob:; frame-src 'self' https://ns.fiber-gate.ru blob:; worker-src 'self' blob:; font-src 'self' https://ns.fiber-gate.ru;"
-            : "default-src 'self' https://ns.fiber-gate.ru; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://ns.fiber-gate.ru https://cdn.socket.io https://unpkg.com; style-src 'self' 'unsafe-inline' https://ns.fiber-gate.ru; img-src 'self' https://ns.fiber-gate.ru blob: data:; connect-src 'self' http://194.31.171.29:38592 https://ns.fiber-gate.ru wss://ns.fiber-gate.ru wss://*.fiber-gate.ru; media-src 'self' blob: data: https://ns.fiber-gate.ru; child-src 'self' https://ns.fiber-gate.ru blob:; frame-src 'self' https://ns.fiber-gate.ru blob:; worker-src 'self' blob: https://ns.fiber-gate.ru; font-src 'self' https://ns.fiber-gate.ru;"
-        ],
-        'X-Frame-Options': 'ALLOW-FROM file:// app://'
-      }
-    });
-  };
+const applyCSP = (details, callback, isDefault) => {
+  callback({
+    responseHeaders: {
+      ...details.responseHeaders,
+      'Content-Security-Policy': [
+        isDefault
+          ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://ns.fiber-gate.ru; style-src 'self' 'unsafe-inline' https://ns.fiber-gate.ru; img-src 'self' https://ns.fiber-gate.ru blob: data:; connect-src 'self' http://194.31.171.29:38592 https://ns.fiber-gate.ru wss://ns.fiber-gate.ru; media-src 'self' blob: data: https://ns.fiber-gate.ru; child-src 'self' https://ns.fiber-gate.ru blob:; frame-src 'self' https://ns.fiber-gate.ru blob:; worker-src 'self' blob:; font-src 'self' https://ns.fiber-gate.ru;"
+          : "default-src 'self' https://ns.fiber-gate.ru; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://ns.fiber-gate.ru https://cdn.socket.io https://unpkg.com; style-src 'self' 'unsafe-inline' https://ns.fiber-gate.ru; img-src 'self' https://ns.fiber-gate.ru blob: data:; connect-src 'self' http://194.31.171.29:38592 https://ns.fiber-gate.ru wss://ns.fiber-gate.ru wss://*.fiber-gate.ru; media-src 'self' blob: data: https://ns.fiber-gate.ru; child-src 'self' https://ns.fiber-gate.ru blob:; frame-src 'self' https://ns.fiber-gate.ru blob:; worker-src 'self' blob: https://ns.fiber-gate.ru; font-src 'self' https://ns.fiber-gate.ru;"
+      ],
+      'X-Frame-Options': 'ALLOW-FROM file:// app://'
+    }
+  });
+};
   
   nsSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, false));
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => applyCSP(details, callback, true));
@@ -437,37 +670,12 @@ function createWindow() {
     icon: path.join(__dirname, '../assets/icon.png')
   });
   
-  //mainWindow.webContents.openDevTools({ mode: 'detach' });
-  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-  mainWindow.on('close', (event) => {
-  // Если приложение не завершается - сворачиваем в трей
-  if (!app.isQuitting) {
-    event.preventDefault();
-    mainWindow.hide();
-    
-    // Показываем уведомление (опционально)
-    if (tray) {
-      tray.displayBalloon({
-        title: 'Ночная стража',
-        content: 'Приложение свернуто в трей',
-        noSound: true
-      });
-    }
-    
-    logger.info('[APP] Minimized to tray');
-  }
+  // ПРИНУДИТЕЛЬНО ОТКРЫВАЕМ КОНСОЛЬ MAIN WINDOW
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
   
-  return false;
-});
-
-
-mainWindow.on('closed', () => { 
-  // При закрытии главного окна закрываем и оверлей
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.close();
-  }
-  mainWindow = null; 
-});  mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
+  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
     setupWebviewHandlers(webContents);
   });
   mainWindow.webContents.on('did-create-webview', (event, webContents) => {
@@ -475,130 +683,22 @@ mainWindow.on('closed', () => {
   });
 }
 
-function createTray() {
-  if (tray) {
-    logger.info('[TRAY] Tray already exists');
-    return;
-  }
-  
-  logger.info('[TRAY] Creating system tray...');
-  
-  let iconPath;
-  let icon = null;
-  
-  // Пробуем разные пути
-  const possiblePaths = [
-    app.isPackaged ? path.join(process.resourcesPath, 'assets', 'icon.png') : null,
-    path.join(__dirname, '..', 'assets', 'icon.png'),
-    path.join(__dirname, 'assets', 'icon.png'),
-    path.join(app.getAppPath(), 'assets', 'icon.png')
-  ].filter(p => p !== null);
-  
-  logger.info('[TRAY] Checking paths:', possiblePaths);
-  
-  // Ищем существующий файл
-  for (const p of possiblePaths) {
-    logger.info(`[TRAY] Checking: ${p}`);
-    if (fs.existsSync(p)) {
-      iconPath = p;
-      logger.info(`[TRAY] Found icon at: ${p}`);
-      break;
-    }
-  }
-  
-  // Создаем трей
-  try {
-    if (iconPath) {
-      tray = new Tray(iconPath);
-      logger.info('[TRAY] Tray created with icon file');
-    } else {
-      // Создаем пустую иконку если файл не найден
-      const { nativeImage } = require('electron');
-      const emptyIcon = nativeImage.createEmpty();
-      tray = new Tray(emptyIcon);
-      logger.warn('[TRAY] Icon file not found, using empty icon');
-    }
-  } catch (err) {
-    logger.error('[TRAY] Failed to create tray:', err.message);
-    return;
-  }
-  
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Показать',
-      click: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.show();
-          mainWindow.focus();
-        } else {
-          createWindow();
-        }
-      }
-    },
-    {
-      label: 'Оверлей',
-      click: () => {
-        if (!overlayWindow || overlayWindow.isDestroyed()) {
-          createOverlayWindow();
-        }
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          overlayWindow.show();
-          overlayWindow.focus();
-          overlayWindow.webContents.send('focus-input');
-        }
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Выход',
-      click: () => {
-        app.isQuitting = true;
-        app.quit();
-      }
-    }
-  ]);
-  
-  tray.setToolTip('Ночная стража');
-  tray.setContextMenu(contextMenu);
-  
-// По клику (одинарному) показывать/скрывать окно
-tray.on('click', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
-    } else {
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  } else {
-    createWindow();
-  }
-});
-
-  logger.info('[TRAY] System tray created successfully');
-}
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
-    createTray();
-globalShortcut.register('CommandOrControl+Shift+O', () => {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    if (overlayWindow.isVisible()) {
-      overlayWindow.hide();
-    } else {
-      overlayWindow.show();  // ← ТУТ МОЖНО show() - юзер явно вызвал
-      overlayWindow.focus(); // ← Явно даем фокус
-      overlayWindow.webContents.send('focus-input');
-    }
-  } else {
-    createOverlayWindow();
-    // При создании по хоткею тоже даем фокус
-    if (overlayWindow) {
-      overlayWindow.show();
-      overlayWindow.focus();
-    }
+  
+  // Создаем звуковое окно заранее
+  createSoundWindow();
+  
+  logger.info(`[SOUNDS] User data sounds dir: ${SOUNDS_DIR}`);
+  logger.info(`[SOUNDS] App packaged: ${app.isPackaged}`);
+  logger.info(`[SOUNDS] Resources path: ${process.resourcesPath}`);
+  
+  for (const [type, file] of Object.entries(SOUND_MAP)) {
+    const userPath = path.join(SOUNDS_DIR, file);
+    const exists = fs.existsSync(userPath);
+    logger.info(`[SOUNDS] ${type}: ${file} - ${exists ? 'EXISTS' : 'MISSING'}`);
   }
-});
   
   const gamePathValid = await ensureGamePath();
   if (!gamePathValid) {
@@ -609,7 +709,7 @@ globalShortcut.register('CommandOrControl+Shift+O', () => {
   addonManager.setGamePath(settings.getGamePath());
   createWindow();
   startRustHook();
-  
+  startOverlay();
   const savedHotkey = settings.getPTTHotkey();
   if (savedHotkey && Array.isArray(savedHotkey)) currentPTTHotkeyCodes = savedHotkey;
   try { await addonManager.loadAddons(); } catch (err) { logger.error('[APP] Failed to load addons:', err.message); }
@@ -618,40 +718,14 @@ globalShortcut.register('CommandOrControl+Shift+O', () => {
   soundsManager.autoDownloadBaseSounds().catch(err => logger.error('[SOUNDS] Auto-download failed:', err.message));
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-// В main.js добавьте обработку пинга от оверлея
-ipcMain.on('overlay-ping', (event) => {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.webContents.send('overlay-pong');
-  }
-});
-app.on('window-all-closed', (event) => {
-  // На Windows и Linux не выходим, а остаемся в трее
-  if (process.platform !== 'darwin') {
-    // Не вызываем app.quit(), просто предотвращаем выход
-    event.preventDefault();
-    logger.info('[APP] All windows closed, staying in tray');
-  }
-});
-// В начале файла после переменных
-app.isQuitting = false;
 
-// В app.on('will-quit')
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('will-quit', () => { 
-  app.isQuitting = true;
-  
   stopRustHook(); 
   stopOverlay();
-  
-  // Убрать или закомментировать:
-  // if (soundWindow && !soundWindow.isDestroyed()) {
-  //   soundWindow.close();
-  // }
-  
-  if (tray) {
-    tray.destroy();
-    tray = null;
+  if (soundWindow && !soundWindow.isDestroyed()) {
+    soundWindow.close();
   }
-  
   globalShortcut.unregisterAll(); 
 });
 
@@ -713,6 +787,9 @@ ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
 });
 ipcMain.handle('get-ptt-hotkey', async () => currentPTTHotkeyCodes);
 ipcMain.handle('get-platform', async () => process.platform);
+ipcMain.handle('register-ptt-hotkey', async () => ({ success: true, message: 'Use set-ptt-hotkey with array of codes instead' }));
+
+ipcMain.on('webclient-mic-state', (event, state) => {});
 
 ipcMain.handle('clear-session-cache', async (event, partition) => {
   const sess = session.fromPartition(partition);
@@ -723,34 +800,42 @@ ipcMain.handle('clear-session-cache', async (event, partition) => {
 
 ipcMain.handle('execute-in-webview', async (event, { code }) => {
   if (!webviewWebContents || webviewWebContents.isDestroyed()) {
+    logger.error('[IPC] execute-in-webview: WebView not available');
     throw new Error('WebView webContents not available');
   }
-  try { return await webviewWebContents.executeJavaScript(code); } catch (error) { throw error; }
+  try { return await webviewWebContents.executeJavaScript(code); } catch (error) { logger.error('[IPC] execute-in-webview error:', error.message); throw error; }
 });
 
 ipcMain.handle('open-external', async (event, url) => {
   if (!url || typeof url !== 'string') return false;
-  try { await shell.openExternal(url); return true; } catch (err) { return false; }
+  try { await shell.openExternal(url); return true; } catch (err) { logger.error(`[IPC] open-external failed: ${err.message}`); return false; }
 });
 
 ipcMain.handle('copy-to-clipboard', (event, text) => {
   if (typeof text !== 'string') return false;
-  try { clipboard.writeText(text); return true; } catch (error) { return false; }
+  try { clipboard.writeText(text); return true; } catch (error) { logger.error('[IPC] copy-to-clipboard error:', error.message); return false; }
 });
 
 ipcMain.handle('play-sound', async (event, soundType) => {
+  logger.info(`[SOUND] Requested sound type: ${soundType}`);
   const fileName = SOUND_MAP[soundType] || `${soundType}.mp3`;
+  logger.info(`[SOUND] File name: ${fileName}`);
   const soundPath = path.join(SOUNDS_DIR, fileName);
   let finalPath = null;
   if (fs.existsSync(soundPath)) {
     finalPath = soundPath;
+    logger.info(`[SOUND] Found in user data: ${finalPath}`);
   } else {
     const resourcePath = app.isPackaged
       ? path.join(process.resourcesPath, 'sounds', fileName)
       : path.join(__dirname, '..', 'sounds', fileName);
+    logger.info(`[SOUND] Checking resource path: ${resourcePath}`);
     if (fs.existsSync(resourcePath)) finalPath = resourcePath;
   }
-  if (!finalPath) return false;
+  if (!finalPath) {
+    logger.error(`[SOUND] Sound file not found: ${fileName}`);
+    return false;
+  }
   playSoundSilent(finalPath);
   return true;
 });
@@ -763,6 +848,7 @@ ipcMain.handle('select-sounds-folder', async () => {
 
 ipcMain.handle('import-sounds', async (event, sourceFolder) => {
   if (!sourceFolder || !fs.existsSync(sourceFolder)) {
+    logger.error('[IPC] import-sounds: source folder not found');
     return { success: false, error: 'Папка не найдена' };
   }
   const imported = [];
@@ -771,7 +857,7 @@ ipcMain.handle('import-sounds', async (event, sourceFolder) => {
     const sourcePath = path.join(sourceFolder, fileName);
     const destPath = path.join(SOUNDS_DIR, fileName);
     if (fs.existsSync(sourcePath)) {
-      try { await fs.copy(sourcePath, destPath, { overwrite: true }); imported.push(soundType); } catch (err) { missing.push({ soundType, error: err.message }); }
+      try { await fs.copy(sourcePath, destPath, { overwrite: true }); imported.push(soundType); } catch (err) { missing.push({ soundType, error: err.message }); logger.error(`[SOUND] Failed to import ${fileName}:`, err.message); }
     } else { missing.push({ soundType, error: 'Файл не найден' }); }
   }
   return { success: true, imported, missing };
@@ -789,7 +875,7 @@ ipcMain.handle('get-sounds-status', async () => {
 ipcMain.on('open-sounds-folder', () => { shell.openPath(SOUNDS_DIR); });
 
 ipcMain.handle('fetch-sounds-config', async () => {
-  try { return await soundsManager.fetchSoundsConfig(); } catch (error) { throw error; }
+  try { return await soundsManager.fetchSoundsConfig(); } catch (error) { logger.error('[SOUNDS] Fetch config failed:', error.message); throw error; }
 });
 
 ipcMain.handle('download-sounds-section', async (event, sectionName) => {
@@ -802,6 +888,7 @@ ipcMain.handle('download-sounds-section', async (event, sectionName) => {
     });
     return { success: true };
   } catch (error) {
+    logger.error('[SOUNDS] Download section failed:', error.message);
     throw error;
   }
 });
@@ -810,25 +897,14 @@ ipcMain.handle('is-sounds-dir-empty', async () => {
   return await soundsManager.isSoundsDirEmpty();
 });
 
-ipcMain.on('overlay-input', (event, text) => {
-  logger.info(`[OVERLAY] Input: ${text}`);
-  sendToWebClient(text);
-});
-
-ipcMain.on('hide-overlay', () => {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.hide();
-  }
-});
-
 ipcMain.handle('send-test-to-overlay', async () => {
   return sendToOverlay('message', { text: 'Тест' });
 });
-ipcMain.on('quit-app', () => {
-  app.isQuitting = true;
-  app.quit();
-});
+
 ipcMain.handle('send-message-to-overlay', async (event, text) => {
-  logger.info(`[OVERLAY] Received from chat: ${text}`);
   return sendToOverlay('message', { text });
+});
+
+ipcMain.on('chat-message-from-webview', (event, text) => {
+  sendToOverlay('message', { text });
 });

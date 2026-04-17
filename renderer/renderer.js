@@ -563,18 +563,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  window.addEventListener('message', (event) => {
-    if (event.data?.type === 'CHAT_MESSAGE' && event.data?.source === 'webview') {
-      const text = event.data.text;
-      console.log('[CHAT] Message from webview:', text);
-      
-      if (window.electronAPI?.sendMessageToOverlay) {
-        window.electronAPI.sendMessageToOverlay(text).catch(err => {
-          console.error('[OVERLAY] Failed to send to overlay:', err);
-        });
-      }
+window.addEventListener('message', (event) => {
+  console.log('[MAIN] Received postMessage:', event.data?.type, event.data?.source);
+  
+  if (event.data?.type === 'CHAT_MESSAGE' && event.data?.source === 'webview') {
+    const text = event.data.text;
+    console.log('[CHAT] Message from webview:', text);
+    console.log('[CHAT] sendMessageToOverlay exists:', !!window.electronAPI?.sendMessageToOverlay);
+    
+    if (window.electronAPI?.sendMessageToOverlay) {
+      console.log('[CHAT] Calling sendMessageToOverlay...');
+      window.electronAPI.sendMessageToOverlay(text).then(() => {
+        console.log('[CHAT] ✅ Message sent to overlay successfully');
+      }).catch(err => {
+        console.error('[CHAT] ❌ Failed to send to overlay:', err);
+      });
+    } else {
+      console.error('[CHAT] ❌ sendMessageToOverlay not available');
     }
-  });
+  }
+});
 
   if (window.electronAPI?.onSoundsDownloadProgress) {
     window.electronAPI.onSoundsDownloadProgress((progress) => {
@@ -669,47 +677,61 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (nsWebview) {
-    nsWebview.addEventListener('dom-ready', () => {
-      window.electronAPI?.sendToWebClient('electron-config', {
-        theme: 'dark',
-        language: 'ru'
-      });
-      
-      // Добавляем наблюдатель за сообщениями чата
-      nsWebview.executeJavaScript(`
-        (function() {
-          console.log('[Overlay] Setting up chat observer');
-          
-          const observer = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-              for (const node of mutation.addedNodes) {
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                  const messageSelectors = ['.message', '.chat-message', '.msg', '[data-message]'];
-                  for (const selector of messageSelectors) {
-                    if (node.matches && node.matches(selector)) {
-                      const text = node.textContent || '';
-                      if (text.trim()) {
-                        window.postMessage({ 
-                          type: 'CHAT_MESSAGE', 
-                          text: text, 
-                          source: 'webview' 
-                        }, '*');
-                      }
-                      break;
-                    }
-                  }
+nsWebview.addEventListener('dom-ready', () => {
+  window.electronAPI?.sendToWebClient('electron-config', {
+    theme: 'dark',
+    language: 'ru'
+  });
+  
+  // Наблюдатель за чатом
+nsWebview.executeJavaScript(`
+  (function() {
+    console.log('[Overlay] Setting up chat observer');
+    
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const messageSelectors = ['.message', '.chat-message', '.msg', '[data-message]'];
+            for (const selector of messageSelectors) {
+              if (node.matches && node.matches(selector)) {
+                const textElement = node.querySelector('.message-text');
+                const usernameElement = node.querySelector('.message-username');
+                
+                const text = textElement?.textContent?.trim() || '';
+                const username = usernameElement?.textContent?.trim() || '';
+                
+                if (text && text !== '🔴 Отключен' && text !== '🟢 Подключен') {
+                  const fullMessage = username ? username + ': ' + text : text;
+                  console.log('[CHAT] Sending to overlay:', fullMessage);
                 }
+                break;
               }
             }
-          });
-          
-          observer.observe(document.body, {
-            childList: true,
-            subtree: true
-          });
-        })();
-      `).catch(() => {});
+          }
+        }
+      }
     });
+    
+    observer.observe(document.body, { childList: true, subtree: true });
+    console.log('[Overlay] Chat observer ready - ALL messages will be sent');
+  })();
+`).catch(() => {});
+  
+  // Слушатель звуков
+  nsWebview.executeJavaScript(`
+    (function() {
+      window.addEventListener('message', (event) => {
+        if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
+          if (window.ipcRenderer) {
+            window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
+          }
+        }
+      });
+      console.log('[Overlay] Sound listener ready');
+    })();
+  `).catch(() => {});
+});
     
     nsWebview.addEventListener('did-fail-load', event => {
       showError('Не удалось загрузить веб-клиент: ' + (event.errorDescription || 'Unknown error'));
@@ -722,43 +744,36 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
     
-    nsWebview.addEventListener('dom-ready', () => {
-      nsWebview.executeJavaScript(`
-        (function() {
-          window.addEventListener('message', (event) => {
-            if (event.data?.type === 'ELECTRON_PLAY_SOUND' && event.data?.soundType) {
-              if (window.ipcRenderer) {
-                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-              }
-            }
-            if (event.data?.type === 'PLAY_SOUND' && event.data?.soundType) {
-              if (window.ipcRenderer) {
-                window.ipcRenderer.sendToHost('play-sound', event.data.soundType);
-              }
-            }
-          });
-        })();
-      `).catch(() => {});
-    });
+
     
-    nsWebview.addEventListener('console-message', (event) => {
-      const message = event.message;
-      let soundType = null;
-      if (message.includes('[WebView] ✓ Sent via postMessage:')) {
-        const match = message.match(/postMessage:\s*(\w+-\w+)/);
-        if (match) {
-          soundType = match[1];
-        }
-      } else if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
-        const match = message.match(/playSound called with:\s*(\w+-\w+)/);
-        if (match) {
-          soundType = match[1];
-        }
+nsWebview.addEventListener('console-message', (event) => {
+  const message = event.message;
+  
+  // Перехват сообщений чата
+  if (message.includes('[CHAT] Sending to overlay:')) {
+    const match = message.match(/Sending to overlay:\s*(.+)$/);
+    if (match) {
+      const text = match[1].trim();
+      console.log('[CHAT] Captured:', text);
+      
+      if (window.electronAPI?.sendMessageToOverlay) {
+        window.electronAPI.sendMessageToOverlay(text).catch(err => {
+          console.error('[OVERLAY] Failed:', err);
+        });
       }
-      if (soundType) {
-        window.electronAPI.playSound(soundType).catch(() => {});
-      }
-    });
+    }
+  }
+  
+  // Перехват звуков
+  let soundType = null;
+  if (message.includes('playSound called with:') && message.includes('[CLIENT]')) {
+    const match = message.match(/playSound called with:\s*(\w+-\w+|\w+)/);
+    if (match) soundType = match[1];
+  }
+  if (soundType) {
+    window.electronAPI.playSound(soundType).catch(() => {});
+  }
+});
   }
 
   window.addEventListener('message', (event) => {
