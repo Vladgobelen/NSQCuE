@@ -35,11 +35,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var isMouseInCaptureZone = false;
   var isGameReady = false;
   var isLaunchBlocked = false;
-  
-  var unreadMessageCount = 0;
-  var processedMessageIds = {};
-  var roomJoinTime = 0;
-  var currentRoomId = '';
 
   function updateLaunchButtonState() {
     if (launchBtn) {
@@ -250,10 +245,6 @@ document.addEventListener('DOMContentLoaded', function() {
       addonsList.style.display = 'none';
       backPanel.style.display = 'flex';
       voiceBtn.style.display = 'none';
-      
-      roomJoinTime = 0;
-      currentRoomId = '';
-      
       try {
         var platform = await window.electronAPI.getPlatform();
         window.electronAPI.sendToWebClient('electron-ready', {
@@ -268,27 +259,6 @@ document.addEventListener('DOMContentLoaded', function() {
           userAgent: navigator.userAgent
         });
       }
-
-      setTimeout(async function() {
-        try {
-          var creds = await window.electronAPI.loadCredentials();
-          if (creds && creds.username && creds.password) {
-            var fillCode = '\n' +
-              '  (function() {\n' +
-              '    var usernameInput = document.querySelector("#usernameInput, input[name=\\"username\\"], input[placeholder*=\\"Ник\\"]");\n' +
-              '    var passwordInput = document.querySelector("#passwordInput, input[type=\\"password\\"]");\n' +
-              '    if (usernameInput && passwordInput) {\n' +
-              '      usernameInput.value = "' + creds.username.replace(/"/g, '\\"') + '";\n' +
-              '      passwordInput.value = "' + creds.password.replace(/"/g, '\\"') + '";\n' +
-              '      var submitBtn = document.querySelector("#authSubmitBtn, button:contains(\'Войти\')");\n' +
-              '      if (submitBtn) submitBtn.click();\n' +
-              '    }\n' +
-              '  })();\n';
-            nsWebview.executeJavaScript(fillCode).catch(function() {});
-          }
-        } catch (e) {}
-      }, 2000);
-      
     } else {
       if (webviewContainer) webviewContainer.classList.remove('active');
       topBar.style.display = 'flex';
@@ -299,11 +269,6 @@ document.addEventListener('DOMContentLoaded', function() {
       backPanel.style.display = 'none';
       backPanel.classList.remove('visible');
       voiceBtn.style.display = 'block';
-      
-      unreadMessageCount = 0;
-      if (window.electronAPI && window.electronAPI.updateTrayBadge) {
-        window.electronAPI.updateTrayBadge(0);
-      }
     }
   }
 
@@ -617,18 +582,6 @@ document.addEventListener('DOMContentLoaded', function() {
   window.addEventListener('message', function(event) {
     console.log('[MAIN] Received postMessage:', event.data && event.data.type, event.data && event.data.source);
     
-    if (event.data && event.data.type === 'SAVE_CREDENTIALS' && event.data.source === 'webview') {
-      var username = event.data.username;
-      var password = event.data.password;
-      if (username && password && window.electronAPI && window.electronAPI.saveCredentials) {
-        window.electronAPI.saveCredentials(username, password).then(function() {
-          console.log('[AUTH] Credentials saved');
-        }).catch(function(err) {
-          console.error('[AUTH] Failed to save credentials:', err);
-        });
-      }
-    }
-    
     if (event.data && event.data.type === 'CHAT_MESSAGE' && event.data.source === 'webview') {
       var text = event.data.text;
       console.log('[CHAT] Message from webview:', text);
@@ -643,25 +596,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       } else {
         console.error('[CHAT] ❌ sendMessageToOverlay not available');
-      }
-    }
-    
-    if (event.data && event.data.type === 'ELECTRON_SHOW_NOTIFICATION' && event.data.source === 'webview') {
-      var title = event.data.title;
-      var body = event.data.body;
-      console.log('[RENDERER] Received notification from webview:', title, body);
-      
-      if (window.electronAPI && window.electronAPI.showNotification) {
-        window.electronAPI.showNotification(title, body);
-      }
-    }
-    
-    if (event.data && event.data.type === 'ELECTRON_UPDATE_TRAY_BADGE' && event.data.source === 'webview') {
-      var count = event.data.count;
-      console.log('[RENDERER] Received tray badge update from webview:', count);
-      
-      if (window.electronAPI && window.electronAPI.updateTrayBadge) {
-        window.electronAPI.updateTrayBadge(count);
       }
     }
   });
@@ -824,175 +758,6 @@ document.addEventListener('DOMContentLoaded', function() {
         '    console.log("[Overlay] Sound listener ready");\n' +
         '  })();\n'
       ).catch(function() {});
-      
-      // Внедряем electronAPI
-      var injectCode = '\n' +
-        '(function() {\n' +
-        '  let ipcRenderer = null;\n' +
-        '  try { if (typeof require !== "undefined") { ipcRenderer = require("electron").ipcRenderer; } } catch (e) {}\n' +
-        '  if (!ipcRenderer && window.ipcRenderer) ipcRenderer = window.ipcRenderer;\n' +
-        '  \n' +
-        '  window.ELECTRON_CUSTOM_SOUNDS_ENABLED = true;\n' +
-        '  \n' +
-        '  window.electronAPI = {\n' +
-        '    playSound: (soundType) => {\n' +
-        '      console.log("[electronAPI] playSound called:", soundType);\n' +
-        '      if (ipcRenderer) {\n' +
-        '        try { \n' +
-        '          ipcRenderer.sendToHost("play-sound", soundType); \n' +
-        '          return Promise.resolve(true); \n' +
-        '        } catch (e) {\n' +
-        '          console.error("[electronAPI] ipcRenderer error:", e);\n' +
-        '        }\n' +
-        '      }\n' +
-        '      window.postMessage({ type: "ELECTRON_PLAY_SOUND", soundType: soundType, source: "webview" }, "*");\n' +
-        '      return Promise.resolve(true);\n' +
-        '    },\n' +
-        '    \n' +
-        '    showNotification: (title, body) => {\n' +
-        '      console.log("[electronAPI] showNotification:", title);\n' +
-        '      window.postMessage({ \n' +
-        '        type: "ELECTRON_SHOW_NOTIFICATION", \n' +
-        '        title: title, \n' +
-        '        body: body, \n' +
-        '        source: "webview" \n' +
-        '      }, "*");\n' +
-        '    },\n' +
-        '    \n' +
-        '    updateTrayBadge: (count) => {\n' +
-        '      console.log("[electronAPI] updateTrayBadge:", count);\n' +
-        '      window.postMessage({ \n' +
-        '        type: "ELECTRON_UPDATE_TRAY_BADGE", \n' +
-        '        count: count, \n' +
-        '        source: "webview" \n' +
-        '      }, "*");\n' +
-        '    }\n' +
-        '  };\n' +
-        '  \n' +
-        '  window.addEventListener("message", (event) => {\n' +
-        '    if (event.data && event.data.type === "ELECTRON_PLAY_SOUND" && event.data.soundType) {\n' +
-        '      console.log("[message listener] Received sound postMessage:", event.data.soundType);\n' +
-        '    }\n' +
-        '  });\n' +
-        '  \n' +
-        '  console.log("✅ injectCode fully loaded");\n' +
-        '})();\n';
-      
-      nsWebview.executeJavaScript(injectCode).catch(function() {});
-      
-      // Внедряем перехватчик уведомлений
-      var notificationCatcherCode = '\n' +
-        '(function() {\n' +
-        '  console.log("🔧 [NotificationCatcher] Final version starting...");\n' +
-        '  \n' +
-        '  if (window.__notificationObserver) {\n' +
-        '    window.__notificationObserver.disconnect();\n' +
-        '  }\n' +
-        '  \n' +
-        '  let pendingNotification = null;\n' +
-        '  let notificationTimer = null;\n' +
-        '  let lastProcessedId = null;\n' +
-        '  let processingTimeout = null;\n' +
-        '  \n' +
-        '  if (window.voiceClient && window.voiceClient.socket) {\n' +
-        '    if (!window.voiceClient.socket.__originalOnevent) {\n' +
-        '      window.voiceClient.socket.__originalOnevent = window.voiceClient.socket.onevent;\n' +
-        '    }\n' +
-        '    \n' +
-        '    window.voiceClient.socket.onevent = function(packet) {\n' +
-        '      const event = packet.data[0];\n' +
-        '      const data = packet.data[1];\n' +
-        '      \n' +
-        '      if (event === "personal-notification") {\n' +
-        '        console.log("🎯 [NotificationCatcher] Personal notification:", data.sender, data.text);\n' +
-        '        \n' +
-        '        pendingNotification = {\n' +
-        '          sender: data.sender || data.username || "",\n' +
-        '          text: data.text || "",\n' +
-        '          roomName: data.roomName || ""\n' +
-        '        };\n' +
-        '        \n' +
-        '        if (notificationTimer) clearTimeout(notificationTimer);\n' +
-        '        notificationTimer = setTimeout(() => { \n' +
-        '          pendingNotification = null; \n' +
-        '        }, 5000);\n' +
-        '      }\n' +
-        '      \n' +
-        '      return window.voiceClient.socket.__originalOnevent.call(this, packet);\n' +
-        '    };\n' +
-        '    console.log("[NotificationCatcher] Socket hooked");\n' +
-        '  } else {\n' +
-        '    console.log("[NotificationCatcher] voiceClient not ready, retrying...");\n' +
-        '    setTimeout(arguments.callee, 1000);\n' +
-        '    return;\n' +
-        '  }\n' +
-        '  \n' +
-        '  function sendNotification(data) {\n' +
-        '    const notificationId = data.sender + "|" + data.text + "|" + data.roomName;\n' +
-        '    \n' +
-        '    if (lastProcessedId === notificationId) {\n' +
-        '      console.log("[NotificationCatcher] Skipping duplicate");\n' +
-        '      return;\n' +
-        '    }\n' +
-        '    lastProcessedId = notificationId;\n' +
-        '    \n' +
-        '    const title = data.sender;\n' +
-        '    const body = data.text;\n' +
-        '    \n' +
-        '    console.log("ELECTRON_NOTIFICATION:" + JSON.stringify({ title, body }));\n' +
-        '    console.log("[NotificationCatcher] Sent:", { title, body });\n' +
-        '    \n' +
-        '    setTimeout(() => { lastProcessedId = null; }, 2000);\n' +
-        '  }\n' +
-        '  \n' +
-        '  window.__notificationObserver = new MutationObserver((mutations) => {\n' +
-        '    for (const mutation of mutations) {\n' +
-        '      for (const node of mutation.addedNodes) {\n' +
-        '        if (node.id === "live-notification-banner") {\n' +
-        '          console.log("🔔 [NotificationCatcher] Banner detected!");\n' +
-        '          \n' +
-        '          if (processingTimeout) clearTimeout(processingTimeout);\n' +
-        '          \n' +
-        '          processingTimeout = setTimeout(() => {\n' +
-        '            const strongEl = node.querySelector("strong");\n' +
-        '            const domAuthor = strongEl?.textContent?.trim() || "";\n' +
-        '            \n' +
-        '            if (pendingNotification) {\n' +
-        '              sendNotification({\n' +
-        '                sender: pendingNotification.sender,\n' +
-        '                text: pendingNotification.text,\n' +
-        '                roomName: pendingNotification.roomName\n' +
-        '              });\n' +
-        '              pendingNotification = null;\n' +
-        '            } else {\n' +
-        '              const spanEl = node.querySelector("span[style*=\\"opacity\\"]");\n' +
-        '              const domAction = spanEl?.textContent?.trim() || "";\n' +
-        '              sendNotification({\n' +
-        '                sender: domAuthor,\n' +
-        '                text: domAction,\n' +
-        '                roomName: ""\n' +
-        '              });\n' +
-        '            }\n' +
-        '            \n' +
-        '            if (notificationTimer) {\n' +
-        '              clearTimeout(notificationTimer);\n' +
-        '              notificationTimer = null;\n' +
-        '            }\n' +
-        '            \n' +
-        '            processingTimeout = null;\n' +
-        '          }, 100);\n' +
-        '        }\n' +
-        '      }\n' +
-        '    }\n' +
-        '  });\n' +
-        '  \n' +
-        '  window.__notificationObserver.observe(document.body, { childList: true, subtree: true });\n' +
-        '  console.log("[NotificationCatcher] Ready!");\n' +
-        '})();\n';
-      
-      nsWebview.executeJavaScript(notificationCatcherCode).catch(function(err) {
-        console.error('Failed to inject notification catcher:', err);
-      });
     });
     
     nsWebview.addEventListener('did-fail-load', function(event) {
@@ -1008,22 +773,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     nsWebview.addEventListener('console-message', function(event) {
       var message = event.message;
-      
-      if (message.startsWith('ELECTRON_NOTIFICATION:')) {
-        try {
-          var jsonStr = message.substring('ELECTRON_NOTIFICATION:'.length);
-          var data = JSON.parse(jsonStr);
-          
-          console.log('[NOTIFICATION] Received from webview:', data.title, data.body);
-          
-          if (window.electronAPI && window.electronAPI.showNotification) {
-            window.electronAPI.showNotification(data.title, data.body);
-          }
-        } catch (e) {
-          console.error('[NOTIFICATION] Parse error:', e);
-        }
-      }
-      
       var match;
       var text;
       var soundType;

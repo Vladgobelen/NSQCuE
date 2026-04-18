@@ -1,6 +1,6 @@
 {
-  "name": "nsqcue-updater",
-  "version": "1.0.0",
+  "name": "NSQCuE",
+  "version": "33.0.0",
   "description": "Установщик аддонов Ночная Стража",
   "main": "main/main.js",
   "scripts": {

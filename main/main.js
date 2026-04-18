@@ -7,7 +7,25 @@ const settings = require('./settings');
 const soundsManager = require('./soundsManager');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
-const { app, BrowserWindow, ipcMain, shell, dialog, session, globalShortcut, Menu, clipboard, Tray, Notification } = require('electron');
+let notificationsEnabled = true; 
+
+// ========== ДЕБАГ ЛОГ ==========
+const debugLogFile = path.join(__dirname, 'debug.log');
+
+function debugLog(...args) {
+    const msg = args.join(' ') + '\n';
+    console.log(...args);
+    try {
+        fs.appendFileSync(debugLogFile, msg);
+    } catch(e) {}
+}
+
+debugLog('========================================');
+debugLog('[MAIN] Electron starting');
+debugLog('[MAIN] Node version:', process.version);
+debugLog('[MAIN] __dirname:', __dirname);
+debugLog('========================================');
+
 let mainWindow;
 let overlayWindow = null;
 let webviewWebContents = null;
@@ -41,7 +59,6 @@ function playSoundSilent(filePath) {
   
   logger.info(`[SOUND] Playing: ${filePath}`);
   
-  // Конвертируем в data URL
   const audioData = fs.readFileSync(filePath);
   const base64 = audioData.toString('base64');
   const dataUrl = `data:audio/mp3;base64,${base64}`;
@@ -159,7 +176,6 @@ function stopRustHook() {
 
 function createOverlayWindow() {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
-    // Окно уже существует, ничего не делаем
     logger.info('[OVERLAY] Window already exists, skipping creation');
     return;
   }
@@ -177,7 +193,7 @@ function createOverlayWindow() {
     skipTaskbar: true,
     resizable: true,
     focusable: true,
-    show: false,               // ← ВАЖНО: создаем скрытым
+    show: false,
     title: 'NSQCuE — Оверлей чата',
     webPreferences: {
       nodeIntegration: true,
@@ -187,21 +203,15 @@ function createOverlayWindow() {
     }
   });
   
-  // Загружаем HTML
   const overlayPath = path.join(__dirname, '../renderer/overlay.html');
   overlayWindow.loadFile(overlayPath).catch(err => {
     logger.error(`[OVERLAY] Failed to load: ${err.message}`);
   });
   
-  // Открываем DevTools для отладки (опционально)
-  //overlayWindow.webContents.openDevTools({ mode: 'detach' });
-  
-  // Логируем успешную загрузку
   overlayWindow.webContents.once('did-finish-load', () => {
     logger.info('[OVERLAY] Window loaded successfully (hidden)');
   });
   
-  // Обработчики событий окна
   overlayWindow.on('closed', () => {
     logger.info('[OVERLAY] Window closed');
     overlayWindow = null;
@@ -215,17 +225,14 @@ function createOverlayWindow() {
     logger.info('[OVERLAY] Window hidden');
   });
   
-  // Логируем консоль оверлея (для отладки)
   overlayWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     const levels = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
     logger.info(`[OVERLAY_CONSOLE] ${levels[level] || 'LOG'}: ${message}`);
   });
   
-  // Обработка крашей рендерера
   overlayWindow.webContents.on('render-process-gone', (event, details) => {
     logger.error(`[OVERLAY] Render process gone: ${details.reason}`);
     overlayWindow = null;
-    // Автоматически пересоздаем при краше (но оставляем скрытым)
     setTimeout(() => createOverlayWindow(), 1000);
   });
   
@@ -246,14 +253,7 @@ function stopOverlay() {
 function sendToOverlay(type, data) {
   logger.info(`[OVERLAY] sendToOverlay called: ${type}, ${data.text}`);
   if (overlayWindow && !overlayWindow.isDestroyed()) {
-    // Только отправляем сообщение, НЕ показываем окно
     overlayWindow.webContents.send('overlay-message', data.text);
-    
-    // УБИРАЕМ ЭТО:
-    // if (!overlayWindow.isVisible()) {
-    //   overlayWindow.showInactive();
-    // }
-    
     return true;
   }
   return false;
@@ -302,7 +302,6 @@ function sendToWebClient(text) {
 
 function setupWebviewHandlers(webContents) {
   webviewWebContents = webContents;
-  //webContents.openDevTools({ mode: 'detach' });
   
   const isExternalUrl = (url) => {
     try {
@@ -320,7 +319,6 @@ function setupWebviewHandlers(webContents) {
     return { action: 'deny' };
   });
   
-// Перехват звуков через console-message
   webContents.on('console-message', (event, level, message) => {
     let soundType = null;
     
@@ -387,10 +385,34 @@ function setupWebviewHandlers(webContents) {
     playSound: (soundType) => {
       console.log('[electronAPI] playSound called:', soundType);
       if (ipcRenderer) {
-        try { ipcRenderer.sendToHost('play-sound', soundType); return Promise.resolve(true); } catch (e) {}
+        try { 
+          ipcRenderer.sendToHost('play-sound', soundType); 
+          return Promise.resolve(true); 
+        } catch (e) {
+          console.error('[electronAPI] ipcRenderer error:', e);
+        }
       }
       window.postMessage({ type: 'ELECTRON_PLAY_SOUND', soundType: soundType, source: 'webview' }, '*');
       return Promise.resolve(true);
+    },
+    
+    showNotification: (title, body) => {
+      console.log('[electronAPI] showNotification:', title);
+      window.postMessage({ 
+        type: 'ELECTRON_SHOW_NOTIFICATION', 
+        title: title, 
+        body: body, 
+        source: 'webview' 
+      }, '*');
+    },
+    
+    updateTrayBadge: (count) => {
+      console.log('[electronAPI] updateTrayBadge:', count);
+      window.postMessage({ 
+        type: 'ELECTRON_UPDATE_TRAY_BADGE', 
+        count: count, 
+        source: 'webview' 
+      }, '*');
     }
   };
   
@@ -399,7 +421,10 @@ function setupWebviewHandlers(webContents) {
       console.log('[message listener] Received sound postMessage:', event.data.soundType);
     }
   });
+  
+  console.log('✅ injectCode fully loaded');
 })();`;
+    
     webContents.executeJavaScript(injectCode).catch(() => {});
   });
 }
@@ -437,38 +462,35 @@ function createWindow() {
     },
     icon: path.join(__dirname, '../assets/icon.png')
   });
-  
   //mainWindow.webContents.openDevTools({ mode: 'detach' });
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   mainWindow.on('close', (event) => {
-  // Если приложение не завершается - сворачиваем в трей
-  if (!app.isQuitting) {
-    event.preventDefault();
-    mainWindow.hide();
-    
-    // Показываем уведомление (опционально)
-    if (tray) {
-      tray.displayBalloon({
-        title: 'Ночная стража',
-        content: 'Приложение свернуто в трей',
-        noSound: true
-      });
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      
+      if (tray) {
+        tray.displayBalloon({
+          title: 'Ночная стража',
+          content: 'Приложение свернуто в трей',
+          noSound: true
+        });
+      }
+      
+      logger.info('[APP] Minimized to tray');
     }
     
-    logger.info('[APP] Minimized to tray');
-  }
+    return false;
+  });
+
+  mainWindow.on('closed', () => { 
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.close();
+    }
+    mainWindow = null; 
+  });
   
-  return false;
-});
-
-
-mainWindow.on('closed', () => { 
-  // При закрытии главного окна закрываем и оверлей
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.close();
-  }
-  mainWindow = null; 
-});  mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
+  mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
     setupWebviewHandlers(webContents);
   });
   mainWindow.webContents.on('did-create-webview', (event, webContents) => {
@@ -477,6 +499,8 @@ mainWindow.on('closed', () => {
 }
 
 function createTray() {
+  debugLog('[TRAY] createTray called');
+  
   if (tray) {
     logger.info('[TRAY] Tray already exists');
     return;
@@ -485,9 +509,7 @@ function createTray() {
   logger.info('[TRAY] Creating system tray...');
   
   let iconPath;
-  let icon = null;
   
-  // Пробуем разные пути
   const possiblePaths = [
     app.isPackaged ? path.join(process.resourcesPath, 'assets', 'icon.png') : null,
     path.join(__dirname, '..', 'assets', 'icon.png'),
@@ -495,11 +517,7 @@ function createTray() {
     path.join(app.getAppPath(), 'assets', 'icon.png')
   ].filter(p => p !== null);
   
-  logger.info('[TRAY] Checking paths:', possiblePaths);
-  
-  // Ищем существующий файл
   for (const p of possiblePaths) {
-    logger.info(`[TRAY] Checking: ${p}`);
     if (fs.existsSync(p)) {
       iconPath = p;
       logger.info(`[TRAY] Found icon at: ${p}`);
@@ -507,13 +525,11 @@ function createTray() {
     }
   }
   
-  // Создаем трей
   try {
     if (iconPath) {
       tray = new Tray(iconPath);
       logger.info('[TRAY] Tray created with icon file');
     } else {
-      // Создаем пустую иконку если файл не найден
       const { nativeImage } = require('electron');
       const emptyIcon = nativeImage.createEmpty();
       tray = new Tray(emptyIcon);
@@ -523,6 +539,33 @@ function createTray() {
     logger.error('[TRAY] Failed to create tray:', err.message);
     return;
   }
+  
+  updateTrayMenu(); // Вызываем функцию создания меню
+  
+  tray.on('click', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+        if (tray) {
+          tray.setTitle('');
+          unreadMessagesCount = 0;
+        }
+      }
+    } else {
+      createWindow();
+    }
+  });
+
+  debugLog('[TRAY] Tray created:', !!tray);
+  logger.info('[TRAY] System tray created successfully');
+}
+
+// Новая функция для обновления меню трея
+function updateTrayMenu() {
+  if (!tray) return;
   
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -551,6 +594,17 @@ function createTray() {
     },
     { type: 'separator' },
     {
+      label: '🔔 Уведомления включены',
+      type: 'checkbox',
+      checked: notificationsEnabled,
+      click: (menuItem) => {
+        notificationsEnabled = menuItem.checked;
+        menuItem.label = notificationsEnabled ? '🔔 Уведомления включены' : '🔕 Уведомления выключены';
+        debugLog('[TRAY] Notifications enabled:', notificationsEnabled);
+      }
+    },
+    { type: 'separator' },
+    {
       label: 'Выход',
       click: () => {
         app.isQuitting = true;
@@ -561,39 +615,26 @@ function createTray() {
   
   tray.setToolTip('Ночная стража');
   tray.setContextMenu(contextMenu);
-  
-// По клику (одинарному) показывать/скрывать окно
-tray.on('click', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
-    } else {
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  } else {
-    createWindow();
-  }
-});
-
-  logger.info('[TRAY] System tray created successfully');
 }
-/**
- * Показывает системное уведомление
- * @param {string} title - Заголовок
- * @param {string} body - Текст уведомления
- */
+
 function showSystemNotification(title, body) {
+    debugLog('[NOTIFICATION] showSystemNotification called:', title, body);
+    
+    // Проверяем, включены ли уведомления
+    if (!notificationsEnabled) {
+        debugLog('[NOTIFICATION] Notifications are disabled, skipping');
+        return;
+    }
+    
     if (Notification.isSupported()) {
         const notification = new Notification({
             title: title,
             body: body,
-            icon: path.join(__dirname, '../assets/icon.png'), // Убедитесь что иконка существует
+            icon: path.join(__dirname, '../assets/icon.png'),
             silent: false,
         });
 
         notification.on('click', () => {
-            // Разворачиваем окно при клике на уведомление
             if (mainWindow) {
                 if (mainWindow.isMinimized()) mainWindow.restore();
                 mainWindow.show();
@@ -602,51 +643,61 @@ function showSystemNotification(title, body) {
         });
 
         notification.show();
+        debugLog('[NOTIFICATION] Notification shown');
     } else {
         logger.warn('Системные уведомления не поддерживаются');
     }
 }
-/**
- * Обновляет счетчик непрочитанных сообщений в трее
- * @param {number} count - Количество непрочитанных сообщений
- */
+
 function updateTrayBadge(count) {
-    if (!tray) return;
+    debugLog('[TRAY] ========== updateTrayBadge called ==========');
+    debugLog('[TRAY] count =', count, 'type =', typeof count);
+    debugLog('[TRAY] tray exists?', !!tray);
     
-    unreadMessagesCount = count;
+    if (!tray) {
+        debugLog('[TRAY] ERROR: tray is null!');
+        return;
+    }
     
-    if (count > 0) {
-        // Устанавливаем текст счетчика поверх иконки
-        tray.setTitle(count.toString());
-        tray.setToolTip(`Ночная стража (непрочитано: ${count})`);
+    var num = parseInt(count, 10) || 0;
+    unreadMessagesCount = num;
+    debugLog('[TRAY] parsed num =', num);
+    
+    if (num > 0) {
+        tray.setTitle(num.toString());
+        tray.setToolTip('Ночная стража (непрочитано: ' + num + ')');
+        debugLog('[TRAY] Set title to:', num.toString());
     } else {
-        // Убираем текст, если все прочитано
         tray.setTitle('');
         tray.setToolTip('Ночная стража');
+        debugLog('[TRAY] Cleared title');
     }
 }
+
 app.whenReady().then(async () => {
+  debugLog('[MAIN] app.whenReady starting');
   Menu.setApplicationMenu(null);
   fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
-    createTray();
-globalShortcut.register('CommandOrControl+Shift+O', () => {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    if (overlayWindow.isVisible()) {
-      overlayWindow.hide();
+  
+  createTray();
+  
+  globalShortcut.register('CommandOrControl+Shift+O', () => {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      if (overlayWindow.isVisible()) {
+        overlayWindow.hide();
+      } else {
+        overlayWindow.show();
+        overlayWindow.focus();
+        overlayWindow.webContents.send('focus-input');
+      }
     } else {
-      overlayWindow.show();  // ← ТУТ МОЖНО show() - юзер явно вызвал
-      overlayWindow.focus(); // ← Явно даем фокус
-      overlayWindow.webContents.send('focus-input');
+      createOverlayWindow();
+      if (overlayWindow) {
+        overlayWindow.show();
+        overlayWindow.focus();
+      }
     }
-  } else {
-    createOverlayWindow();
-    // При создании по хоткею тоже даем фокус
-    if (overlayWindow) {
-      overlayWindow.show();
-      overlayWindow.focus();
-    }
-  }
-});
+  });
   
   const gamePathValid = await ensureGamePath();
   if (!gamePathValid) {
@@ -665,57 +716,43 @@ globalShortcut.register('CommandOrControl+Shift+O', () => {
   addonManager.startBackgroundChecker(mainWindow);
   soundsManager.autoDownloadBaseSounds().catch(err => logger.error('[SOUNDS] Auto-download failed:', err.message));
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  
+  debugLog('[MAIN] app.whenReady completed');
 });
-// В main.js добавьте обработку пинга от оверлея
+
+// ========== IPC HANDLERS ==========
+
 ipcMain.on('overlay-ping', (event) => {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send('overlay-pong');
   }
 });
 
-// Обработчик для обновления значка в трее (счетчик непрочитанных)
+// Основной обработчик для трея (из preload)
 ipcMain.on('update-tray-badge', (event, count) => {
-    logger.info(`[TRAY] Получен запрос на обновление счетчика: ${count}`);
+    debugLog('[IPC] update-tray-badge received, count =', count);
     updateTrayBadge(count);
 });
 
-// Обработчик для показа уведомления
-ipcMain.on('show-notification', (event, { title, body }) => {
-    logger.info(`[NOTIFICATION] Получен запрос на показ уведомления: ${title}`);
+// Основной обработчик для уведомлений (из preload)
+ipcMain.on('show-notification', (event, title, body) => {
+    debugLog('[IPC] show-notification received:', title, body);
     showSystemNotification(title, body);
 });
 
-app.on('window-all-closed', (event) => {
-  // На Windows и Linux не выходим, а остаемся в трее
-  if (process.platform !== 'darwin') {
-    // Не вызываем app.quit(), просто предотвращаем выход
-    event.preventDefault();
-    logger.info('[APP] All windows closed, staying in tray');
-  }
-});
-// В начале файла после переменных
-app.isQuitting = false;
-
-// В app.on('will-quit')
-app.on('will-quit', () => { 
-  app.isQuitting = true;
-  
-  stopRustHook(); 
-  stopOverlay();
-  
-  // Убрать или закомментировать:
-  // if (soundWindow && !soundWindow.isDestroyed()) {
-  //   soundWindow.close();
-  // }
-  
-  if (tray) {
-    tray.destroy();
-    tray = null;
-  }
-  
-  globalShortcut.unregisterAll(); 
+// Обработчики от webview (postMessage)
+ipcMain.on('show-notification-from-webview', (event, title, body) => {
+    debugLog('[WEBVIEW] Notification:', title, body);
+    showSystemNotification(title, body);
 });
 
+ipcMain.on('update-tray-badge-from-webview', (event, count) => {
+    const num = parseInt(count, 10) || 0;
+    debugLog('[WEBVIEW] Tray badge:', num);
+    updateTrayBadge(num);
+});
+
+// Остальные IPC handlers...
 ipcMain.handle('load-addons', async () => {
   try { return await addonManager.loadAddons(); } catch (error) { logger.error('[IPC] load-addons error:', error.message); return {}; }
 });
@@ -885,11 +922,33 @@ ipcMain.on('hide-overlay', () => {
 ipcMain.handle('send-test-to-overlay', async () => {
   return sendToOverlay('message', { text: 'Тест' });
 });
+
 ipcMain.on('quit-app', () => {
   app.isQuitting = true;
   app.quit();
 });
+
 ipcMain.handle('send-message-to-overlay', async (event, text) => {
   logger.info(`[OVERLAY] Received from chat: ${text}`);
   return sendToOverlay('message', { text });
+});
+
+app.on('window-all-closed', (event) => {
+  if (process.platform !== 'darwin') {
+    event.preventDefault();
+    logger.info('[APP] All windows closed, staying in tray');
+  }
+});
+
+app.on('will-quit', () => { 
+  app.isQuitting = true;
+  stopRustHook(); 
+  stopOverlay();
+  
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+  
+  globalShortcut.unregisterAll(); 
 });

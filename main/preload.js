@@ -110,13 +110,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API для оверлея
   sendTestToOverlay: () => ipcRenderer.invoke('send-test-to-overlay'),
   sendMessageToOverlay: (text) => ipcRenderer.invoke('send-message-to-overlay', text),
-    onOverlayInput: (callback) => {
+  onOverlayInput: (callback) => {
     const handler = (event, text) => callback(text);
     ipcRenderer.on('overlay-input-received', handler);
     return () => ipcRenderer.off('overlay-input-received', handler);
   },
+
+  // ========== УВЕДОМЛЕНИЯ И СЧЕТЧИК В ТРЕЕ ==========
+  showNotification: (title, body) => {
+    try {
+      ipcRenderer.send('show-notification', title, body);
+    } catch(e) {}
+  },
   
-  // Уведомления и счетчик в трее
-  showNotification: (title, body) => ipcRenderer.send('show-notification', { title, body }),
-  updateTrayBadge: (count) => ipcRenderer.send('update-tray-badge', count)
+  updateTrayBadge: (count) => {
+    try {
+      ipcRenderer.send('update-tray-badge', count);
+    } catch(e) {}
+  },
+  
+  getNotificationsEnabled: () => ipcRenderer.invoke('get-notifications-enabled')
+
 });
