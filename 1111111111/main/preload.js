@@ -80,11 +80,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('addon-update-available', handler);
     return () => ipcRenderer.off('addon-update-available', handler);
   },
-  onConfigSourceStatus: (callback) => {
-    const handler = (event, data) => callback(data);
-    ipcRenderer.on('config-source-status', handler);
-    return () => ipcRenderer.off('config-source-status', handler);
-  },
   onPTTActivated: (callback) => {
     const handler = () => {
       const frame = document.getElementById('ns-webview');
@@ -111,6 +106,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('sounds-download-progress', handler);
     return () => ipcRenderer.off('sounds-download-progress', handler);
   },
+  
+  // API для оверлея
   sendTestToOverlay: () => ipcRenderer.invoke('send-test-to-overlay'),
   sendMessageToOverlay: (text) => ipcRenderer.invoke('send-message-to-overlay', text),
   onOverlayInput: (callback) => {
@@ -118,16 +115,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('overlay-input-received', handler);
     return () => ipcRenderer.off('overlay-input-received', handler);
   },
+
+  // ========== УВЕДОМЛЕНИЯ И СЧЕТЧИК В ТРЕЕ ==========
   showNotification: (title, body) => {
-    ipcRenderer.send('show-notification', title, body);
+    try {
+      ipcRenderer.send('show-notification', title, body);
+    } catch(e) {}
   },
+  
   updateTrayBadge: (count) => {
-    ipcRenderer.send('update-tray-badge', count);
+    try {
+      ipcRenderer.send('update-tray-badge', count);
+    } catch(e) {}
   },
-  getNotificationsEnabled: () => ipcRenderer.invoke('get-notifications-enabled'),
-  loadCredentials: () => ipcRenderer.invoke('load-credentials'),
-  saveCredentials: (username, password) => ipcRenderer.invoke('save-credentials', username, password),
-  deleteCredentials: () => ipcRenderer.invoke('delete-credentials'),
-  getAccounts: () => ipcRenderer.invoke('get-accounts'),
-  switchAccount: (userId) => ipcRenderer.invoke('switch-account', userId)
+  
+  getNotificationsEnabled: () => ipcRenderer.invoke('get-notifications-enabled')
+
 });

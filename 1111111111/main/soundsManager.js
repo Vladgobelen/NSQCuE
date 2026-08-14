@@ -6,6 +6,9 @@ const { app } = require('electron');
 const SOUNDS_CONFIG_URL = 'https://raw.githubusercontent.com/Vladgobelen/NSQCu/main/sounds.json';
 const SOUNDS_DIR = path.join(app.getPath('userData'), 'sounds');
 
+/**
+ * Проверка: пуста ли папка кастомных звуков (нет .mp3 файлов)
+ */
 async function isSoundsDirEmpty() {
   try {
     await fs.ensureDir(SOUNDS_DIR);
@@ -14,10 +17,13 @@ async function isSoundsDirEmpty() {
     return mp3Files.length === 0;
   } catch (error) {
     console.error('[SOUNDS] Error checking sounds dir:', error.message);
-    return true;
+    return true; // Treat errors as "empty" to trigger download
   }
 }
 
+/**
+ * Скачивание файла по URL в указанную папку
+ */
 async function downloadFileFromUrl(url, destPath) {
   const response = await axios.get(url, {
     responseType: 'stream',
@@ -34,20 +40,9 @@ async function downloadFileFromUrl(url, destPath) {
   });
 }
 
-function getFileNameFromUrl(url, soundKey) {
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname;
-    const fileName = path.basename(pathname);
-    
-    if (fileName && fileName.toLowerCase().endsWith('.mp3')) {
-      return fileName;
-    }
-  } catch (e) {}
-  
-  return `${soundKey}.mp3`;
-}
-
+/**
+ * Получение конфигурации звуков (парсинг sounds.json)
+ */
 async function fetchSoundsConfig() {
   try {
     const response = await axios.get(SOUNDS_CONFIG_URL, {
@@ -61,11 +56,20 @@ async function fetchSoundsConfig() {
   }
 }
 
+/**
+ * Получение списка доступных разделов
+ */
 function getSections(config) {
   if (!config?.sections) return [];
   return Object.keys(config.sections);
 }
 
+/**
+ * Скачивание всех файлов из указанного раздела
+ * @param {string} sectionName - имя раздела (например, "Стандартные")
+ * @param {object} config - конфигурация из sounds.json
+ * @param {function} onProgress - колбэк для прогресса (optional)
+ */
 async function downloadSection(sectionName, config, onProgress = null) {
   const section = config.sections?.[sectionName];
   if (!section) {
@@ -79,7 +83,7 @@ async function downloadSection(sectionName, config, onProgress = null) {
   
   for (let i = 0; i < total; i++) {
     const [soundKey, url] = entries[i];
-    const fileName = getFileNameFromUrl(url, soundKey);
+    const fileName = `${soundKey}.mp3`;
     const destPath = path.join(SOUNDS_DIR, fileName);
     
     try {
@@ -103,10 +107,15 @@ async function downloadSection(sectionName, config, onProgress = null) {
           error: error.message 
         });
       }
+      // Continue with other files even if one fails
     }
   }
 }
 
+/**
+ * Авто-загрузка базовых звуков при первом запуске
+ * Скачивает раздел "Стандартные" если папка пуста
+ */
 async function autoDownloadBaseSounds() {
   if (!await isSoundsDirEmpty()) {
     return { skipped: true, reason: 'sounds_dir_not_empty' };

@@ -1,0 +1,1064 @@
+document.addEventListener('DOMContentLoaded', function() {
+  var gameStatus = document.getElementById('game-status');
+  var launchBtn = document.getElementById('launch-btn');
+  var addonsList = document.getElementById('addons-list');
+  var logsBtn = document.getElementById('logs-btn');
+  var voiceBtn = document.getElementById('voice-btn');
+  var changePathBtn = document.getElementById('change-path-btn');
+  var webviewContainer = document.getElementById('webview-container');
+  var nsWebview = document.getElementById('ns-webview');
+  var backPanel = document.getElementById('back-panel');
+  var backBtn = document.getElementById('back-btn');
+  var panelMicBtn = document.getElementById('panel-mic-btn');
+  var panelRefreshBtn = document.getElementById('panel-refresh-btn');
+  var panelSettingsBtn = document.getElementById('panel-settings-btn');
+  var panelSoundsBtn = document.getElementById('panel-sounds-btn');
+  var panelTestBtn = document.getElementById('panel-test-btn');
+  var pttSettingsPanel = document.getElementById('ptt-settings-panel');
+  var pttCaptureArea = document.getElementById('ptt-capture-area');
+  var pttSaveBtn = document.getElementById('ptt-save-btn');
+  var pttCancelBtn = document.getElementById('ptt-cancel-btn');
+  var soundsSectionsPanel = document.getElementById('sounds-sections-panel');
+  var soundsPanelContent = document.getElementById('sounds-panel-content');
+  var soundsCloseBtn = document.getElementById('sounds-close-btn');
+  var topBar = document.getElementById('top-bar');
+  var gamePanel = document.getElementById('game-panel');
+  var divider = document.getElementById('divider');
+  var addonsHeader = document.getElementById('addons-header');
+
+  var isWebViewVisible = false;
+  var hidePanelTimeout = null;
+  var isPanelMicActive = false;
+  var capturedHotkey = new Set();
+  var isSettingsOpen = false;
+  var isSoundsPanelOpen = false;
+  var isMouseInCaptureZone = false;
+  var isGameReady = false;
+  var isLaunchBlocked = false;
+  
+  var unreadMessageCount = 0;
+  var processedMessageIds = {};
+  var roomJoinTime = 0;
+  var currentRoomId = '';
+
+  function updateLaunchButtonState() {
+    if (launchBtn) {
+      launchBtn.disabled = !isGameReady || isLaunchBlocked;
+    }
+  }
+
+  function formatHotkey(codes) {
+    if (!codes || !Array.isArray(codes) || codes.length === 0) {
+      return 'Не задан';
+    }
+    var keyNames = {
+      16: 'Shift', 17: 'Ctrl', 18: 'Alt', 32: 'Space', 27: 'Esc', 13: 'Enter',
+      9: 'Tab', 8: 'Backspace', 46: 'Del', 37: '←', 38: '↑', 39: '→', 40: '↓',
+      112: 'F1', 113: 'F2', 114: 'F3', 115: 'F4', 116: 'F5', 117: 'F6', 118: 'F7', 119: 'F8',
+      120: 'F9', 121: 'F10', 122: 'F11', 123: 'F12',
+      272: 'Mouse4', 273: 'Mouse5', 276: 'MouseLeft', 277: 'MouseRight', 278: 'MouseMiddle'
+    };
+    return codes.map(function(code) { return keyNames[code] || 'K' + code; }).join(' + ');
+  }
+
+  function updateSettingsTooltip(codes) {
+    if (panelSettingsBtn) {
+      panelSettingsBtn.title = 'PTT: ' + formatHotkey(codes);
+    }
+  }
+
+  function showError(message) {
+    alert('Ошибка: ' + message);
+  }
+
+  async function loadAddons() {
+    try {
+      var addons = await window.electronAPI.loadAddons();
+      renderAddons(addons);
+    } catch (e) {
+      showError('Не удалось загрузить список аддонов');
+    }
+  }
+
+  function renderAddons(addons) {
+    addonsList.innerHTML = '';
+    for (var name in addons) {
+      if (addons.hasOwnProperty(name)) {
+        addonsList.appendChild(createAddonElement(name, addons[name]));
+      }
+    }
+  }
+
+  function createAddonElement(name, addon) {
+    var card = document.createElement('div');
+    card.className = 'addon-card';
+    card.dataset.name = name;
+    var contentWrapper = document.createElement('div');
+    contentWrapper.className = 'addon-content-wrapper';
+    var overlay = document.createElement('div');
+    overlay.className = 'progress-overlay hidden';
+    card.overlay = overlay;
+    var topRow = document.createElement('div');
+    topRow.className = 'addon-top';
+    var nameEl = document.createElement('span');
+    nameEl.className = 'addon-name';
+    nameEl.textContent = name;
+    var updateLabel = document.createElement('span');
+    updateLabel.className = 'update-label';
+    updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
+    updateLabel.textContent = 'Доступно обновление';
+    var checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = 'checkbox-' + name;
+    checkbox.checked = addon.installed;
+    checkbox.disabled = addon.being_processed || addon.updating;
+    var label = document.createElement('label');
+    label.htmlFor = 'checkbox-' + name;
+    label.className = 'custom-checkbox';
+    topRow.append(nameEl, updateLabel, checkbox, label);
+    var description = document.createElement('div');
+    description.className = 'addon-description';
+    description.textContent = addon.description;
+    card.checkbox = checkbox;
+    card.updateLabel = updateLabel;
+    card.appendChild(overlay);
+    contentWrapper.append(topRow, description);
+    card.appendChild(contentWrapper);
+    if (addon.installed) {
+      card.onmouseenter = function() { card.classList.add('deleting-warning'); };
+      card.onmouseleave = function() { card.classList.remove('deleting-warning'); };
+    }
+    checkbox.addEventListener('change', function() {
+      var willInstall = checkbox.checked;
+      var originalState = !willInstall;
+      checkbox.disabled = true;
+      card.classList.remove('deleting-warning');
+      window.electronAPI.toggleAddon(name, willInstall)
+        .then(function(success) {
+          if (!success) {
+            checkbox.checked = originalState;
+          }
+        })
+        .catch(function() {
+          checkbox.checked = originalState;
+          checkbox.disabled = false;
+        });
+    });
+    return card;
+  }
+
+  function updateAddonProgress(name, progress) {
+    var cards = document.querySelectorAll('.addon-card');
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      if (card.dataset.name === name && card.overlay) {
+        card.overlay.style.setProperty('--progress', Math.min(progress, 1.0) * 100 + '%');
+        card.overlay.classList.toggle('hidden', progress <= 0);
+        card.overlay.style.opacity = progress > 0 ? '1' : '0';
+        if (progress >= 1.0) {
+          setTimeout(function() {
+            card.overlay.classList.add('hidden');
+            card.overlay.style.opacity = '';
+          }, 300);
+        }
+        break;
+      }
+    }
+  }
+
+  function refreshAddonStatus(name) {
+    window.electronAPI.loadAddons()
+      .then(function(addons) {
+        var addon = addons[name];
+        if (!addon) return;
+        var cards = document.querySelectorAll('.addon-card');
+        for (var i = 0; i < cards.length; i++) {
+          var card = cards[i];
+          if (card.dataset.name === name) {
+            card.checkbox.disabled = false;
+            card.checkbox.checked = addon.installed;
+            if (card.overlay) {
+              card.overlay.classList.add('hidden');
+              card.overlay.style.opacity = '0';
+              card.overlay.style.setProperty('--progress', '0%');
+            }
+            if (addon.installed) {
+              card.onmouseenter = function() { card.classList.add('deleting-warning'); };
+              card.onmouseleave = function() { card.classList.remove('deleting-warning'); };
+            } else {
+              card.onmouseenter = null;
+              card.onmouseleave = null;
+            }
+            card.updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
+            break;
+          }
+        }
+      })
+      .catch(function() {
+        var cards = document.querySelectorAll('.addon-card');
+        for (var i = 0; i < cards.length; i++) {
+          var card = cards[i];
+          if (card.dataset.name === name) {
+            card.checkbox.disabled = false;
+          }
+        }
+      });
+  }
+
+  function checkGame() {
+    window.electronAPI.checkGame()
+      .then(function(exists) {
+        isGameReady = exists;
+        gameStatus.textContent = exists ? 'Готова к запуску' : 'Игра не найдена';
+        gameStatus.style.color = exists ? '#4CAF50' : '#F44336';
+        updateLaunchButtonState();
+      })
+      .catch(function() {
+        isGameReady = false;
+        gameStatus.textContent = 'Ошибка проверки игры';
+        gameStatus.style.color = '#F44336';
+        updateLaunchButtonState();
+      });
+  }
+
+  async function launchGame() {
+    var result = await window.electronAPI.launchGame();
+    if (!result) {
+      showError('Не удалось запустить игру');
+    }
+  }
+
+  function openLogsFolder() {
+    window.electronAPI.openLogsFolder();
+  }
+
+  async function changeGamePath() {
+    var result = await window.electronAPI.changeGamePath();
+    if (result) {
+      checkGame();
+      loadAddons();
+    }
+  }
+
+  async function toggleView() {
+    if (isWebViewVisible) {
+      if (webviewContainer) webviewContainer.classList.add('active');
+      topBar.style.display = 'none';
+      gamePanel.style.display = 'none';
+      divider.style.display = 'none';
+      addonsHeader.style.display = 'none';
+      addonsList.style.display = 'none';
+      backPanel.style.display = 'flex';
+      voiceBtn.style.display = 'none';
+      
+      roomJoinTime = 0;
+      currentRoomId = '';
+      
+      try {
+        var platform = await window.electronAPI.getPlatform();
+        window.electronAPI.sendToWebClient('electron-ready', {
+          version: '1.0.0',
+          platform: platform || 'unknown',
+          userAgent: navigator.userAgent
+        });
+      } catch (e) {
+        window.electronAPI.sendToWebClient('electron-ready', {
+          version: '1.0.0',
+          platform: 'unknown',
+          userAgent: navigator.userAgent
+        });
+      }
+
+      setTimeout(async function() {
+        try {
+          var creds = await window.electronAPI.loadCredentials();
+          if (creds && creds.username && creds.password) {
+            var fillCode = '\n' +
+              '  (function() {\n' +
+              '    var usernameInput = document.querySelector("#usernameInput, input[name=\\"username\\"], input[placeholder*=\\"Ник\\"]");\n' +
+              '    var passwordInput = document.querySelector("#passwordInput, input[type=\\"password\\"]");\n' +
+              '    if (usernameInput && passwordInput) {\n' +
+              '      usernameInput.value = "' + creds.username.replace(/"/g, '\\"') + '";\n' +
+              '      passwordInput.value = "' + creds.password.replace(/"/g, '\\"') + '";\n' +
+              '      var submitBtn = document.querySelector("#authSubmitBtn, button:contains(\'Войти\')");\n' +
+              '      if (submitBtn) submitBtn.click();\n' +
+              '    }\n' +
+              '  })();\n';
+            nsWebview.executeJavaScript(fillCode).catch(function() {});
+          }
+        } catch (e) {}
+      }, 2000);
+      
+    } else {
+      if (webviewContainer) webviewContainer.classList.remove('active');
+      topBar.style.display = 'flex';
+      gamePanel.style.display = 'flex';
+      divider.style.display = 'block';
+      addonsHeader.style.display = 'flex';
+      addonsList.style.display = 'block';
+      backPanel.style.display = 'none';
+      backPanel.classList.remove('visible');
+      voiceBtn.style.display = 'block';
+      
+      unreadMessageCount = 0;
+      if (window.electronAPI && window.electronAPI.updateTrayBadge) {
+        window.electronAPI.updateTrayBadge(0);
+      }
+    }
+  }
+
+  async function openSoundsPanel() {
+    if (isSoundsPanelOpen) {
+      soundsSectionsPanel.classList.remove('visible');
+      isSoundsPanelOpen = false;
+      return;
+    }
+    soundsSectionsPanel.classList.add('visible');
+    isSoundsPanelOpen = true;
+    soundsPanelContent.innerHTML = '<div class="sounds-loading">Загрузка конфигурации...</div>';
+    try {
+      var customBtn = document.createElement('button');
+      customBtn.className = 'sounds-section-btn';
+      customBtn.textContent = '📁 Свои';
+      customBtn.title = 'Открыть папку с кастомными звуками';
+      customBtn.addEventListener('click', function() {
+        window.electronAPI.openSoundsFolder();
+      });
+      soundsPanelContent.appendChild(customBtn);
+      var dividerEl = document.createElement('div');
+      dividerEl.className = 'sounds-divider';
+      soundsPanelContent.appendChild(dividerEl);
+      var config = await window.electronAPI.fetchSoundsConfig();
+      soundsPanelContent.innerHTML = '';
+      soundsPanelContent.appendChild(customBtn);
+      soundsPanelContent.appendChild(dividerEl);
+      if (!config || !config.sections) {
+        soundsPanelContent.innerHTML = '<div class="sounds-error">Разделы не найдены</div>';
+        return;
+      }
+      var sections = Object.keys(config.sections);
+      for (var i = 0; i < sections.length; i++) {
+        var sectionName = sections[i];
+        var btn = document.createElement('button');
+        btn.className = 'sounds-section-btn';
+        btn.textContent = sectionName;
+        btn.addEventListener('click', (function(sn) {
+          return function() { downloadSectionSounds(sn); };
+        })(sectionName));
+        soundsPanelContent.appendChild(btn);
+      }
+    } catch (err) {
+      soundsPanelContent.innerHTML = '<div class="sounds-error">Ошибка: ' + err.message + '</div>';
+    }
+  }
+
+  async function downloadSectionSounds(sectionName) {
+    soundsPanelContent.innerHTML = '<div class="sounds-loading">Загрузка раздела "' + sectionName + '"...</div>';
+    try {
+      await window.electronAPI.downloadSoundsSection(sectionName);
+      soundsPanelContent.innerHTML = '<div class="sounds-success">✅ Раздел "' + sectionName + '" загружен</div>';
+    } catch (err) {
+      soundsPanelContent.innerHTML = '<div class="sounds-error">❌ Ошибка: ' + err.message + '</div>';
+    }
+  }
+
+  function sendMessageToWebChat(text) {
+    var webview = document.getElementById('ns-webview');
+    if (!webview) {
+      console.warn('[OVERLAY] WebView not found');
+      return;
+    }
+    
+    var escapedText = text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    
+    var code = '\n' +
+      '  (function() {\n' +
+      '    var selectors = [\n' +
+      '      "input[type=\\"text\\"]",\n' +
+      '      "textarea",\n' +
+      '      "[contenteditable=\\"true\\"]",\n' +
+      '      ".chat-input",\n' +
+      '      "#chat-input",\n' +
+      '      ".message-input"\n' +
+      '    ];\n' +
+      '    \n' +
+      '    var input = null;\n' +
+      '    for (var i = 0; i < selectors.length; i++) {\n' +
+      '      input = document.querySelector(selectors[i]);\n' +
+      '      if (input) break;\n' +
+      '    }\n' +
+      '    \n' +
+      '    if (input) {\n' +
+      '      if (input.tagName === "INPUT" || input.tagName === "TEXTAREA") {\n' +
+      '        input.value = "' + escapedText + '";\n' +
+      '        input.dispatchEvent(new Event("input", { bubbles: true }));\n' +
+      '        \n' +
+      '        var sendBtn = document.querySelector("button[type=\\"submit\\"], .send-button, #send-button");\n' +
+      '        if (sendBtn) {\n' +
+      '          sendBtn.click();\n' +
+      '        } else {\n' +
+      '          input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));\n' +
+      '        }\n' +
+      '        return true;\n' +
+      '      }\n' +
+      '    }\n' +
+      '    return false;\n' +
+      '  })();\n';
+    
+    webview.executeJavaScript(code).then(function(result) {
+      if (result) {
+        console.log('[OVERLAY] Message sent to web chat');
+      } else {
+        console.warn('[OVERLAY] Could not find chat input');
+      }
+    }).catch(function(err) {
+      console.error('[OVERLAY] Error sending to web chat:', err);
+    });
+  }
+
+  loadAddons();
+  checkGame();
+
+  (async function() {
+    try {
+      var saved = await window.electronAPI.getPTTHotkey();
+      updateSettingsTooltip(saved);
+    } catch (e) {
+      updateSettingsTooltip(null);
+    }
+  })();
+
+  if (window.electronAPI && window.electronAPI.onBlockLaunchGame) {
+    window.electronAPI.onBlockLaunchGame(function(blocked) {
+      isLaunchBlocked = blocked;
+      updateLaunchButtonState();
+    });
+  }
+
+  launchBtn.addEventListener('click', function() {
+    launchGame();
+  });
+
+  logsBtn.addEventListener('click', function() {
+    openLogsFolder();
+  });
+
+  changePathBtn.addEventListener('click', function() {
+    changeGamePath();
+  });
+
+  voiceBtn.addEventListener('click', async function() {
+    isWebViewVisible = true;
+    await toggleView();
+  });
+
+  backBtn.addEventListener('click', function() {
+    isWebViewVisible = false;
+    toggleView();
+  });
+
+  if (panelMicBtn) {
+    panelMicBtn.addEventListener('click', function() {
+      isPanelMicActive = !isPanelMicActive;
+      panelMicBtn.classList.toggle('active', isPanelMicActive);
+      panelMicBtn.title = isPanelMicActive ? 'Микрофон активен (выкл)' : 'Активировать микрофон';
+      if (window.electronAPI) {
+        window.electronAPI.sendToWebClient('toggle-mic', { active: isPanelMicActive });
+      }
+    });
+  }
+
+  if (panelRefreshBtn) {
+    panelRefreshBtn.addEventListener('click', async function() {
+      panelRefreshBtn.style.pointerEvents = 'none';
+      panelRefreshBtn.style.opacity = '0.5';
+      try {
+        await window.electronAPI.clearWebviewCache();
+        if (nsWebview) {
+          nsWebview.reload();
+        }
+      } catch (e) {
+        showError('Ошибка обновления веб-клиента');
+      } finally {
+        setTimeout(function() {
+          panelRefreshBtn.style.pointerEvents = 'auto';
+          panelRefreshBtn.style.opacity = '1';
+        }, 500);
+      }
+    });
+  }
+
+  if (panelSettingsBtn) {
+    panelSettingsBtn.addEventListener('click', function() {
+      isSettingsOpen = true;
+      pttSettingsPanel.classList.add('visible');
+      pttCaptureArea.classList.add('active');
+      pttCaptureArea.textContent = 'Наведите курсор на это поле и нажмите клавиши...';
+      capturedHotkey.clear();
+      isMouseInCaptureZone = false;
+      if (window.electronAPI && window.electronAPI.startKeyCapture) {
+        window.electronAPI.startKeyCapture().catch(function() {});
+      }
+    });
+  }
+
+  if (pttCancelBtn) {
+    pttCancelBtn.addEventListener('click', function() {
+      isSettingsOpen = false;
+      pttSettingsPanel.classList.remove('visible');
+      pttCaptureArea.classList.remove('active');
+      isMouseInCaptureZone = false;
+      if (window.electronAPI && window.electronAPI.getPTTHotkey) {
+        window.electronAPI.getPTTHotkey().then(updateSettingsTooltip);
+      }
+      if (window.electronAPI && window.electronAPI.stopKeyCapture) {
+        window.electronAPI.stopKeyCapture();
+      }
+    });
+  }
+
+  if (pttSaveBtn) {
+    pttSaveBtn.addEventListener('click', async function() {
+      var codes = Array.from(capturedHotkey);
+      if (codes.length > 0) {
+        var res = await window.electronAPI.setPTTHotkey(codes);
+        if (res && res.success) {
+          pttCaptureArea.textContent = '✅ Сохранено: ' + codes.join(' + ');
+          updateSettingsTooltip(codes);
+          setTimeout(function() {
+            pttSettingsPanel.classList.remove('visible');
+            pttCaptureArea.classList.remove('active');
+            isSettingsOpen = false;
+            isMouseInCaptureZone = false;
+            if (window.electronAPI && window.electronAPI.stopKeyCapture) {
+              window.electronAPI.stopKeyCapture();
+            }
+          }, 1000);
+        } else {
+          pttCaptureArea.textContent = '❌ Ошибка сохранения';
+        }
+      } else {
+        pttCaptureArea.textContent = '⚠️ Сначала нажмите клавиши!';
+      }
+    });
+  }
+
+  if (pttCaptureArea) {
+    pttCaptureArea.addEventListener('mouseenter', function() {
+      isMouseInCaptureZone = true;
+      if (capturedHotkey.size === 0) {
+        pttCaptureArea.textContent = 'Запись... Нажмите клавиши';
+      }
+    });
+    pttCaptureArea.addEventListener('mouseleave', function() {
+      isMouseInCaptureZone = false;
+      if (capturedHotkey.size === 0) {
+        pttCaptureArea.textContent = 'Наведите курсор и нажмите клавиши...';
+      }
+    });
+  }
+
+  if (backPanel) {
+    backPanel.addEventListener('mouseenter', function() {
+      clearTimeout(hidePanelTimeout);
+      backPanel.classList.add('visible');
+    });
+    backPanel.addEventListener('mouseleave', function() {
+      if (isSettingsOpen || isSoundsPanelOpen) return;
+      hidePanelTimeout = setTimeout(function() {
+        backPanel.classList.remove('visible');
+      }, 500);
+    });
+  }
+
+  if (panelSoundsBtn) {
+    panelSoundsBtn.addEventListener('click', openSoundsPanel);
+  }
+
+  if (soundsCloseBtn) {
+    soundsCloseBtn.addEventListener('click', function() {
+      soundsSectionsPanel.classList.remove('visible');
+      isSoundsPanelOpen = false;
+    });
+  }
+
+  if (panelTestBtn) {
+    panelTestBtn.addEventListener('click', async function() {
+      try {
+        await window.electronAPI.sendTestToOverlay();
+        console.log('[OVERLAY] Test message sent');
+        
+        panelTestBtn.style.backgroundColor = '#4CAF50';
+        setTimeout(function() {
+          panelTestBtn.style.backgroundColor = '';
+        }, 200);
+      } catch (err) {
+        console.error('[OVERLAY] Failed to send test:', err);
+        panelTestBtn.style.backgroundColor = '#f44336';
+        setTimeout(function() {
+          panelTestBtn.style.backgroundColor = '';
+        }, 200);
+      }
+    });
+  }
+
+  if (window.electronAPI && window.electronAPI.onOverlayInput) {
+    window.electronAPI.onOverlayInput(function(text) {
+      console.log('[OVERLAY] Input received:', text);
+      
+      if (panelTestBtn) {
+        panelTestBtn.title = 'Последнее: ' + text;
+      }
+      
+      sendMessageToWebChat(text);
+    });
+  }
+
+  window.addEventListener('message', function(event) {
+    console.log('[MAIN] Received postMessage:', event.data && event.data.type, event.data && event.data.source);
+    
+    if (event.data && event.data.type === 'SAVE_CREDENTIALS' && event.data.source === 'webview') {
+      var username = event.data.username;
+      var password = event.data.password;
+      if (username && password && window.electronAPI && window.electronAPI.saveCredentials) {
+        window.electronAPI.saveCredentials(username, password).then(function() {
+          console.log('[AUTH] Credentials saved');
+        }).catch(function(err) {
+          console.error('[AUTH] Failed to save credentials:', err);
+        });
+      }
+    }
+    
+    if (event.data && event.data.type === 'CHAT_MESSAGE' && event.data.source === 'webview') {
+      var text = event.data.text;
+      console.log('[CHAT] Message from webview:', text);
+      console.log('[CHAT] sendMessageToOverlay exists:', !!(window.electronAPI && window.electronAPI.sendMessageToOverlay));
+      
+      if (window.electronAPI && window.electronAPI.sendMessageToOverlay) {
+        console.log('[CHAT] Calling sendMessageToOverlay...');
+        window.electronAPI.sendMessageToOverlay(text).then(function() {
+          console.log('[CHAT] ✅ Message sent to overlay successfully');
+        }).catch(function(err) {
+          console.error('[CHAT] ❌ Failed to send to overlay:', err);
+        });
+      } else {
+        console.error('[CHAT] ❌ sendMessageToOverlay not available');
+      }
+    }
+    
+    if (event.data && event.data.type === 'ELECTRON_SHOW_NOTIFICATION' && event.data.source === 'webview') {
+      var title = event.data.title;
+      var body = event.data.body;
+      console.log('[RENDERER] Received notification from webview:', title, body);
+      
+      if (window.electronAPI && window.electronAPI.showNotification) {
+        window.electronAPI.showNotification(title, body);
+      }
+    }
+    
+    if (event.data && event.data.type === 'ELECTRON_UPDATE_TRAY_BADGE' && event.data.source === 'webview') {
+      var count = event.data.count;
+      console.log('[RENDERER] Received tray badge update from webview:', count);
+      
+      if (window.electronAPI && window.electronAPI.updateTrayBadge) {
+        window.electronAPI.updateTrayBadge(count);
+      }
+    }
+  });
+
+  if (window.electronAPI && window.electronAPI.onSoundsDownloadProgress) {
+    window.electronAPI.onSoundsDownloadProgress(function(progress) {
+      if (soundsPanelContent && soundsPanelContent.querySelector('.sounds-loading')) {
+        soundsPanelContent.innerHTML = '<div class="sounds-loading">Загрузка: ' + progress.current + '/' + progress.total + ' (' + progress.sound + ')</div>';
+      }
+    });
+  }
+
+  window.electronAPI.onProgress(function(name, progress) {
+    updateAddonProgress(name, progress);
+  });
+
+  window.electronAPI.onOperationFinished(function(name, success) {
+    if (success) {
+      refreshAddonStatus(name);
+    }
+  });
+
+  window.electronAPI.onAddonUpdateAvailable(function(name) {
+    if (name === 'NSQC') {
+      refreshAddonStatus(name);
+    }
+  });
+
+  window.electronAPI.onError(function(error) {
+    showError(error);
+    var checkboxes = document.querySelectorAll('.addon-card input[type="checkbox"]');
+    for (var i = 0; i < checkboxes.length; i++) {
+      checkboxes[i].disabled = false;
+    }
+  });
+
+  if (window.electronAPI && window.electronAPI.onKeyCaptured) {
+    window.electronAPI.onKeyCaptured(function(code) {
+      if (isMouseInCaptureZone) {
+        capturedHotkey.add(code);
+        pttCaptureArea.textContent = Array.from(capturedHotkey).join(' + ');
+      }
+    });
+  }
+
+  if (window.electronAPI && window.electronAPI.onPTTPressed) {
+    window.electronAPI.onPTTPressed(function() {
+      if (!isPanelMicActive) {
+        isPanelMicActive = true;
+        if (panelMicBtn) {
+          panelMicBtn.classList.add('active');
+          panelMicBtn.title = 'Микрофон активен (PTT)';
+        }
+        if (window.electronAPI) {
+          window.electronAPI.sendToWebClient('toggle-mic', { active: true });
+        }
+      }
+    });
+  }
+
+  if (window.electronAPI && window.electronAPI.onPTTReleased) {
+    window.electronAPI.onPTTReleased(function() {
+      if (isPanelMicActive) {
+        isPanelMicActive = false;
+        if (panelMicBtn) {
+          panelMicBtn.classList.remove('active');
+          panelMicBtn.title = 'Активировать микрофон';
+        }
+        if (window.electronAPI) {
+          window.electronAPI.sendToWebClient('toggle-mic', { active: false });
+        }
+      }
+    });
+  }
+
+  if (window.electronAPI && window.electronAPI.onWebClientEvent) {
+    window.electronAPI.onWebClientEvent('mic-state', function(state) {
+      if (voiceBtn) {
+        voiceBtn.classList.toggle('speaking', state && state.speaking);
+        voiceBtn.classList.toggle('muted', state && state.muted);
+        voiceBtn.title = (state && state.muted) ? 'Микрофон выключен' : (state && state.speaking) ? 'Говорите...' : 'Микрофон готов';
+      }
+      if (panelMicBtn) {
+        var active = (state && state.active) || (state && state.speaking) || false;
+        if (!isPanelMicActive || active !== isPanelMicActive) {
+          isPanelMicActive = active;
+          panelMicBtn.classList.toggle('active', isPanelMicActive);
+        }
+      }
+      if (window.electronAPI) {
+        window.electronAPI.sendMicState(state);
+      }
+    });
+    window.electronAPI.onWebClientEvent('request-ptt-register', function(config) {
+      if (window.electronAPI && window.electronAPI.registerPTTHotkey && config && config.hotkey) {
+        window.electronAPI.registerPTTHotkey(config.hotkey)
+          .then(function(result) {
+            window.electronAPI.sendToWebClient('ptt-register-result', result);
+          })
+          .catch(function() {});
+      }
+    });
+  }
+
+  if (nsWebview) {
+    nsWebview.addEventListener('dom-ready', function() {
+      if (window.electronAPI) {
+        window.electronAPI.sendToWebClient('electron-config', {
+          theme: 'dark',
+          language: 'ru'
+        });
+      }
+      
+      nsWebview.executeJavaScript('\n' +
+        '  (function() {\n' +
+        '    console.log("[Overlay] Setting up chat observer");\n' +
+        '    \n' +
+        '    var observer = new MutationObserver(function(mutations) {\n' +
+        '      for (var i = 0; i < mutations.length; i++) {\n' +
+        '        var mutation = mutations[i];\n' +
+        '        for (var j = 0; j < mutation.addedNodes.length; j++) {\n' +
+        '          var node = mutation.addedNodes[j];\n' +
+        '          if (node.nodeType === Node.ELEMENT_NODE) {\n' +
+        '            var messageSelectors = [".message", ".chat-message", ".msg", "[data-message]"];\n' +
+        '            for (var k = 0; k < messageSelectors.length; k++) {\n' +
+        '              var selector = messageSelectors[k];\n' +
+        '              if (node.matches && node.matches(selector)) {\n' +
+        '                var textElement = node.querySelector(".message-text");\n' +
+        '                var usernameElement = node.querySelector(".message-username");\n' +
+        '                \n' +
+        '                var text = textElement ? (textElement.textContent || "").trim() : "";\n' +
+        '                var username = usernameElement ? (usernameElement.textContent || "").trim() : "";\n' +
+        '                \n' +
+        '                if (text && text !== "🔴 Отключен" && text !== "🟢 Подключен") {\n' +
+        '                  var fullMessage = username ? username + ": " + text : text;\n' +
+        '                  console.log("[CHAT] Sending to overlay:", fullMessage);\n' +
+        '                }\n' +
+        '                break;\n' +
+        '              }\n' +
+        '            }\n' +
+        '          }\n' +
+        '        }\n' +
+        '      }\n' +
+        '    });\n' +
+        '    \n' +
+        '    observer.observe(document.body, { childList: true, subtree: true });\n' +
+        '    console.log("[Overlay] Chat observer ready - ALL messages will be sent");\n' +
+        '  })();\n'
+      ).catch(function() {});
+      
+      nsWebview.executeJavaScript('\n' +
+        '  (function() {\n' +
+        '    window.addEventListener("message", function(event) {\n' +
+        '      if (event.data && event.data.type === "ELECTRON_PLAY_SOUND" && event.data.soundType) {\n' +
+        '        if (window.ipcRenderer) {\n' +
+        '          window.ipcRenderer.sendToHost("play-sound", event.data.soundType);\n' +
+        '        }\n' +
+        '      }\n' +
+        '    });\n' +
+        '    console.log("[Overlay] Sound listener ready");\n' +
+        '  })();\n'
+      ).catch(function() {});
+      
+      // Внедряем electronAPI
+      var injectCode = '\n' +
+        '(function() {\n' +
+        '  let ipcRenderer = null;\n' +
+        '  try { if (typeof require !== "undefined") { ipcRenderer = require("electron").ipcRenderer; } } catch (e) {}\n' +
+        '  if (!ipcRenderer && window.ipcRenderer) ipcRenderer = window.ipcRenderer;\n' +
+        '  \n' +
+        '  window.ELECTRON_CUSTOM_SOUNDS_ENABLED = true;\n' +
+        '  \n' +
+        '  window.electronAPI = {\n' +
+        '    playSound: (soundType) => {\n' +
+        '      console.log("[electronAPI] playSound called:", soundType);\n' +
+        '      if (ipcRenderer) {\n' +
+        '        try { \n' +
+        '          ipcRenderer.sendToHost("play-sound", soundType); \n' +
+        '          return Promise.resolve(true); \n' +
+        '        } catch (e) {\n' +
+        '          console.error("[electronAPI] ipcRenderer error:", e);\n' +
+        '        }\n' +
+        '      }\n' +
+        '      window.postMessage({ type: "ELECTRON_PLAY_SOUND", soundType: soundType, source: "webview" }, "*");\n' +
+        '      return Promise.resolve(true);\n' +
+        '    },\n' +
+        '    \n' +
+        '    showNotification: (title, body) => {\n' +
+        '      console.log("[electronAPI] showNotification:", title);\n' +
+        '      window.postMessage({ \n' +
+        '        type: "ELECTRON_SHOW_NOTIFICATION", \n' +
+        '        title: title, \n' +
+        '        body: body, \n' +
+        '        source: "webview" \n' +
+        '      }, "*");\n' +
+        '    },\n' +
+        '    \n' +
+        '    updateTrayBadge: (count) => {\n' +
+        '      console.log("[electronAPI] updateTrayBadge:", count);\n' +
+        '      window.postMessage({ \n' +
+        '        type: "ELECTRON_UPDATE_TRAY_BADGE", \n' +
+        '        count: count, \n' +
+        '        source: "webview" \n' +
+        '      }, "*");\n' +
+        '    }\n' +
+        '  };\n' +
+        '  \n' +
+        '  window.addEventListener("message", (event) => {\n' +
+        '    if (event.data && event.data.type === "ELECTRON_PLAY_SOUND" && event.data.soundType) {\n' +
+        '      console.log("[message listener] Received sound postMessage:", event.data.soundType);\n' +
+        '    }\n' +
+        '  });\n' +
+        '  \n' +
+        '  console.log("✅ injectCode fully loaded");\n' +
+        '})();\n';
+      
+      nsWebview.executeJavaScript(injectCode).catch(function() {});
+      
+      // Внедряем перехватчик уведомлений
+      var notificationCatcherCode = '\n' +
+        '(function() {\n' +
+        '  console.log("🔧 [NotificationCatcher] Final version starting...");\n' +
+        '  \n' +
+        '  if (window.__notificationObserver) {\n' +
+        '    window.__notificationObserver.disconnect();\n' +
+        '  }\n' +
+        '  \n' +
+        '  let pendingNotification = null;\n' +
+        '  let notificationTimer = null;\n' +
+        '  let lastProcessedId = null;\n' +
+        '  let processingTimeout = null;\n' +
+        '  \n' +
+        '  if (window.voiceClient && window.voiceClient.socket) {\n' +
+        '    if (!window.voiceClient.socket.__originalOnevent) {\n' +
+        '      window.voiceClient.socket.__originalOnevent = window.voiceClient.socket.onevent;\n' +
+        '    }\n' +
+        '    \n' +
+        '    window.voiceClient.socket.onevent = function(packet) {\n' +
+        '      const event = packet.data[0];\n' +
+        '      const data = packet.data[1];\n' +
+        '      \n' +
+        '      if (event === "personal-notification") {\n' +
+        '        console.log("🎯 [NotificationCatcher] Personal notification:", data.sender, data.text);\n' +
+        '        \n' +
+        '        pendingNotification = {\n' +
+        '          sender: data.sender || data.username || "",\n' +
+        '          text: data.text || "",\n' +
+        '          roomName: data.roomName || ""\n' +
+        '        };\n' +
+        '        \n' +
+        '        if (notificationTimer) clearTimeout(notificationTimer);\n' +
+        '        notificationTimer = setTimeout(() => { \n' +
+        '          pendingNotification = null; \n' +
+        '        }, 5000);\n' +
+        '      }\n' +
+        '      \n' +
+        '      return window.voiceClient.socket.__originalOnevent.call(this, packet);\n' +
+        '    };\n' +
+        '    console.log("[NotificationCatcher] Socket hooked");\n' +
+        '  } else {\n' +
+        '    console.log("[NotificationCatcher] voiceClient not ready, retrying...");\n' +
+        '    setTimeout(arguments.callee, 1000);\n' +
+        '    return;\n' +
+        '  }\n' +
+        '  \n' +
+        '  function sendNotification(data) {\n' +
+        '    const notificationId = data.sender + "|" + data.text + "|" + data.roomName;\n' +
+        '    \n' +
+        '    if (lastProcessedId === notificationId) {\n' +
+        '      console.log("[NotificationCatcher] Skipping duplicate");\n' +
+        '      return;\n' +
+        '    }\n' +
+        '    lastProcessedId = notificationId;\n' +
+        '    \n' +
+        '    const title = data.sender;\n' +
+        '    const body = data.text;\n' +
+        '    \n' +
+        '    console.log("ELECTRON_NOTIFICATION:" + JSON.stringify({ title, body }));\n' +
+        '    console.log("[NotificationCatcher] Sent:", { title, body });\n' +
+        '    \n' +
+        '    setTimeout(() => { lastProcessedId = null; }, 2000);\n' +
+        '  }\n' +
+        '  \n' +
+        '  window.__notificationObserver = new MutationObserver((mutations) => {\n' +
+        '    for (const mutation of mutations) {\n' +
+        '      for (const node of mutation.addedNodes) {\n' +
+        '        if (node.id === "live-notification-banner") {\n' +
+        '          console.log("🔔 [NotificationCatcher] Banner detected!");\n' +
+        '          \n' +
+        '          if (processingTimeout) clearTimeout(processingTimeout);\n' +
+        '          \n' +
+        '          processingTimeout = setTimeout(() => {\n' +
+        '            const strongEl = node.querySelector("strong");\n' +
+        '            const domAuthor = strongEl?.textContent?.trim() || "";\n' +
+        '            \n' +
+        '            if (pendingNotification) {\n' +
+        '              sendNotification({\n' +
+        '                sender: pendingNotification.sender,\n' +
+        '                text: pendingNotification.text,\n' +
+        '                roomName: pendingNotification.roomName\n' +
+        '              });\n' +
+        '              pendingNotification = null;\n' +
+        '            } else {\n' +
+        '              const spanEl = node.querySelector("span[style*=\\"opacity\\"]");\n' +
+        '              const domAction = spanEl?.textContent?.trim() || "";\n' +
+        '              sendNotification({\n' +
+        '                sender: domAuthor,\n' +
+        '                text: domAction,\n' +
+        '                roomName: ""\n' +
+        '              });\n' +
+        '            }\n' +
+        '            \n' +
+        '            if (notificationTimer) {\n' +
+        '              clearTimeout(notificationTimer);\n' +
+        '              notificationTimer = null;\n' +
+        '            }\n' +
+        '            \n' +
+        '            processingTimeout = null;\n' +
+        '          }, 100);\n' +
+        '        }\n' +
+        '      }\n' +
+        '    }\n' +
+        '  });\n' +
+        '  \n' +
+        '  window.__notificationObserver.observe(document.body, { childList: true, subtree: true });\n' +
+        '  console.log("[NotificationCatcher] Ready!");\n' +
+        '})();\n';
+      
+      nsWebview.executeJavaScript(notificationCatcherCode).catch(function(err) {
+        console.error('Failed to inject notification catcher:', err);
+      });
+    });
+    
+    nsWebview.addEventListener('did-fail-load', function(event) {
+      showError('Не удалось загрузить веб-клиент: ' + (event.errorDescription || 'Unknown error'));
+    });
+    
+    nsWebview.addEventListener('ipc-message', function(event) {
+      if (event.channel === 'play-sound') {
+        var soundType = event.args[0];
+        window.electronAPI.playSound(soundType).catch(function() {});
+      }
+    });
+    
+    nsWebview.addEventListener('console-message', function(event) {
+      var message = event.message;
+      
+      if (message.startsWith('ELECTRON_NOTIFICATION:')) {
+        try {
+          var jsonStr = message.substring('ELECTRON_NOTIFICATION:'.length);
+          var data = JSON.parse(jsonStr);
+          
+          console.log('[NOTIFICATION] Received from webview:', data.title, data.body);
+          
+          if (window.electronAPI && window.electronAPI.showNotification) {
+            window.electronAPI.showNotification(data.title, data.body);
+          }
+        } catch (e) {
+          console.error('[NOTIFICATION] Parse error:', e);
+        }
+      }
+      
+      var match;
+      var text;
+      var soundType;
+      
+      if (message.indexOf('[CHAT] Sending to overlay:') !== -1) {
+        match = message.match(/Sending to overlay:\s*(.+)$/);
+        if (match) {
+          text = match[1].trim();
+          console.log('[CHAT] Captured:', text);
+          
+          if (window.electronAPI && window.electronAPI.sendMessageToOverlay) {
+            window.electronAPI.sendMessageToOverlay(text).catch(function(err) {
+              console.error('[OVERLAY] Failed:', err);
+            });
+          }
+        }
+      }
+      
+      if (message.indexOf('playSound called with:') !== -1 && message.indexOf('[CLIENT]') !== -1) {
+        match = message.match(/playSound called with:\s*(\w+-\w+|\w+)/);
+        if (match) {
+          soundType = match[1];
+        }
+      }
+      if (soundType) {
+        window.electronAPI.playSound(soundType).catch(function() {});
+      }
+    });
+  }
+
+  window.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'COPY_TO_CLIPBOARD' && event.data.text) {
+      if (window.electronAPI && window.electronAPI.copyToClipboard) {
+        window.electronAPI.copyToClipboard(event.data.text).catch(function() {});
+      }
+    }
+  });
+});

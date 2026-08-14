@@ -1,6 +1,6 @@
 {
   "name": "NSQCuE",
-  "version": "42.0.0",
+  "version": "33.0.0",
   "description": "Установщик аддонов Ночная Стража",
   "main": "main/main.js",
   "scripts": {
@@ -12,31 +12,28 @@
   "build": {
     "appId": "com.nsqcue.updater",
     "productName": "Ночная стража: установщик аддонов",
-    "executableName": "NSQCuE-42",
+    "executableName": "NSQCuE-29",
     "icon": "assets/icon.png",
-    "asar": true,
+    "extraResources": [
+      {
+        "from": "global-mouse-hook.exe",
+        "to": "global-mouse-hook.exe"
+      },
+      {
+        "from": "chat-overlay.exe",
+        "to": "chat-overlay.exe"
+      },
+      {
+        "from": "baseSounds/",
+        "to": "baseSounds/"
+      }
+    ],
     "files": [
       "main/**/*",
       "renderer/**/*",
       "assets/**/*",
       "node_modules/**/*",
-      "package.json",
-      "!main/*.log",
-      "!main/*.1",
-      "!renderer/*.1",
-      "!renderer/*.2",
-      "!**/*.jsB",
-      "!**/*.yml1",
-      "!**/*.html1",
-      "!node_modules/electron/**",
-      "!node_modules/electron-builder/**",
-      "!node_modules/.bin/**"
-    ],
-    "extraResources": [
-      {
-        "from": "baseSounds/",
-        "to": "baseSounds/"
-      }
+      "package.json"
     ],
     "directories": {
       "output": "dist"
@@ -48,16 +45,6 @@
           "arch": [
             "x64"
           ]
-        }
-      ],
-      "extraResources": [
-        {
-          "from": "global-mouse-hook.exe",
-          "to": "global-mouse-hook.exe"
-        },
-        {
-          "from": "chat-overlay.exe",
-          "to": "chat-overlay.exe"
         }
       ]
     },
@@ -77,13 +64,7 @@
         }
       ],
       "category": "Utility",
-      "synopsis": "Установщик аддонов Ночная Стража",
-      "extraResources": [
-        {
-          "from": "global_mouse_hook",
-          "to": "global-mouse-hook"
-        }
-      ]
+      "synopsis": "Установщик аддонов Ночная Стража"
     }
   },
   "dependencies": {
