@@ -59,6 +59,43 @@ class AddonManager {
   }
 
   // ───────────────────────────────────────────────────────────
+  //  Хелперы для имён файлов
+  // ───────────────────────────────────────────────────────────
+
+  /**
+   * Безопасно декодирует имя файла, полученное из URL.
+   * `%20` → пробел, `%2B` → `+`. Если декодировать нельзя — возвращает как есть.
+   */
+  _decodeFileName(rawName) {
+    if (!rawName) return rawName;
+    try {
+      // decodeURIComponent делает ОДНО декодирование.
+      // Если в строке был двойной энкод (%2520), останется %20 — это ожидаемо,
+      // т.к. сервер не должен был отдавать двойной энкод.
+      return decodeURIComponent(rawName);
+    } catch {
+      return rawName;
+    }
+  }
+
+  /**
+   * Возвращает ВСЕ возможные варианты имени файла для поиска на диске:
+   *  - декодированное (нормальное: "patch AIO.mpq")
+   *  - исходное из URL (заэнкоженное: "patch%20AIO.mpq")
+   * Нужно для обратной совместимости со старыми установками.
+   */
+  _candidateFileNames(link) {
+    const base = path.basename(link || '');
+    if (!base) return [];
+    const decoded = this._decodeFileName(base);
+    const set = new Set([base, decoded]);
+    // На случай двойного энкода
+    const decodedTwice = this._decodeFileName(decoded);
+    if (decodedTwice && decodedTwice !== decoded) set.add(decodedTwice);
+    return Array.from(set).map((s) => s.toLowerCase());
+  }
+
+  // ───────────────────────────────────────────────────────────
   //  Загрузка конфигурации с fallback + диагностика
   // ───────────────────────────────────────────────────────────
   async _fetchConfigWithFallback() {
@@ -75,23 +112,21 @@ class AddonManager {
 
         const response = await axios.get(url, {
           headers: {
-            'User-Agent': 'NightWatchUpdater/1.0',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
+            'Accept': 'application/json, text/plain, */*',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
           },
           params: { _t: Date.now() },
           timeout: NET_TIMEOUT_CONFIG,
           maxRedirects: 5,
-          // Принудительно не парсить JSON автоматически — увидим сырой ответ
+          responseType: 'text',
           transformResponse: [(d) => d],
           validateStatus: null,
+          decompress: true,
         });
 
         const status = response.status;
         const contentType = response.headers['content-type'] || 'n/a';
         const raw = response.data;
-
-        // ── Диагностика: что реально пришло ────────────────────
         const rawStr = typeof raw === 'string' ? raw : JSON.stringify(raw);
         const len = rawStr.length;
         const preview = rawStr.slice(0, 200).replace(/\s+/g, ' ');
@@ -101,7 +136,6 @@ class AddonManager {
           `(status=${status}, content-type=${contentType}, len=${len})`
         );
 
-        // HTTP-ошибка?
         if (status < 200 || status >= 300) {
           logger.warn(
             `[CONFIG] HTTP ${status} from ${url} (preview="${preview}...")`
@@ -112,7 +146,6 @@ class AddonManager {
           continue;
         }
 
-        // Пытаемся распарсить JSON
         let config = null;
         try {
           config = JSON.parse(rawStr);
@@ -127,7 +160,6 @@ class AddonManager {
           continue;
         }
 
-        // Нет поля addons?
         if (!config || typeof config !== 'object' || !config.addons) {
           logger.warn(
             `[CONFIG] No 'addons' in response from ${url} ` +
@@ -140,7 +172,6 @@ class AddonManager {
           continue;
         }
 
-        // Всё ок
         const addonCount = Object.keys(config.addons).length;
         logger.info(
           `[CONFIG] Loaded from: ${url} (addons: ${addonCount})`
@@ -215,7 +246,7 @@ class AddonManager {
         // Обновляем/создаём
         for (const [name, cfg] of Object.entries(config.addons)) {
           const built = this._buildAddonFromConfig(name, cfg);
-          built.installed = this._checkInstalled(name, cfg.target_path || '', gamePath);
+          built.installed = this._checkInstalled(name, cfg.target_path || '', gamePath, built.link);
 
           const existing = this.addons[name];
           if (existing) {
@@ -249,7 +280,7 @@ class AddonManager {
   // ───────────────────────────────────────────────────────────
   //  Проверка установки
   // ───────────────────────────────────────────────────────────
-  _checkInstalled(name, targetPath, gamePath) {
+  _checkInstalled(name, targetPath, gamePath, link) {
     if (!gamePath) return false;
     const fullTarget = path.join(gamePath, targetPath);
     if (!fs.existsSync(fullTarget)) return false;
@@ -258,16 +289,26 @@ class AddonManager {
 
     try {
       const items = fs.readdirSync(fullTarget, { withFileTypes: true });
+      const namesLower = items.map((it) => it.name.toLowerCase());
 
-      if (items.some((it) => it.name.toLowerCase() === lowerName)) return true;
+      // Точное совпадение имени папки/файла с именем аддона
+      if (namesLower.includes(lowerName)) return true;
 
+      // Для NSQC4 — папка NSQC4 внутри AddOns
       if (name === AUTO_UPDATE_ADDON) {
         const nsqcDir = path.join(fullTarget, AUTO_UPDATE_ADDON);
         if (fs.existsSync(nsqcDir)) return true;
       }
 
+      // MPQ-патчи: ищем файл как по имени аддона, так и по имени из URL
       if (lowerName.endsWith('.mpq')) {
-        if (items.some((it) => it.isFile() && it.name.toLowerCase() === lowerName)) return true;
+        // 1. Имя аддона + .mpq
+        if (namesLower.includes(`${lowerName}.mpq`)) return true;
+        // 2. Имя из URL (декодированное / заэнкоженное / двойное)
+        const candidates = this._candidateFileNames(link);
+        for (const cand of candidates) {
+          if (namesLower.includes(cand)) return true;
+        }
       }
 
       return false;
@@ -283,9 +324,8 @@ class AddonManager {
     logger.info(`[VERSION] Запрос: ${NSQC4_VERSION_URL}`);
     const res = await axios.get(NSQC4_VERSION_URL, {
       headers: {
-        'User-Agent': 'NightWatchUpdater/1.0',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+        'Accept': 'text/plain, */*',
       },
       params: { _t: Date.now() },
       timeout: NET_TIMEOUT_VERSION,
@@ -459,7 +499,7 @@ class AddonManager {
             await this._installAddon(addon, mainWindow);
 
             const gamePath = this.getGamePath();
-            const ok = this._checkInstalled(addonName, addon.target_path, gamePath);
+            const ok = this._checkInstalled(addonName, addon.target_path, gamePath, addon.link);
             if (ok) {
               logger.info(`[REINSTALL] ${addonName} OK, ждём ${POST_INSTALL_DELAY}мс`);
               await this._sleep(POST_INSTALL_DELAY);
@@ -519,7 +559,7 @@ class AddonManager {
         await this._installAddon(addon, mainWindow);
 
         const gamePath = this.getGamePath();
-        const ok = this._checkInstalled(name, addon.target_path, gamePath);
+        const ok = this._checkInstalled(name, addon.target_path, gamePath, addon.link);
         if (ok) {
           logger.info(`[TOGGLE] ${name} установлен, ждём ${POST_INSTALL_DELAY}мс`);
           await this._sleep(POST_INSTALL_DELAY);
@@ -577,7 +617,19 @@ class AddonManager {
       logger.info(`[INSTALL] ${addon.name}: скачано, распаковка`);
 
       if (isMpq) {
-        const mpqPath = path.join(targetDir, path.basename(addon.link));
+        // ✅ ВАЖНО: декодируем имя файла из URL, чтобы получить нормальное
+        // имя на диске (без %20, %2B). Иначе WoW не найдёт патч.
+        const rawName = path.basename(addon.link);
+        const decodedName = this._decodeFileName(rawName);
+        const mpqPath = path.join(targetDir, decodedName);
+
+        // Если на диске уже лежит файл с заэнкоженным именем — удалим его
+        // (последствие старой версии приложения)
+        const altPath = path.join(targetDir, rawName);
+        if (altPath !== mpqPath && await fs.pathExists(altPath)) {
+          try { await fs.remove(altPath); } catch { /* ignore */ }
+        }
+
         await fs.move(tempFile, mpqPath, { overwrite: true });
         logger.info(`[INSTALL] ${addon.name}: MPQ перемещён в ${mpqPath}`);
       } else {
@@ -621,7 +673,6 @@ class AddonManager {
       responseType: 'stream',
       headers: {
         'User-Agent': 'NightWatchUpdater/1.0',
-        'Cache-Control': 'no-cache',
       },
       timeout: NET_TIMEOUT_ADDON,
       maxRedirects: 5,
@@ -716,16 +767,34 @@ class AddonManager {
     const items = await fs.readdir(targetDir, { withFileTypes: true });
     const lowerName = addon.name.toLowerCase();
 
+    // Возможные имена файлов MPQ: по имени аддона и по имени из URL
+    const candidates = new Set([
+      lowerName,
+      `${lowerName}.mpq`,
+      `${lowerName}.zip`,
+    ]);
+    for (const cand of this._candidateFileNames(addon.link)) {
+      candidates.add(cand);
+      candidates.add(`${cand}.mpq`);
+      candidates.add(`${cand}.zip`);
+    }
+
     const toRemove = items.filter((i) => {
       const n = i.name.toLowerCase();
-      return n === lowerName
-        || n === `${lowerName}.mpq`
-        || n === `${lowerName}.zip`
-        || n.startsWith(`${lowerName}-`)
-        || n.startsWith(`${lowerName}_`);
+      // Точное совпадение с любым кандидатом
+      if (candidates.has(n)) return true;
+      // Префикс по имени аддона (name-, name_)
+      if (n.startsWith(`${lowerName}-`) || n.startsWith(`${lowerName}_`)) return true;
+      // Заэнкоженный вариант имени аддона как префикс (обратная совместимость)
+      const encodedName = encodeURIComponent(addon.name).toLowerCase();
+      if (n.startsWith(`${encodedName}-`) || n.startsWith(`${encodedName}_`)) return true;
+      return false;
     });
 
     logger.info(`[UNINSTALL] ${addon.name}: к удалению ${toRemove.length} элементов`);
+    for (const item of toRemove) {
+      logger.info(`[UNINSTALL] ${addon.name}: удаляю ${item.name}`);
+    }
 
     for (let i = 0; i < toRemove.length; i++) {
       const progress = 0.1 + 0.8 * ((i + 1) / toRemove.length);
