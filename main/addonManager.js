@@ -38,12 +38,10 @@ class AddonManager {
     this.gamePath = null;
     this.mainWindow = null;
 
-    // Мьютексы
     this.checkingUpdate = false;
     this.isReinstalling = false;
     this.reinstallQueue = null;
 
-    // Мьютекс на loadAddons
     this.loadingAddons = false;
     this.loadingAddonsPromise = null;
 
@@ -61,42 +59,31 @@ class AddonManager {
   // ───────────────────────────────────────────────────────────
   //  Хелперы для имён файлов
   // ───────────────────────────────────────────────────────────
-
-  /**
-   * Безопасно декодирует имя файла, полученное из URL.
-   * `%20` → пробел, `%2B` → `+`. Если декодировать нельзя — возвращает как есть.
-   */
   _decodeFileName(rawName) {
     if (!rawName) return rawName;
-    try {
-      // decodeURIComponent делает ОДНО декодирование.
-      // Если в строке был двойной энкод (%2520), останется %20 — это ожидаемо,
-      // т.к. сервер не должен был отдавать двойной энкод.
-      return decodeURIComponent(rawName);
-    } catch {
-      return rawName;
-    }
+    try { return decodeURIComponent(rawName); }
+    catch { return rawName; }
   }
 
-  /**
-   * Возвращает ВСЕ возможные варианты имени файла для поиска на диске:
-   *  - декодированное (нормальное: "patch AIO.mpq")
-   *  - исходное из URL (заэнкоженное: "patch%20AIO.mpq")
-   * Нужно для обратной совместимости со старыми установками.
-   */
   _candidateFileNames(link) {
     const base = path.basename(link || '');
     if (!base) return [];
     const decoded = this._decodeFileName(base);
     const set = new Set([base, decoded]);
-    // На случай двойного энкода
     const decodedTwice = this._decodeFileName(decoded);
     if (decodedTwice && decodedTwice !== decoded) set.add(decodedTwice);
     return Array.from(set).map((s) => s.toLowerCase());
   }
 
+  // Возвращает все ссылки аддона (учитывая старое поле `link`)
+  _getLinks(addon) {
+    if (Array.isArray(addon.links) && addon.links.length > 0) return addon.links;
+    if (typeof addon.link === 'string' && addon.link) return [addon.link];
+    return [];
+  }
+
   // ───────────────────────────────────────────────────────────
-  //  Загрузка конфигурации с fallback + диагностика
+  //  Загрузка конфигурации с fallback
   // ───────────────────────────────────────────────────────────
   async _fetchConfigWithFallback() {
     const total = CONFIG_URLS.length;
@@ -137,9 +124,7 @@ class AddonManager {
         );
 
         if (status < 200 || status >= 300) {
-          logger.warn(
-            `[CONFIG] HTTP ${status} from ${url} (preview="${preview}...")`
-          );
+          logger.warn(`[CONFIG] HTTP ${status} from ${url} (preview="${preview}...")`);
           this._emitEvent(this.mainWindow, 'config-source-status', {
             index: i + 1, total, url, state: 'failed',
           });
@@ -147,9 +132,8 @@ class AddonManager {
         }
 
         let config = null;
-        try {
-          config = JSON.parse(rawStr);
-        } catch (parseErr) {
+        try { config = JSON.parse(rawStr); }
+        catch (parseErr) {
           logger.warn(
             `[CONFIG] JSON parse error from ${url}: ${parseErr.message} ` +
             `(preview="${preview}...")`
@@ -163,8 +147,7 @@ class AddonManager {
         if (!config || typeof config !== 'object' || !config.addons) {
           logger.warn(
             `[CONFIG] No 'addons' in response from ${url} ` +
-            `(type=${typeof config}, keys=${config && typeof config === 'object' ? Object.keys(config).join(',') : 'n/a'}, ` +
-            `preview="${preview}...")`
+            `(type=${typeof config}, preview="${preview}...")`
           );
           this._emitEvent(this.mainWindow, 'config-source-status', {
             index: i + 1, total, url, state: 'failed',
@@ -173,9 +156,7 @@ class AddonManager {
         }
 
         const addonCount = Object.keys(config.addons).length;
-        logger.info(
-          `[CONFIG] Loaded from: ${url} (addons: ${addonCount})`
-        );
+        logger.info(`[CONFIG] Loaded from: ${url} (addons: ${addonCount})`);
         this._emitEvent(this.mainWindow, 'config-source-status', {
           index: i + 1, total, url, state: 'loaded',
         });
@@ -197,12 +178,20 @@ class AddonManager {
   //  Разбор cfg → нормализованный addon
   // ───────────────────────────────────────────────────────────
   _buildAddonFromConfig(name, cfg) {
-    const link = cfg.link || '';
     const description = cfg.description || '';
     const targetPath = cfg.target_path || '';
+
+    let links = [];
+    if (Array.isArray(cfg.links) && cfg.links.length > 0) {
+      links = cfg.links.filter((u) => typeof u === 'string' && u.trim());
+    } else if (typeof cfg.link === 'string' && cfg.link.trim()) {
+      links = [cfg.link];
+    }
+
+    const firstLink = links[0] || '';
     const isZip = cfg.is_zip !== undefined
       ? cfg.is_zip
-      : !link.toLowerCase().endsWith('.mpq');
+      : !firstLink.toLowerCase().endsWith('.mpq');
 
     const wrapInFolder = cfg.wrap_in_folder !== undefined
       ? !!cfg.wrap_in_folder
@@ -215,7 +204,8 @@ class AddonManager {
       needs_update: false,
       being_processed: false,
       updating: false,
-      link,
+      links,
+      link: firstLink,
       target_path: targetPath.replace(/\//g, path.sep),
       is_zip: isZip,
       wrap_in_folder: wrapInFolder,
@@ -238,15 +228,13 @@ class AddonManager {
         const gamePath = this.getGamePath();
         const newNames = new Set(Object.keys(config.addons));
 
-        // Удаляем аддоны, которых больше нет в конфиге
         for (const name of Object.keys(this.addons)) {
           if (!newNames.has(name)) delete this.addons[name];
         }
 
-        // Обновляем/создаём
         for (const [name, cfg] of Object.entries(config.addons)) {
           const built = this._buildAddonFromConfig(name, cfg);
-          built.installed = this._checkInstalled(name, cfg.target_path || '', gamePath, built.link);
+          built.installed = this._checkInstalled(name, cfg.target_path || '', gamePath, built);
 
           const existing = this.addons[name];
           if (existing) {
@@ -254,6 +242,7 @@ class AddonManager {
               description: built.description,
               installed: built.installed,
               link: built.link,
+              links: built.links,
               target_path: built.target_path,
               is_zip: built.is_zip,
               wrap_in_folder: built.wrap_in_folder,
@@ -278,9 +267,9 @@ class AddonManager {
   }
 
   // ───────────────────────────────────────────────────────────
-  //  Проверка установки
+  //  Проверка установки (принимает addon-объект)
   // ───────────────────────────────────────────────────────────
-  _checkInstalled(name, targetPath, gamePath, link) {
+  _checkInstalled(name, targetPath, gamePath, addonOrLink) {
     if (!gamePath) return false;
     const fullTarget = path.join(gamePath, targetPath);
     if (!fs.existsSync(fullTarget)) return false;
@@ -291,22 +280,27 @@ class AddonManager {
       const items = fs.readdirSync(fullTarget, { withFileTypes: true });
       const namesLower = items.map((it) => it.name.toLowerCase());
 
-      // Точное совпадение имени папки/файла с именем аддона
       if (namesLower.includes(lowerName)) return true;
 
-      // Для NSQC4 — папка NSQC4 внутри AddOns
       if (name === AUTO_UPDATE_ADDON) {
         const nsqcDir = path.join(fullTarget, AUTO_UPDATE_ADDON);
         if (fs.existsSync(nsqcDir)) return true;
       }
 
-      // MPQ-патчи: ищем файл как по имени аддона, так и по имени из URL
       if (lowerName.endsWith('.mpq')) {
-        // 1. Имя аддона + .mpq
         if (namesLower.includes(`${lowerName}.mpq`)) return true;
-        // 2. Имя из URL (декодированное / заэнкоженное / двойное)
-        const candidates = this._candidateFileNames(link);
-        for (const cand of candidates) {
+
+        // Собираем кандидатов из ВСЕХ ссылок
+        const allCandidates = new Set();
+        if (addonOrLink && Array.isArray(addonOrLink.links)) {
+          for (const l of addonOrLink.links) {
+            for (const c of this._candidateFileNames(l)) allCandidates.add(c);
+          }
+        } else if (typeof addonOrLink === 'string' && addonOrLink) {
+          for (const c of this._candidateFileNames(addonOrLink)) allCandidates.add(c);
+        }
+
+        for (const cand of allCandidates) {
           if (namesLower.includes(cand)) return true;
         }
       }
@@ -339,8 +333,7 @@ class AddonManager {
     if (res.status < 200 || res.status >= 300) {
       throw new Error(`VERSION.lua HTTP ${res.status}`);
     }
-    const text = String(res.data);
-    return this._parseVersionLua(text);
+    return this._parseVersionLua(String(res.data));
   }
 
   _parseVersionLua(text) {
@@ -362,8 +355,7 @@ class AddonManager {
         gamePath, 'Interface', 'AddOns', AUTO_UPDATE_ADDON, 'VERSION.lua'
       );
       if (!fs.existsSync(versFile)) return null;
-      const text = fs.readFileSync(versFile, 'utf-8');
-      return this._parseVersionLua(text);
+      return this._parseVersionLua(fs.readFileSync(versFile, 'utf-8'));
     } catch (e) {
       logger.warn(`[VERSION] Локальный VERSION.lua не прочитан: ${e.message}`);
       return null;
@@ -499,7 +491,7 @@ class AddonManager {
             await this._installAddon(addon, mainWindow);
 
             const gamePath = this.getGamePath();
-            const ok = this._checkInstalled(addonName, addon.target_path, gamePath, addon.link);
+            const ok = this._checkInstalled(addonName, addon.target_path, gamePath, addon);
             if (ok) {
               logger.info(`[REINSTALL] ${addonName} OK, ждём ${POST_INSTALL_DELAY}мс`);
               await this._sleep(POST_INSTALL_DELAY);
@@ -559,7 +551,7 @@ class AddonManager {
         await this._installAddon(addon, mainWindow);
 
         const gamePath = this.getGamePath();
-        const ok = this._checkInstalled(name, addon.target_path, gamePath, addon.link);
+        const ok = this._checkInstalled(name, addon.target_path, gamePath, addon);
         if (ok) {
           logger.info(`[TOGGLE] ${name} установлен, ждём ${POST_INSTALL_DELAY}мс`);
           await this._sleep(POST_INSTALL_DELAY);
@@ -571,8 +563,7 @@ class AddonManager {
         await this._uninstallAddon(addon, mainWindow);
       }
     } catch (error) {
-      logger.error(`[TOGGLE] ${install ? 'install' : 'uninstall'} ${name}:`,
-        error.message);
+      logger.error(`[TOGGLE] ${install ? 'install' : 'uninstall'} ${name}:`, error.message);
       throw error;
     } finally {
       addon.being_processed = false;
@@ -599,7 +590,12 @@ class AddonManager {
     const targetDir = path.join(gamePath, addon.target_path);
     await fs.ensureDir(targetDir);
 
-    const isMpq = addon.link.toLowerCase().endsWith('.mpq');
+    const links = this._getLinks(addon);
+    if (links.length === 0) {
+      throw new Error(`У аддона ${addon.name} нет ни одной ссылки`);
+    }
+
+    const isMpq = links[0].toLowerCase().endsWith('.mpq');
     const stamp = Date.now();
     const tempDir = path.join(os.tmpdir(), `extract_${addon.name}_${stamp}`);
     const tempFile = path.join(
@@ -608,26 +604,33 @@ class AddonManager {
     );
 
     try {
-      logger.info(`[INSTALL] ${addon.name}: скачивание ${addon.link}`);
-      await this._downloadFile(addon.link, tempFile, (frac) => {
-        const base = 0.15;
-        const span = isMpq ? 0.60 : 0.50;
-        this._emitProgress(mainWindow, addon.name, base + span * frac);
-      });
-      logger.info(`[INSTALL] ${addon.name}: скачано, распаковка`);
+      // ✅ Fallback по всем ссылкам
+      const { usedUrl } = await this._downloadWithFallback(
+        links, tempFile,
+        (frac) => {
+          const base = 0.15;
+          const span = isMpq ? 0.60 : 0.50;
+          this._emitProgress(mainWindow, addon.name, base + span * frac);
+        },
+        addon.name
+      );
+
+      logger.info(`[INSTALL] ${addon.name}: скачано с ${usedUrl}`);
 
       if (isMpq) {
-        // ✅ ВАЖНО: декодируем имя файла из URL, чтобы получить нормальное
-        // имя на диске (без %20, %2B). Иначе WoW не найдёт патч.
-        const rawName = path.basename(addon.link);
+        // Имя файла — из ссылки, по которой реально скачалось
+        let rawName;
+        try {
+          rawName = path.basename(new URL(usedUrl).pathname);
+        } catch {
+          rawName = path.basename(usedUrl);
+        }
         const decodedName = this._decodeFileName(rawName);
         const mpqPath = path.join(targetDir, decodedName);
 
-        // Если на диске уже лежит файл с заэнкоженным именем — удалим его
-        // (последствие старой версии приложения)
         const altPath = path.join(targetDir, rawName);
         if (altPath !== mpqPath && await fs.pathExists(altPath)) {
-          try { await fs.remove(altPath); } catch { /* ignore */ }
+          try { await fs.remove(altPath); } catch {}
         }
 
         await fs.move(tempFile, mpqPath, { overwrite: true });
@@ -640,11 +643,8 @@ class AddonManager {
             .on('close', resolve)
             .on('error', reject);
         });
-        logger.info(`[INSTALL] ${addon.name}: распаковано, разбор структуры`);
         await this._handleArchiveStructure(
-          tempDir,
-          targetDir,
-          addon.name,
+          tempDir, targetDir, addon.name,
           addon.wrap_in_folder !== false
         );
       }
@@ -663,7 +663,7 @@ class AddonManager {
   }
 
   // ───────────────────────────────────────────────────────────
-  //  Скачивание с прогрессом
+  //  Скачивание: одна ссылка
   // ───────────────────────────────────────────────────────────
   async _downloadFile(url, dest, onProgress) {
     if (!/^https?:\/\//i.test(url)) {
@@ -671,16 +671,14 @@ class AddonManager {
     }
     const response = await axios.get(url, {
       responseType: 'stream',
-      headers: {
-        'User-Agent': 'NightWatchUpdater/1.0',
-      },
+      headers: { 'User-Agent': 'NightWatchUpdater/1.0' },
       timeout: NET_TIMEOUT_ADDON,
       maxRedirects: 5,
       validateStatus: null,
     });
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(`HTTP ${response.status} при скачивании ${url}`);
+      throw new Error(`HTTP ${response.status}`);
     }
 
     const totalLength = parseInt(response.headers['content-length'], 10) || 0;
@@ -698,6 +696,27 @@ class AddonManager {
       writer.on('finish', resolve);
       writer.on('error', reject);
     });
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  Скачивание: fallback по нескольким ссылкам
+  // ───────────────────────────────────────────────────────────
+  async _downloadWithFallback(urls, dest, onProgress, addonName) {
+    const errors = [];
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
+      logger.info(`[DOWNLOAD] ${addonName}: попытка ${i + 1}/${urls.length} — ${url}`);
+      try {
+        await this._downloadFile(url, dest, onProgress);
+        logger.info(`[DOWNLOAD] ${addonName}: успех с ${url}`);
+        return { usedUrl: url };
+      } catch (err) {
+        logger.warn(`[DOWNLOAD] ${addonName}: ошибка с ${url}: ${err.message}`);
+        errors.push(`${url} → ${err.message}`);
+        try { await fs.remove(dest); } catch {}
+      }
+    }
+    throw new Error(`Все ссылки недоступны:\n` + errors.join('\n'));
   }
 
   // ───────────────────────────────────────────────────────────
@@ -743,11 +762,8 @@ class AddonManager {
     for (const e of inner) {
       const src = path.join(sourceDir, e.name);
       const dst = path.join(targetDir, e.name);
-      if (e.isDirectory()) {
-        await fs.copy(src, dst);
-      } else {
-        await fs.copyFile(src, dst);
-      }
+      if (e.isDirectory()) await fs.copy(src, dst);
+      else await fs.copyFile(src, dst);
     }
     logger.info(`[ARCHIVE] ${addonName}: распаковано плоско в ${targetDir}`);
   }
@@ -767,25 +783,24 @@ class AddonManager {
     const items = await fs.readdir(targetDir, { withFileTypes: true });
     const lowerName = addon.name.toLowerCase();
 
-    // Возможные имена файлов MPQ: по имени аддона и по имени из URL
     const candidates = new Set([
       lowerName,
       `${lowerName}.mpq`,
       `${lowerName}.zip`,
     ]);
-    for (const cand of this._candidateFileNames(addon.link)) {
-      candidates.add(cand);
-      candidates.add(`${cand}.mpq`);
-      candidates.add(`${cand}.zip`);
+
+    for (const link of this._getLinks(addon)) {
+      for (const cand of this._candidateFileNames(link)) {
+        candidates.add(cand);
+        candidates.add(`${cand}.mpq`);
+        candidates.add(`${cand}.zip`);
+      }
     }
 
     const toRemove = items.filter((i) => {
       const n = i.name.toLowerCase();
-      // Точное совпадение с любым кандидатом
       if (candidates.has(n)) return true;
-      // Префикс по имени аддона (name-, name_)
       if (n.startsWith(`${lowerName}-`) || n.startsWith(`${lowerName}_`)) return true;
-      // Заэнкоженный вариант имени аддона как префикс (обратная совместимость)
       const encodedName = encodeURIComponent(addon.name).toLowerCase();
       if (n.startsWith(`${encodedName}-`) || n.startsWith(`${encodedName}_`)) return true;
       return false;
