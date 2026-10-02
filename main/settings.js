@@ -9,18 +9,20 @@ class Settings {
   }
 
   loadSettings() {
+    const defaults = {
+      gamePath: null,
+      pttHotkey: null,
+      notificationPosition: 'top-right',
+    };
     try {
       if (fs.existsSync(this.settingsPath)) {
-        return fs.readJsonSync(this.settingsPath);
+        const data = fs.readJsonSync(this.settingsPath);
+        return { ...defaults, ...data };
       }
     } catch (error) {
       console.error('Error loading settings:', error.message);
     }
-    return { 
-      gamePath: null, 
-      pttHotkey: null,
-      notificationPosition: 'top-right'
-    };
+    return defaults;
   }
 
   saveSettings() {
@@ -44,15 +46,19 @@ class Settings {
   isGamePathValid() {
     const gp = this.getGamePath();
     if (!gp) return false;
-    return fs.existsSync(path.join(gp, 'Wow.exe'));
+    try {
+      return fs.existsSync(path.join(gp, 'Wow.exe'));
+    } catch {
+      return false;
+    }
   }
 
   getPTTHotkey() {
-    return this.settings.pttHotkey || null;
+    return Array.isArray(this.settings.pttHotkey) ? this.settings.pttHotkey : null;
   }
 
   setPTTHotkey(hotkey) {
-    this.settings.pttHotkey = hotkey;
+    this.settings.pttHotkey = Array.isArray(hotkey) ? hotkey : null;
     this.saveSettings();
   }
 

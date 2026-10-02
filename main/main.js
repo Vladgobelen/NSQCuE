@@ -8,15 +8,13 @@ const soundsManager = require('./soundsManager');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
 
-// ✅ Изменение 3: Single Instance Lock
+// ✅ Single Instance Lock
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
-    // Уже запущен другой экземпляр — выходим
     app.quit();
 } else {
-    // Слушаем попытки запуска второго экземпляра
-    app.on('second-instance', (event, commandLine, workingDirectory) => {
+    app.on('second-instance', () => {
         if (mainWindow) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.show();
@@ -45,6 +43,9 @@ if (!gotTheLock) {
     app.isQuitting = false;
     fs.ensureDirSync(SOUNDS_DIR);
 
+    // ───────────────────────────────────────────────────────────
+    //  Аккаунты
+    // ───────────────────────────────────────────────────────────
     function loadAccountsFromStorage() {
         try {
             if (fs.existsSync(ACCOUNTS_FILE)) {
@@ -64,6 +65,9 @@ if (!gotTheLock) {
         }
     }
 
+    // ───────────────────────────────────────────────────────────
+    //  Звуки
+    // ───────────────────────────────────────────────────────────
     function getSoundsMap() {
         const map = {};
         try {
@@ -120,13 +124,19 @@ if (!gotTheLock) {
         }
     }
 
+    // ───────────────────────────────────────────────────────────
+    //  Game path
+    // ───────────────────────────────────────────────────────────
     async function ensureGamePath() {
         if (settings.isGamePathValid()) return true;
 
         const result = await dialog.showOpenDialog({
             title: 'Выберите файл Wow.exe',
             properties: ['openFile'],
-            filters: [{ name: 'Executable files', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }]
+            filters: [
+                { name: 'Executable files', extensions: ['exe'] },
+                { name: 'All files', extensions: ['*'] },
+            ],
         });
 
         if (result.canceled || result.filePaths.length === 0) return false;
@@ -144,6 +154,9 @@ if (!gotTheLock) {
         return true;
     }
 
+    // ───────────────────────────────────────────────────────────
+    //  Rust hook
+    // ───────────────────────────────────────────────────────────
     function startRustHook() {
         if (hookProcess) return;
 
@@ -162,7 +175,7 @@ if (!gotTheLock) {
             hookProcess = spawn(exePath, [], {
                 stdio: ['pipe', 'pipe', 'pipe'],
                 windowsHide: true,
-                env: { ...process.env }
+                env: { ...process.env },
             });
 
             hookProcess.stdout.on('data', (data) => {
@@ -234,6 +247,9 @@ if (!gotTheLock) {
         }
     }
 
+    // ───────────────────────────────────────────────────────────
+    //  Overlay
+    // ───────────────────────────────────────────────────────────
     function createOverlayWindow() {
         if (overlayWindow && !overlayWindow.isDestroyed()) {
             overlayWindow.show();
@@ -252,8 +268,8 @@ if (!gotTheLock) {
             resizable: true,
             webPreferences: {
                 nodeIntegration: true,
-                contextIsolation: false
-            }
+                contextIsolation: false,
+            },
         });
 
         overlayWindow.loadFile(path.join(__dirname, '../renderer/overlay.html'));
@@ -261,10 +277,6 @@ if (!gotTheLock) {
         overlayWindow.on('closed', () => {
             overlayWindow = null;
         });
-    }
-
-    function startOverlay() {
-        createOverlayWindow();
     }
 
     function stopOverlay() {
@@ -323,6 +335,9 @@ if (!gotTheLock) {
         }
     }
 
+    // ───────────────────────────────────────────────────────────
+    //  WebView handlers
+    // ───────────────────────────────────────────────────────────
     function setupWebviewHandlers(webContents) {
         webviewWebContents = webContents;
 
@@ -625,6 +640,9 @@ if (!gotTheLock) {
         });
     }
 
+    // ───────────────────────────────────────────────────────────
+    //  Main window
+    // ───────────────────────────────────────────────────────────
     function createWindow() {
         const nsSession = session.fromPartition('persist:ns');
         nsSession.setPermissionRequestHandler((webContents, permission, callback) => {
@@ -641,8 +659,8 @@ if (!gotTheLock) {
                             ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://ns.fiber-gate.ru; style-src 'self' 'unsafe-inline' https://ns.fiber-gate.ru; img-src 'self' https://ns.fiber-gate.ru blob: data:; connect-src 'self' http://194.31.171.29:38592 https://ns.fiber-gate.ru wss://ns.fiber-gate.ru; media-src 'self' blob: data: https://ns.fiber-gate.ru; child-src 'self' https://ns.fiber-gate.ru blob:; frame-src 'self' https://ns.fiber-gate.ru blob:; worker-src 'self' blob:; font-src 'self' https://ns.fiber-gate.ru;"
                             : "default-src 'self' https://ns.fiber-gate.ru; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://ns.fiber-gate.ru https://cdn.socket.io https://unpkg.com; style-src 'self' 'unsafe-inline' https://ns.fiber-gate.ru; img-src 'self' https://ns.fiber-gate.ru blob: data:; connect-src 'self' http://194.31.171.29:38592 https://ns.fiber-gate.ru wss://ns.fiber-gate.ru wss://*.fiber-gate.ru; media-src 'self' blob: data: https://ns.fiber-gate.ru; child-src 'self' https://ns.fiber-gate.ru blob:; frame-src 'self' https://ns.fiber-gate.ru blob:; worker-src 'self' blob: https://ns.fiber-gate.ru; font-src 'self' https://ns.fiber-gate.ru;"
                     ],
-                    'X-Frame-Options': 'ALLOW-FROM file:// app://'
-                }
+                    'X-Frame-Options': 'ALLOW-FROM file:// app://',
+                },
             });
         };
 
@@ -654,9 +672,9 @@ if (!gotTheLock) {
             title: 'Ночная стража: установщик аддонов',
             webPreferences: {
                 preload: path.join(__dirname, 'preload.js'),
-                nodeIntegration: false, contextIsolation: true, webviewTag: true, permissions: ['microphone']
+                nodeIntegration: false, contextIsolation: true, webviewTag: true, permissions: ['microphone'],
             },
-            icon: path.join(__dirname, '../assets/icon.png')
+            icon: path.join(__dirname, '../assets/icon.png'),
         });
 
         mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
@@ -669,7 +687,7 @@ if (!gotTheLock) {
                     tray.displayBalloon({
                         title: 'Ночная стража',
                         content: 'Приложение свернуто в трей',
-                        noSound: true
+                        noSound: true,
                     });
                 }
             }
@@ -692,6 +710,9 @@ if (!gotTheLock) {
         });
     }
 
+    // ───────────────────────────────────────────────────────────
+    //  Tray
+    // ───────────────────────────────────────────────────────────
     function createTray() {
         if (tray) return;
 
@@ -700,7 +721,7 @@ if (!gotTheLock) {
             app.isPackaged ? path.join(process.resourcesPath, 'assets', 'icon.png') : null,
             path.join(__dirname, '..', 'assets', 'icon.png'),
             path.join(__dirname, 'assets', 'icon.png'),
-            path.join(app.getAppPath(), 'assets', 'icon.png')
+            path.join(app.getAppPath(), 'assets', 'icon.png'),
         ].filter(p => p !== null);
 
         for (const p of possiblePaths) {
@@ -715,8 +736,7 @@ if (!gotTheLock) {
                 tray = new Tray(iconPath);
             } else {
                 const { nativeImage } = require('electron');
-                const emptyIcon = nativeImage.createEmpty();
-                tray = new Tray(emptyIcon);
+                tray = new Tray(nativeImage.createEmpty());
             }
         } catch (err) {
             logger.error('[TRAY] Failed to create tray:', err.message);
@@ -757,7 +777,7 @@ if (!gotTheLock) {
                     } else {
                         createWindow();
                     }
-                }
+                },
             },
             {
                 label: 'Оверлей',
@@ -770,7 +790,7 @@ if (!gotTheLock) {
                         overlayWindow.focus();
                         overlayWindow.webContents.send('focus-input');
                     }
-                }
+                },
             },
             { type: 'separator' },
             {
@@ -791,8 +811,8 @@ if (!gotTheLock) {
                     { label: '↙ Снизу слева', type: 'radio', checked: currentPos === 'bottom-left',
                       click: () => { settings.setNotificationPosition('bottom-left'); } },
                     { label: '← Слева', type: 'radio', checked: currentPos === 'left',
-                      click: () => { settings.setNotificationPosition('left'); } }
-                ]
+                      click: () => { settings.setNotificationPosition('left'); } },
+                ],
             },
             { type: 'separator' },
             {
@@ -802,7 +822,7 @@ if (!gotTheLock) {
                 click: (menuItem) => {
                     notificationsEnabled = menuItem.checked;
                     menuItem.label = notificationsEnabled ? '🔔 Уведомления включены' : '🔕 Уведомления выключены';
-                }
+                },
             },
             { type: 'separator' },
             {
@@ -810,14 +830,17 @@ if (!gotTheLock) {
                 click: () => {
                     app.isQuitting = true;
                     app.quit();
-                }
-            }
+                },
+            },
         ]);
 
         tray.setToolTip('Ночная стража');
         tray.setContextMenu(contextMenu);
     }
 
+    // ───────────────────────────────────────────────────────────
+    //  Notifications
+    // ───────────────────────────────────────────────────────────
     function createNotificationWindow() {
         if (notificationWindow && !notificationWindow.isDestroyed()) {
             return notificationWindow;
@@ -828,7 +851,6 @@ if (!gotTheLock) {
         const winWidth = 300;
         const winHeight = 60;
         const margin = 15;
-        let x, y;
 
         const posMap = {
             'top-left':      { x: margin, y: margin },
@@ -838,17 +860,16 @@ if (!gotTheLock) {
             'bottom-right':  { x: width - winWidth - margin, y: height - winHeight - margin - 40 },
             'bottom':        { x: (width - winWidth) / 2, y: height - winHeight - margin - 40 },
             'bottom-left':   { x: margin, y: height - winHeight - margin - 40 },
-            'left':          { x: margin, y: (height - winHeight) / 2 }
+            'left':          { x: margin, y: (height - winHeight) / 2 },
         };
 
         const coords = posMap[position] || posMap['top-right'];
-        x = coords.x;
-        y = coords.y;
 
         notificationWindow = new BrowserWindow({
             width: winWidth,
             height: winHeight,
-            x, y,
+            x: coords.x,
+            y: coords.y,
             frame: false,
             transparent: true,
             alwaysOnTop: true,
@@ -862,8 +883,8 @@ if (!gotTheLock) {
             useContentSize: true,
             webPreferences: {
                 nodeIntegration: true,
-                contextIsolation: false
-            }
+                contextIsolation: false,
+            },
         });
 
         notificationWindow.setBackgroundColor('#00000000');
@@ -923,6 +944,9 @@ if (!gotTheLock) {
         }
     }
 
+    // ───────────────────────────────────────────────────────────
+    //  App ready
+    // ───────────────────────────────────────────────────────────
     app.whenReady().then(async () => {
         Menu.setApplicationMenu(null);
         fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
@@ -969,7 +993,10 @@ if (!gotTheLock) {
         app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
     });
 
-    ipcMain.on('overlay-ping', (event) => {
+    // ───────────────────────────────────────────────────────────
+    //  IPC — уведомления / трей
+    // ───────────────────────────────────────────────────────────
+    ipcMain.on('overlay-ping', () => {
         if (overlayWindow && !overlayWindow.isDestroyed()) {
             overlayWindow.webContents.send('overlay-pong');
         }
@@ -988,8 +1015,7 @@ if (!gotTheLock) {
     });
 
     ipcMain.on('update-tray-badge-from-webview', (event, count) => {
-        const num = parseInt(count, 10) || 0;
-        updateTrayBadge(num);
+        updateTrayBadge(parseInt(count, 10) || 0);
     });
 
     ipcMain.on('close-notification-window', () => {
@@ -999,7 +1025,7 @@ if (!gotTheLock) {
     });
 
     ipcMain.on('notification-clicked', () => {
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.show();
             mainWindow.focus();
@@ -1008,8 +1034,12 @@ if (!gotTheLock) {
         }
     });
 
+    // ───────────────────────────────────────────────────────────
+    //  IPC — аддоны
+    // ───────────────────────────────────────────────────────────
     ipcMain.handle('load-addons', async () => {
-        try { return await addonManager.loadAddons(); } catch (error) { logger.error('[IPC] load-addons error:', error.message); return {}; }
+        try { return await addonManager.loadAddons(); }
+        catch (error) { logger.error('[IPC] load-addons error:', error.message); return {}; }
     });
 
     ipcMain.handle('toggle-addon', async (event, name, install) => {
@@ -1025,7 +1055,8 @@ if (!gotTheLock) {
     });
 
     ipcMain.handle('launch-game', async () => {
-        try { return await addonManager.launchGame(); } catch (error) { logger.error('[IPC] launch-game error:', error.message); return false; }
+        try { return await addonManager.launchGame(); }
+        catch (error) { logger.error('[IPC] launch-game error:', error.message); return false; }
     });
 
     ipcMain.handle('check-game', async () => {
@@ -1038,8 +1069,12 @@ if (!gotTheLock) {
 
     ipcMain.handle('change-game-path', async () => {
         const result = await dialog.showOpenDialog({
-            title: 'Выберите файл Wow.exe', properties: ['openFile'],
-            filters: [{ name: 'Executable files', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }]
+            title: 'Выберите файл Wow.exe',
+            properties: ['openFile'],
+            filters: [
+                { name: 'Executable files', extensions: ['exe'] },
+                { name: 'All files', extensions: ['*'] },
+            ],
         });
 
         if (result.canceled || result.filePaths.length === 0) return false;
@@ -1057,8 +1092,22 @@ if (!gotTheLock) {
     ipcMain.on('open-logs-folder', () => { shell.openPath(path.join(app.getPath('userData'), 'logs')); });
     ipcMain.on('go-back', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(`file://${__dirname}/../renderer/index.html`); });
 
-    ipcMain.handle('start-key-capture', async () => { captureMode = true; capturedCodes.clear(); pressedKeys.clear(); return { success: true }; });
-    ipcMain.handle('stop-key-capture', async () => { captureMode = false; const codes = Array.from(capturedCodes); capturedCodes.clear(); return { success: true, codes }; });
+    // ───────────────────────────────────────────────────────────
+    //  IPC — PTT / hotkeys
+    // ───────────────────────────────────────────────────────────
+    ipcMain.handle('start-key-capture', async () => {
+        captureMode = true;
+        capturedCodes.clear();
+        pressedKeys.clear();
+        return { success: true };
+    });
+
+    ipcMain.handle('stop-key-capture', async () => {
+        captureMode = false;
+        const codes = Array.from(capturedCodes);
+        capturedCodes.clear();
+        return { success: true, codes };
+    });
 
     ipcMain.handle('set-ptt-hotkey', async (event, codes) => {
         if (!Array.isArray(codes)) return { success: false, message: 'Invalid hotkey format' };
@@ -1071,14 +1120,17 @@ if (!gotTheLock) {
     ipcMain.handle('get-ptt-hotkey', async () => currentPTTHotkeyCodes);
     ipcMain.handle('get-platform', async () => process.platform);
 
+    // ───────────────────────────────────────────────────────────
+    //  IPC — webview / session
+    // ───────────────────────────────────────────────────────────
     ipcMain.handle('clear-session-cache', async (event, partition) => {
         const sess = session.fromPartition(partition);
-        var savedAccounts = null;
-        var savedLastUser = null;
+        let savedAccounts = null;
+        let savedLastUser = null;
 
         if (webviewWebContents && !webviewWebContents.isDestroyed()) {
             try {
-                var result = await webviewWebContents.executeJavaScript(`
+                const result = await webviewWebContents.executeJavaScript(`
                     (function() {
                         return {
                             accounts: localStorage.getItem('voicechat_accounts'),
@@ -1088,17 +1140,17 @@ if (!gotTheLock) {
                 `);
                 savedAccounts = result.accounts;
                 savedLastUser = result.lastUser;
-            } catch (e) {}
+            } catch {}
         }
 
         await sess.clearCache();
         await sess.clearStorageData({
-            storages: ['cachestorage', 'serviceworkers', 'filesystem', 'indexeddb', 'localstorage']
+            storages: ['cachestorage', 'serviceworkers', 'filesystem', 'indexeddb', 'localstorage'],
         });
 
         if (webviewWebContents && !webviewWebContents.isDestroyed() && (savedAccounts || savedLastUser)) {
             webviewWebContents.once('dom-ready', () => {
-                var code = `
+                const code = `
                     (function() {
                         var accounts = '${savedAccounts || '[]'}';
                         var lastUser = '${savedLastUser || 'null'}';
@@ -1116,19 +1168,22 @@ if (!gotTheLock) {
         if (!webviewWebContents || webviewWebContents.isDestroyed()) {
             throw new Error('WebView webContents not available');
         }
-        try { return await webviewWebContents.executeJavaScript(code); } catch (error) { throw error; }
+        return await webviewWebContents.executeJavaScript(code);
     });
 
     ipcMain.handle('open-external', async (event, url) => {
         if (!url || typeof url !== 'string') return false;
-        try { await shell.openExternal(url); return true; } catch (err) { return false; }
+        try { await shell.openExternal(url); return true; } catch { return false; }
     });
 
     ipcMain.handle('copy-to-clipboard', (event, text) => {
         if (typeof text !== 'string') return false;
-        try { clipboard.writeText(text); return true; } catch (error) { return false; }
+        try { clipboard.writeText(text); return true; } catch { return false; }
     });
 
+    // ───────────────────────────────────────────────────────────
+    //  IPC — звуки
+    // ───────────────────────────────────────────────────────────
     ipcMain.handle('play-sound', async (event, soundType) => {
         const soundPath = findSoundFile(soundType);
         if (!soundPath) return false;
@@ -1137,7 +1192,10 @@ if (!gotTheLock) {
     });
 
     ipcMain.handle('select-sounds-folder', async () => {
-        const result = await dialog.showOpenDialog({ title: 'Выберите папку со звуками', properties: ['openDirectory'] });
+        const result = await dialog.showOpenDialog({
+            title: 'Выберите папку со звуками',
+            properties: ['openDirectory'],
+        });
         if (result.canceled || !result.filePaths.length) return null;
         return result.filePaths[0];
     });
@@ -1177,7 +1235,8 @@ if (!gotTheLock) {
     ipcMain.on('open-sounds-folder', () => { shell.openPath(SOUNDS_DIR); });
 
     ipcMain.handle('fetch-sounds-config', async () => {
-        try { return await soundsManager.fetchSoundsConfig(); } catch (error) { throw error; }
+        try { return await soundsManager.fetchSoundsConfig(); }
+        catch (error) { throw error; }
     });
 
     ipcMain.handle('download-sounds-section', async (event, sectionName) => {
@@ -1198,6 +1257,9 @@ if (!gotTheLock) {
         return await soundsManager.isSoundsDirEmpty();
     });
 
+    // ───────────────────────────────────────────────────────────
+    //  IPC — overlay
+    // ───────────────────────────────────────────────────────────
     ipcMain.on('overlay-input', (event, text) => {
         sendToWebClient(text);
     });
@@ -1221,6 +1283,9 @@ if (!gotTheLock) {
         return sendToOverlay('message', { text });
     });
 
+    // ───────────────────────────────────────────────────────────
+    //  IPC — аккаунты
+    // ───────────────────────────────────────────────────────────
     ipcMain.handle('load-credentials', async () => {
         const data = loadAccountsFromStorage();
         return data.lastCredentials || null;
@@ -1267,10 +1332,7 @@ if (!gotTheLock) {
         const data = loadAccountsFromStorage();
         const accounts = data.accounts || [];
         const existing = accounts.findIndex(a => a.userId === accountData.userId);
-        const account = {
-            ...accountData,
-            lastLogin: new Date().toISOString()
-        };
+        const account = { ...accountData, lastLogin: new Date().toISOString() };
         if (existing >= 0) {
             accounts[existing] = account;
         } else {
@@ -1281,6 +1343,9 @@ if (!gotTheLock) {
         saveAccountsToStorage(data);
     });
 
+    // ───────────────────────────────────────────────────────────
+    //  Lifecycle
+    // ───────────────────────────────────────────────────────────
     app.on('window-all-closed', (event) => {
         if (process.platform !== 'darwin') {
             event.preventDefault();
@@ -1291,6 +1356,13 @@ if (!gotTheLock) {
         app.isQuitting = true;
         stopRustHook();
         stopOverlay();
+
+        // ✅ Очистка таймера фоновой проверки (теперь setTimeout, а не setInterval)
+        if (addonManager.updateInterval) {
+            clearTimeout(addonManager.updateInterval);
+            addonManager.updateInterval = null;
+        }
+
         if (notificationWindow && !notificationWindow.isDestroyed()) {
             notificationWindow.close();
         }
