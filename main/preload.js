@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   loadAddons: () => ipcRenderer.invoke('load-addons'),
   toggleAddon: (name, install) => ipcRenderer.invoke('toggle-addon', name, install),
+  cancelDownload: (name) => ipcRenderer.invoke('cancel-download', name),
   launchGame: () => ipcRenderer.invoke('launch-game'),
   openLogsFolder: () => ipcRenderer.send('open-logs-folder'),
   checkGame: () => ipcRenderer.invoke('check-game'),
@@ -80,10 +81,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('addon-update-available', handler);
     return () => ipcRenderer.off('addon-update-available', handler);
   },
+  onAddonsUpdateStatus: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('addons-update-status', handler);
+    return () => ipcRenderer.off('addons-update-status', handler);
+  },
   onConfigSourceStatus: (callback) => {
     const handler = (event, data) => callback(data);
     ipcRenderer.on('config-source-status', handler);
     return () => ipcRenderer.off('config-source-status', handler);
+  },
+  // ✅ Новый слушатель попыток скачивания
+  onDownloadAttempt: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('download-attempt', handler);
+    return () => ipcRenderer.off('download-attempt', handler);
   },
   onPTTActivated: (callback) => {
     const handler = () => {

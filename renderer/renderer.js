@@ -36,10 +36,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var isGameReady = false;
     var isLaunchBlocked = false;
     var isLoadingAddons = false;
-    // ✅ Изменение 2: Флаг установки аддонов
     var isAddonInstalling = false;
 
-    // ✅ Обновлённая функция: учитывает флаг isAddonInstalling
+    // ✅ Хранилище счётчиков попыток по аддонам
+    var downloadAttempts = {};
+
     function updateLaunchButtonState() {
         if (launchBtn) {
             launchBtn.disabled = !isGameReady || isLaunchBlocked || isAddonInstalling;
@@ -116,6 +117,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function buildUpdateTooltip(addon) {
+        var remote = addon.version || 0;
+        var local = addon.local_version || 0;
+        if (remote > 0 && local > 0) {
+            return 'Доступно обновление: v' + local + ' → v' + remote;
+        }
+        if (remote > 0) {
+            return 'Доступно обновление (v' + remote + ')';
+        }
+        return 'Доступно обновление';
+    }
+
     function createAddonElement(name, addon) {
         var card = document.createElement('div');
         card.className = 'addon-card';
@@ -139,6 +152,13 @@ document.addEventListener('DOMContentLoaded', function() {
         updateLabel.className = 'update-label';
         updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
         updateLabel.textContent = 'Доступно обновление';
+        updateLabel.title = buildUpdateTooltip(addon);
+
+        // ✅ Блок с попытками
+        var attemptLabel = document.createElement('span');
+        attemptLabel.className = 'attempt-label';
+        attemptLabel.style.display = 'none';
+        card.attemptLabel = attemptLabel;
 
         var checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -150,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
         label.htmlFor = 'checkbox-' + name;
         label.className = 'custom-checkbox';
 
-        topRow.append(nameEl, updateLabel, checkbox, label);
+        topRow.append(nameEl, updateLabel, attemptLabel, checkbox, label);
 
         var description = document.createElement('div');
         description.className = 'addon-description';
@@ -167,7 +187,6 @@ document.addEventListener('DOMContentLoaded', function() {
             card.onmouseleave = function() { card.classList.remove('deleting-warning'); };
         }
 
-        // ✅ Обновлённый обработчик: блокирует кнопку запуска во время установки
         checkbox.addEventListener('change', function() {
             var willInstall = checkbox.checked;
             var originalState = !willInstall;
@@ -176,6 +195,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             isAddonInstalling = true;
             updateLaunchButtonState();
+
+            // ✅ Сбрасываем счётчик попыток при новом запуске
+            downloadAttempts[name] = 0;
+            if (card.attemptLabel) {
+                card.attemptLabel.style.display = 'none';
+                card.attemptLabel.textContent = '';
+            }
 
             window.electronAPI.toggleAddon(name, willInstall)
                 .then(function(success) {
@@ -216,6 +242,38 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // ✅ Обновление счётчика попыток на карточке
+    function updateAddonAttempt(data) {
+        if (!data || !data.addonName) return;
+        var cards = document.querySelectorAll('.addon-card');
+        for (var i = 0; i < cards.length; i++) {
+            var card = cards[i];
+            if (card.dataset.name === data.addonName) {
+                if (!card.attemptLabel) break;
+                card.attemptLabel.style.display = 'inline';
+                card.attemptLabel.textContent =
+                    '🔄 Попытка ' + data.attempt +
+                    ' (ссылка ' + data.linkIndex + '/' + data.linkTotal + ')';
+                card.attemptLabel.title = 'Ошибка: ' + (data.error || '');
+                break;
+            }
+        }
+    }
+
+    function applyVersionInfoToCard(card, info) {
+        if (!card || !info) return;
+        if (card.updateLabel) {
+            card.updateLabel.style.display = info.needs_update ? 'inline' : 'none';
+            card.updateLabel.title = buildUpdateTooltip({
+                version: info.version,
+                local_version: info.local_version,
+            });
+        }
+        if (card.checkbox && typeof info.installed === 'boolean') {
+            card.checkbox.checked = info.installed;
+        }
+    }
+
     function refreshAddonStatus(name) {
         window.electronAPI.loadAddons()
             .then(function(addons) {
@@ -235,6 +293,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             card.overlay.style.setProperty('--progress', '0%');
                         }
 
+                        // ✅ Скрываем счётчик попыток после успеха
+                        if (card.attemptLabel) {
+                            card.attemptLabel.style.display = 'none';
+                            card.attemptLabel.textContent = '';
+                        }
+                        downloadAttempts[name] = 0;
+
                         if (addon.installed) {
                             card.onmouseenter = function() { card.classList.add('deleting-warning'); };
                             card.onmouseleave = function() { card.classList.remove('deleting-warning'); };
@@ -243,7 +308,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             card.onmouseleave = null;
                         }
 
-                        card.updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
+                        if (card.updateLabel) {
+                            card.updateLabel.style.display = addon.needs_update ? 'inline' : 'none';
+                            card.updateLabel.title = buildUpdateTooltip(addon);
+                        }
                         break;
                     }
                 }
@@ -275,7 +343,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    // ✅ Обновлённая функция: проверка флага установки
     async function launchGame() {
         if (isAddonInstalling) {
             showError('Дождитесь завершения установки аддонов');
@@ -493,7 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-        if (window.electronAPI && window.electronAPI.onConfigSourceStatus) {
+    if (window.electronAPI && window.electronAPI.onConfigSourceStatus) {
         window.electronAPI.onConfigSourceStatus(function(data) {
             if (!isLoadingAddons) return;
             var textEl = document.getElementById('addons-loading-text');
@@ -507,6 +574,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 sourceEl.textContent = '❌ ' + host;
             } else if (data.state === 'loaded') {
                 sourceEl.textContent = '✅ ' + host;
+            }
+        });
+    }
+
+    // ✅ Слушаем попытки скачивания
+    if (window.electronAPI && window.electronAPI.onDownloadAttempt) {
+        window.electronAPI.onDownloadAttempt(function(data) {
+            updateAddonAttempt(data);
+        });
+    }
+
+    if (window.electronAPI && window.electronAPI.onAddonsUpdateStatus) {
+        window.electronAPI.onAddonsUpdateStatus(function(data) {
+            if (!data || !data.addons) return;
+            var cards = document.querySelectorAll('.addon-card');
+            for (var i = 0; i < cards.length; i++) {
+                var card = cards[i];
+                var info = data.addons[card.dataset.name];
+                if (info) applyVersionInfoToCard(card, info);
             }
         });
     }
@@ -764,7 +850,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updateAddonProgress(name, progress);
     });
 
-    // ✅ Обновлённый обработчик: ждём 3 секунды после успешной установки
     window.electronAPI.onOperationFinished(function(name, success) {
         if (success) {
             setTimeout(function() {
@@ -777,7 +862,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (name === 'NSQC') refreshAddonStatus(name);
     });
 
-    // ✅ Обновлённый обработчик: сброс флага установки при ошибке
     window.electronAPI.onError(function(error) {
         showError(error);
         var checkboxes = document.querySelectorAll('.addon-card input[type="checkbox"]');

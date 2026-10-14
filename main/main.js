@@ -8,7 +8,6 @@ const soundsManager = require('./soundsManager');
 const { setupLogging } = require('./utils');
 const logger = setupLogging();
 
-// ✅ Single Instance Lock
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
@@ -987,6 +986,11 @@ if (!gotTheLock) {
 
         try { await addonManager.loadAddons(); } catch (err) { logger.error('[APP] Failed to load addons:', err.message); }
         try { await addonManager.startupUpdateCheck(mainWindow); } catch (err) { logger.error('[STARTUP] Update check error:', err.message); }
+
+        // ✅ Стартовая проверка версий всех аддонов (один раз)
+        try { await addonManager.checkAllAddonsVersions(); }
+        catch (err) { logger.error('[STARTUP] checkAllAddonsVersions error:', err.message); }
+
         addonManager.startBackgroundChecker(mainWindow);
         soundsManager.autoDownloadBaseSounds().catch(err => logger.error('[SOUNDS] Auto-download failed:', err.message));
 
@@ -1050,6 +1054,17 @@ if (!gotTheLock) {
         } catch (error) {
             logger.error(`[IPC] toggle-addon ${name} error:`, error.message);
             dialog.showErrorBox('Ошибка установки', error.message);
+            return false;
+        }
+    });
+
+    // ✅ Отмена бесконечных попыток скачивания
+    ipcMain.handle('cancel-download', async (event, name) => {
+        try {
+            addonManager.cancelDownload(name);
+            return true;
+        } catch (error) {
+            logger.error(`[IPC] cancel-download ${name} error:`, error.message);
             return false;
         }
     });
@@ -1357,7 +1372,6 @@ if (!gotTheLock) {
         stopRustHook();
         stopOverlay();
 
-        // ✅ Очистка таймера фоновой проверки (теперь setTimeout, а не setInterval)
         if (addonManager.updateInterval) {
             clearTimeout(addonManager.updateInterval);
             addonManager.updateInterval = null;

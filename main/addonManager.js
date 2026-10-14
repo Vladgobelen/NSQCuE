@@ -1,5 +1,6 @@
 const { app } = require('electron');
 const axios = require('axios');
+const https = require('https');
 const fs = require('fs-extra');
 const path = require('path');
 const unzipper = require('unzipper');
@@ -12,8 +13,8 @@ const logger = setupLogging();
 //  КОНСТАНТЫ
 // ─────────────────────────────────────────────────────────────
 const CONFIG_URLS = [
-  'https://ns.fiber-gate.ru/addons/addons.json',
   'https://gitlab.com/Vladgobelen/NSQCu/-/raw/main/addons.json',
+  'https://ns.fiber-gate.ru/addons/addons.json',
   'https://raw.githubusercontent.com/Vladgobelen/NSQCu/refs/heads/main/addons.json',
   'https://gitlab.com/Vladgobelen/nsqcmap/-/raw/main/addons.json',
 ];
@@ -23,11 +24,61 @@ const NSQC4_VERSION_URL =
 
 const AUTO_UPDATE_ADDON = 'NSQC4';
 
-const BACKGROUND_CHECK_INTERVAL = 30 * 1000;
+const BACKGROUND_CHECK_INTERVAL = 30 * 1000;   // 30 сек — NSQC4
+const ALL_ADDONS_CHECK_EVERY_N_TICKS = 20;     // 20 * 30сек = 10 мин — все аддоны
 const POST_INSTALL_DELAY = 3000;
 const NET_TIMEOUT_CONFIG = 10000;
 const NET_TIMEOUT_ADDON = 30000;
 const NET_TIMEOUT_VERSION = 15000;
+
+// ✅ Бесконечные повторные попытки
+const DOWNLOAD_RETRY_DELAY = 10000;   // 10 секунд между полными кругами
+const DOWNLOAD_RETRY_MAX_DELAY = 60000; // максимум 60 сек (не используется при бесконечности, но оставим на всякий)
+
+// ─────────────────────────────────────────────────────────────
+//  ✅ ЗАШИТЫЕ ВЕРСИИ АДДОНОВ
+// ─────────────────────────────────────────────────────────────
+const LOCAL_ADDON_VERSIONS = {
+  'WDM': 4,
+  'Fonts': 1,
+  'patch-ruRU-M.MPQ': 2,
+  'patch-L.mpq': 1,
+  'Patch-ruRU-b.mpq': 1,
+  'patch-ruRU-y.mpq': 1,
+  'patch-ruRU-N.mpq': 1,
+  'patch-ruRU-O.mpq': 1,
+  'patch-ruRU-P.mpq': 1,
+  'patch-ruRU-Q.mpq': 1,
+  'patch-ruRU-R.mpq': 1,
+  'Questie-335': 1,
+  'Bartender4': 1,
+  'ArkInventory': 1,
+  'Chatter': 1,
+  'CrapAway': 1,
+  'Disenchant': 1,
+  'GearScore': 1,
+  'Grid2': 1,
+  'PlateBuffs': 1,
+  'RangeDisplay': 1,
+  'Skada': 1,
+  'TomTom': 1,
+  'DBM': 1,
+  'Gatherer': 1,
+  'Auctionator': 1,
+  'BonusScanner': 1,
+  'Ailo': 1,
+  'DrDamage': 1,
+  'MoveAnything': 1,
+  'OmniCC': 1,
+  'Quartz': 1,
+  'SpeedyActions': 1,
+  'Talented': 1,
+  'TidyPlates': 1,
+  'PallyPower': 1,
+  'Atlas': 1,
+  'NSQC': 1,
+  'NSQC3': 1,
+};
 
 // ─────────────────────────────────────────────────────────────
 //  AddonManager
@@ -46,6 +97,12 @@ class AddonManager {
     this.loadingAddonsPromise = null;
 
     this.updateInterval = null;
+    this._tickCounter = 0;
+
+    this._lastConfig = null;
+
+    // ✅ Флаг отмены для бесконечных попыток
+    this._cancelDownloads = new Set();
   }
 
   setMainWindow(win) { this.mainWindow = win; }
@@ -75,11 +132,37 @@ class AddonManager {
     return Array.from(set).map((s) => s.toLowerCase());
   }
 
-  // Возвращает все ссылки аддона (учитывая старое поле `link`)
   _getLinks(addon) {
     if (Array.isArray(addon.links) && addon.links.length > 0) return addon.links;
     if (typeof addon.link === 'string' && addon.link) return [addon.link];
     return [];
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  ✅ Сравнение версий
+  // ───────────────────────────────────────────────────────────
+  _getLocalVersion(name) {
+    const v = LOCAL_ADDON_VERSIONS[name];
+    return typeof v === 'number' ? v : 0;
+  }
+
+  _getRemoteVersion(cfg) {
+    const v = cfg && cfg.version;
+    if (typeof v === 'number' && isFinite(v)) return v;
+    if (typeof v === 'string') {
+      const n = parseInt(v, 10);
+      if (!isNaN(n)) return n;
+    }
+    return 0;
+  }
+
+  _computeNeedsUpdate(name, cfg) {
+    if (name === AUTO_UPDATE_ADDON) return false;
+    const local = this._getLocalVersion(name);
+    const remote = this._getRemoteVersion(cfg);
+    if (remote === 0) return false;
+    if (local === 0) return false;
+    return remote > local;
   }
 
   // ───────────────────────────────────────────────────────────
@@ -197,6 +280,9 @@ class AddonManager {
       ? !!cfg.wrap_in_folder
       : (isZip && /(^|\/)AddOns\/?$/i.test(targetPath.replace(/\\/g, '/')));
 
+    const remoteVersion = this._getRemoteVersion(cfg);
+    const localVersion = this._getLocalVersion(name);
+
     return {
       name,
       description,
@@ -209,6 +295,8 @@ class AddonManager {
       target_path: targetPath.replace(/\//g, path.sep),
       is_zip: isZip,
       wrap_in_folder: wrapInFolder,
+      version: remoteVersion,
+      local_version: localVersion,
     };
   }
 
@@ -225,6 +313,8 @@ class AddonManager {
     this.loadingAddonsPromise = (async () => {
       try {
         const config = await this._fetchConfigWithFallback();
+        this._lastConfig = config;
+
         const gamePath = this.getGamePath();
         const newNames = new Set(Object.keys(config.addons));
 
@@ -235,6 +325,7 @@ class AddonManager {
         for (const [name, cfg] of Object.entries(config.addons)) {
           const built = this._buildAddonFromConfig(name, cfg);
           built.installed = this._checkInstalled(name, cfg.target_path || '', gamePath, built);
+          built.needs_update = this._computeNeedsUpdate(name, cfg);
 
           const existing = this.addons[name];
           if (existing) {
@@ -246,13 +337,18 @@ class AddonManager {
               target_path: built.target_path,
               is_zip: built.is_zip,
               wrap_in_folder: built.wrap_in_folder,
+              version: built.version,
+              local_version: built.local_version,
+              needs_update: built.needs_update,
             });
           } else {
             this.addons[name] = built;
           }
         }
 
-        logger.info(`[LOAD_ADDONS] Загружено аддонов: ${Object.keys(this.addons).length}`);
+        logger.info(
+          `[LOAD_ADDONS] Загружено аддонов: ${Object.keys(this.addons).length}`
+        );
         return this.addons;
       } catch (err) {
         logger.error('[LOAD_ADDONS] Ошибка:', err.message);
@@ -267,7 +363,70 @@ class AddonManager {
   }
 
   // ───────────────────────────────────────────────────────────
-  //  Проверка установки (принимает addon-объект)
+  //  ✅ Проверка версий ВСЕХ аддонов
+  // ───────────────────────────────────────────────────────────
+  async checkAllAddonsVersions() {
+    try {
+      logger.info('[VERSIONS] Проверка версий всех аддонов...');
+      const config = await this._fetchConfigWithFallback();
+      this._lastConfig = config;
+
+      const updates = [];
+
+      for (const [name, cfg] of Object.entries(config.addons)) {
+        if (name === AUTO_UPDATE_ADDON) continue;
+
+        const needs = this._computeNeedsUpdate(name, cfg);
+        const remote = this._getRemoteVersion(cfg);
+        const local = this._getLocalVersion(name);
+
+        const addon = this.addons[name];
+        if (addon) {
+          const was = !!addon.needs_update;
+          addon.needs_update = needs;
+          addon.version = remote;
+          addon.local_version = local;
+          if (needs && !was) updates.push(name);
+        } else {
+          const built = this._buildAddonFromConfig(name, cfg);
+          built.needs_update = needs;
+          this.addons[name] = built;
+          if (needs) updates.push(name);
+        }
+      }
+
+      logger.info(
+        `[VERSIONS] Проверено аддонов: ${Object.keys(config.addons).length}, ` +
+        `новых обновлений: ${updates.length}`
+      );
+
+      this._emitEvent(this.mainWindow, 'addons-update-status', {
+        addons: this._buildVersionsSnapshot(),
+        updates,
+      });
+
+      return { updates, all: this._buildVersionsSnapshot() };
+    } catch (err) {
+      logger.warn(`[VERSIONS] Ошибка проверки версий: ${err.message}`);
+      return { updates: [], all: null, error: err.message };
+    }
+  }
+
+  _buildVersionsSnapshot() {
+    const snap = {};
+    for (const [name, addon] of Object.entries(this.addons)) {
+      snap[name] = {
+        needs_update: !!addon.needs_update,
+        version: addon.version || 0,
+        local_version: addon.local_version || 0,
+        installed: !!addon.installed,
+      };
+    }
+    return snap;
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  Проверка установки
   // ───────────────────────────────────────────────────────────
   _checkInstalled(name, targetPath, gamePath, addonOrLink) {
     if (!gamePath) return false;
@@ -290,7 +449,6 @@ class AddonManager {
       if (lowerName.endsWith('.mpq')) {
         if (namesLower.includes(`${lowerName}.mpq`)) return true;
 
-        // Собираем кандидатов из ВСЕХ ссылок
         const allCandidates = new Set();
         if (addonOrLink && Array.isArray(addonOrLink.links)) {
           for (const l of addonOrLink.links) {
@@ -412,13 +570,28 @@ class AddonManager {
     if (this.updateInterval) clearTimeout(this.updateInterval);
 
     let failCount = 0;
+    this._tickCounter = 0;
 
     const tick = async () => {
       if (this.checkingUpdate) return schedule();
       this.checkingUpdate = true;
+
+      this._tickCounter++;
+      const doAllAddonsCheck =
+        (this._tickCounter % ALL_ADDONS_CHECK_EVERY_N_TICKS) === 0;
+
       try {
         const updated = await this._checkForUpdates(mainWindow);
         if (updated === false) failCount = 0;
+
+        if (doAllAddonsCheck) {
+          logger.info('[BACKGROUND_CHECK] Пора проверять все аддоны');
+          try {
+            await this.checkAllAddonsVersions();
+          } catch (e) {
+            logger.warn('[BACKGROUND_CHECK] checkAllAddonsVersions failed:', e.message);
+          }
+        }
       } catch (e) {
         failCount++;
         logger.error('[BACKGROUND_CHECK]', e.message);
@@ -466,7 +639,7 @@ class AddonManager {
     this.isReinstalling = true;
     this.reinstallQueue = (async () => {
       try {
-        const config = await this._fetchConfigWithFallback();
+        const config = this._lastConfig || await this._fetchConfigWithFallback();
         for (const addonName of addonNames) {
           const cfg = config.addons[addonName];
           if (!cfg) {
@@ -514,7 +687,7 @@ class AddonManager {
               mainWindow.webContents.send('operation-finished', addonName, true);
             }
           } catch (err) {
-            logger.error(`[REINSTALL] ${addonName}:`, err.message);
+            logger.error(`[REINSTALL] ${addonName}:`, err.message || err.code || String(err));
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send('operation-error', err.message || 'Unknown error');
             }
@@ -559,11 +732,16 @@ class AddonManager {
           logger.warn(`[TOGGLE] ${name} не подтверждён`);
           await this._sleep(1000);
         }
+
+        addon.needs_update = false;
       } else {
         await this._uninstallAddon(addon, mainWindow);
       }
     } catch (error) {
-      logger.error(`[TOGGLE] ${install ? 'install' : 'uninstall'} ${name}:`, error.message);
+      logger.error(
+        `[TOGGLE] ${install ? 'install' : 'uninstall'} ${name}:`,
+        error.message || error.code || String(error)
+      );
       throw error;
     } finally {
       addon.being_processed = false;
@@ -604,7 +782,6 @@ class AddonManager {
     );
 
     try {
-      // ✅ Fallback по всем ссылкам
       const { usedUrl } = await this._downloadWithFallback(
         links, tempFile,
         (frac) => {
@@ -618,7 +795,6 @@ class AddonManager {
       logger.info(`[INSTALL] ${addon.name}: скачано с ${usedUrl}`);
 
       if (isMpq) {
-        // Имя файла — из ссылки, по которой реально скачалось
         let rawName;
         try {
           rawName = path.basename(new URL(usedUrl).pathname);
@@ -652,8 +828,13 @@ class AddonManager {
       this._emitProgress(mainWindow, addon.name, 1.0);
       logger.info(`[INSTALL] ${addon.name}: завершено`);
     } catch (error) {
-      logger.error(`[INSTALL] ${addon.name}:`, error.message);
-      throw new Error(`Failed to install ${addon.name}: ${error.message || 'Unknown error'}`);
+      logger.error(
+        `[INSTALL] ${addon.name}:`,
+        error.message || error.code || String(error)
+      );
+      throw new Error(
+        `Failed to install ${addon.name}: ${error.message || error.code || 'Unknown error'}`
+      );
     } finally {
       await Promise.allSettled([
         fs.remove(tempDir).catch(() => {}),
@@ -663,60 +844,149 @@ class AddonManager {
   }
 
   // ───────────────────────────────────────────────────────────
-  //  Скачивание: одна ссылка
+  //  ✅ Скачивание: ОДНА ссылка, БЕСКОНЕЧНЫЕ попытки каждые 10 сек
+  //  Возвращает true при успехе или 'cancelled'.
   // ───────────────────────────────────────────────────────────
-  async _downloadFile(url, dest, onProgress) {
+  async _downloadFile(url, dest, onProgress, addonName, attemptCallback) {
     if (!/^https?:\/\//i.test(url)) {
       throw new Error(`Некорректная ссылка: ${url}`);
     }
-    const response = await axios.get(url, {
-      responseType: 'stream',
-      headers: { 'User-Agent': 'NightWatchUpdater/1.0' },
-      timeout: NET_TIMEOUT_ADDON,
-      maxRedirects: 5,
-      validateStatus: null,
-    });
 
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`HTTP ${response.status}`);
+    let attempt = 0;
+
+    // Бесконечный цикл
+    while (true) {
+      // Проверка на отмену
+      if (addonName && this._cancelDownloads.has(addonName)) {
+        logger.info(`[DOWNLOAD] ${addonName}: отменено пользователем`);
+        throw new Error('CANCELLED');
+      }
+
+      attempt++;
+      const agent = new https.Agent({ keepAlive: false });
+
+      try {
+        logger.info(`[DOWNLOAD] ${url}: попытка ${attempt}`);
+
+        const response = await axios.get(url, {
+          responseType: 'stream',
+          headers: {
+            'User-Agent': 'NightWatchUpdater/1.0',
+            'Accept': '*/*',
+            'Connection': 'close',
+          },
+          timeout: NET_TIMEOUT_ADDON,
+          maxRedirects: 5,
+          validateStatus: null,
+          httpsAgent: agent,
+          decompress: true,
+        });
+
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const totalLength = parseInt(response.headers['content-length'], 10) || 0;
+        let downloaded = 0;
+        if (onProgress && totalLength > 0) {
+          response.data.on('data', (chunk) => {
+            downloaded += chunk.length;
+            onProgress(Math.min(downloaded / totalLength, 1));
+          });
+        }
+
+        const writer = fs.createWriteStream(dest);
+        await new Promise((resolve, reject) => {
+          response.data.pipe(writer);
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+          response.data.on('error', reject);
+          writer.on('close', resolve);
+        });
+
+        const stat = await fs.stat(dest).catch(() => null);
+        if (!stat || stat.size === 0) {
+          throw new Error('Скачан пустой файл');
+        }
+
+        logger.info(`[DOWNLOAD] ${url}: успех (${stat.size} байт, попытка ${attempt})`);
+        return; // успех
+      } catch (err) {
+        const msg = err.message || err.code || String(err);
+        logger.warn(`[DOWNLOAD] ${url}: ошибка на попытке ${attempt}: ${msg}`);
+        try { await fs.remove(dest); } catch {}
+
+        if (attemptCallback) {
+          try { attemptCallback(attempt, url, msg); } catch {}
+        }
+
+        // Проверка отмены перед паузой
+        if (addonName && this._cancelDownloads.has(addonName)) {
+          logger.info(`[DOWNLOAD] ${addonName}: отменено во время паузы`);
+          throw new Error('CANCELLED');
+        }
+
+        logger.info(`[DOWNLOAD] ${url}: пауза ${DOWNLOAD_RETRY_DELAY}мс перед попыткой ${attempt + 1}`);
+        await this._sleep(DOWNLOAD_RETRY_DELAY);
+      }
     }
-
-    const totalLength = parseInt(response.headers['content-length'], 10) || 0;
-    let downloaded = 0;
-    if (onProgress && totalLength > 0) {
-      response.data.on('data', (chunk) => {
-        downloaded += chunk.length;
-        onProgress(Math.min(downloaded / totalLength, 1));
-      });
-    }
-
-    const writer = fs.createWriteStream(dest);
-    await new Promise((resolve, reject) => {
-      response.data.pipe(writer);
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
   }
 
   // ───────────────────────────────────────────────────────────
-  //  Скачивание: fallback по нескольким ссылкам
+  //  ✅ Скачивание с fallback по ссылкам + бесконечный цикл
   // ───────────────────────────────────────────────────────────
   async _downloadWithFallback(urls, dest, onProgress, addonName) {
     const errors = [];
-    for (let i = 0; i < urls.length; i++) {
-      const url = urls[i];
-      logger.info(`[DOWNLOAD] ${addonName}: попытка ${i + 1}/${urls.length} — ${url}`);
+    let attemptCounter = 0;
+    let linkIndex = 0;
+
+    // Бесконечный цикл по ссылкам
+    while (true) {
+      const url = urls[linkIndex];
+      logger.info(
+        `[DOWNLOAD] ${addonName}: ссылка ${linkIndex + 1}/${urls.length} — ${url}`
+      );
+
       try {
-        await this._downloadFile(url, dest, onProgress);
+        await this._downloadFile(
+          url,
+          dest,
+          onProgress,
+          addonName,
+          (attempt, attemptedUrl, errMsg) => {
+            attemptCounter++;
+            // Отправляем событие в UI
+            this._emitEvent(this.mainWindow, 'download-attempt', {
+              addonName,
+              attempt: attemptCounter,
+              url: attemptedUrl,
+              linkIndex: linkIndex + 1,
+              linkTotal: urls.length,
+              error: errMsg,
+            });
+          }
+        );
+
         logger.info(`[DOWNLOAD] ${addonName}: успех с ${url}`);
         return { usedUrl: url };
       } catch (err) {
-        logger.warn(`[DOWNLOAD] ${addonName}: ошибка с ${url}: ${err.message}`);
-        errors.push(`${url} → ${err.message}`);
+        const msg = err.message || err.code || String(err);
+
+        if (msg === 'CANCELLED') {
+          throw err;
+        }
+
+        logger.warn(`[DOWNLOAD] ${addonName}: ссылка ${url} не сработала: ${msg}`);
+        errors.push(`${url} → ${msg}`);
         try { await fs.remove(dest); } catch {}
+
+        // Переходим к следующей ссылке
+        linkIndex = (linkIndex + 1) % urls.length;
+
+        // Небольшая пауза перед сменой ссылки (чтобы не спамить)
+        await this._sleep(1000);
       }
     }
-    throw new Error(`Все ссылки недоступны:\n` + errors.join('\n'));
   }
 
   // ───────────────────────────────────────────────────────────
@@ -840,6 +1110,18 @@ class AddonManager {
       logger.error('[LAUNCH]', e.message);
       return false;
     }
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  ✅ Отмена бесконечных попыток
+  // ───────────────────────────────────────────────────────────
+  cancelDownload(addonName) {
+    this._cancelDownloads.add(addonName);
+    logger.info(`[DOWNLOAD] ${addonName}: запрошена отмена`);
+  }
+
+  clearCancel(addonName) {
+    this._cancelDownloads.delete(addonName);
   }
 
   // ───────────────────────────────────────────────────────────
