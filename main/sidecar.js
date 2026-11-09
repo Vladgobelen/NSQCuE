@@ -15,7 +15,6 @@ async function startSidecarAndProxy() {
         ? path.join(process.resourcesPath, binaryName)
         : path.join(__dirname, '..', 'native', 'ts-sidecar', binaryName);
 
-    // Отладка: проверяем, видит ли Electron бинарник
     console.log(`[SIDECAR DEBUG] binaryPath: ${binaryPath}`);
     console.log(`[SIDECAR DEBUG] exists: ${fs.existsSync(binaryPath)}`);
 
@@ -46,21 +45,29 @@ async function startSidecarAndProxy() {
                 proxyRules: `socks5://127.0.0.1:${port}`
             });
             logger.info('[SIDECAR] Proxy set for NSQCuE webview');
-            console.log('[SIDECAR] Proxy applied. Reloading webview...');
+            console.log('[SIDECAR] Proxy applied. Waiting 1s before loading webview...');
 
-            // ПРИНУДИТЕЛЬНО ПЕРЕЗАГРУЖАЕМ WEBVIEW, ЧТОБЫ ОН ЗАГРУЗИЛСЯ ЧЕРЕЗ ПРОКСИ
-            const mainWindow = getMainWindow();
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.executeJavaScript(`
-                    const webview = document.getElementById('ns-webview');
-                    if (webview) {
-                        webview.reload();
-                        console.log('[WEBVIEW] Reloaded via sidecar proxy');
-                    }
-                `).catch(err => {
-                    logger.error('[SIDECAR] Failed to reload webview:', err.message);
-                });
-            }
+            // Ждем 1 секунду, чтобы Electron точно был готов
+            setTimeout(() => {
+                const mainWindow = getMainWindow();
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    console.log('[SIDECAR] Sending load command to webview...');
+                    mainWindow.webContents.executeJavaScript(`
+                        const webview = document.getElementById('ns-webview');
+                        if (webview) {
+                            console.log('[WEBVIEW] Setting src to server...');
+                            webview.src = 'https://100.126.188.12/?server=srv_68e645d6';
+                        } else {
+                            console.error('[WEBVIEW] Element not found!');
+                        }
+                    `).catch(err => {
+                        logger.error('[SIDECAR] Failed to load webview:', err.message);
+                        console.error('[SIDECAR] JS Error:', err.message);
+                    });
+                } else {
+                    console.error('[SIDECAR] Main window is not available!');
+                }
+            }, 1000);
         }
     });
 

@@ -81,3 +81,5 @@ native/ts-sidecar/tsnet-state/
 # Если не хочешь заливать тяжелые бинарники в гит, раскомментируй:
 # native/ts-sidecar/ts-sidecar.exe
 # native/ts-sidecar/ts-sidecar-linuxsquashfs-root/
+builder-effective-config.yaml
+builder-debug.yml

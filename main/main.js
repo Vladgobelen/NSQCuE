@@ -1,4 +1,4 @@
-const { app, globalShortcut, BrowserWindow } = require('electron');
+const { app, globalShortcut, BrowserWindow, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const logger = require('./utils').setupLogging();
@@ -25,10 +25,13 @@ if (!gotTheLock) {
         }
     });
 
-    // Отключаем проверку сертификатов для нашего IP (грязный, но рабочий метод для тестов)
+    // Отключаем проверку сертификатов для нашего IP
     app.commandLine.appendSwitch('ignore-certificate-errors');
 
     app.whenReady().then(async () => {
+        // Убираем стандартное меню (Файл, Правка и т.д.) на Linux
+        Menu.setApplicationMenu(null);
+
         console.log('[APP] app.whenReady() started');
 
         fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
@@ -63,7 +66,7 @@ if (!gotTheLock) {
             console.log('[APP] Game path is set:', settings.getGamePath());
         }
 
-        // ВАЖНО: Регистрируем IPC и создаем окно ДО запуска сайдкара
+        // Регистрируем IPC и создаем окно ДО запуска сайдкара
         console.log('[APP] Registering IPC handlers...');
         registerIpcHandlers();
 
@@ -78,7 +81,7 @@ if (!gotTheLock) {
 
         console.log('[APP] Initialization complete');
 
-        // Запускаем сайдкар в фоне, НЕ блокируя запуск приложения
+        // Запускаем сайдкар в фоне
         console.log('[APP] Starting sidecar in background...');
         startSidecarAndProxy().then(() => {
             console.log('[APP] Sidecar startup sequence initiated successfully.');

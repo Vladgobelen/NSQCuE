@@ -1,6 +1,6 @@
 {
   "name": "NSQCuE",
-  "version": "50.0.0",
+  "version": "52.0.0",
   "description": "Установщик аддонов Ночная Стража",
   "main": "main/main.js",
   "scripts": {
@@ -11,8 +11,8 @@
   },
   "build": {
     "appId": "com.nsqcue.updater",
-    "productName": "Ночная стража: установщик аддонов",
-    "executableName": "NSQCuE-50",
+    "productName": "NSQCuE",
+    "executableName": "NSQCuE-52",
     "icon": "assets/icon.png",
     "asar": true,
     "files": [
@@ -50,6 +50,7 @@
           ]
         }
       ],
+      "artifactName": "NSQCuE-${version}.${ext}",
       "extraResources": [
         {
           "from": "global-mouse-hook.exe",
@@ -66,7 +67,6 @@
       ]
     },
     "portable": {
-      "artifactName": "${productName}-${version}-portable.${ext}",
       "unicode": true,
       "warningsAsErrors": false,
       "requestExecutionLevel": "user"
@@ -82,6 +82,7 @@
       ],
       "category": "Utility",
       "synopsis": "Установщик аддонов Ночная Стража",
+      "artifactName": "NSQCuE-${version}.${ext}",
       "extraResources": [
         {
           "from": "global_mouse_hook",
