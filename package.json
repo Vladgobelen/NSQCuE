@@ -1,6 +1,6 @@
 {
   "name": "NSQCuE",
-  "version": "45.0.0",
+  "version": "50.0.0",
   "description": "Установщик аддонов Ночная Стража",
   "main": "main/main.js",
   "scripts": {
@@ -12,7 +12,7 @@
   "build": {
     "appId": "com.nsqcue.updater",
     "productName": "Ночная стража: установщик аддонов",
-    "executableName": "NSQCuE-42",
+    "executableName": "NSQCuE-50",
     "icon": "assets/icon.png",
     "asar": true,
     "files": [
@@ -58,6 +58,10 @@
         {
           "from": "chat-overlay.exe",
           "to": "chat-overlay.exe"
+        },
+        {
+          "from": "native/ts-sidecar/ts-sidecar.exe",
+          "to": "ts-sidecar.exe"
         }
       ]
     },
@@ -82,6 +86,10 @@
         {
           "from": "global_mouse_hook",
           "to": "global-mouse-hook"
+        },
+        {
+          "from": "native/ts-sidecar/ts-sidecar-linux",
+          "to": "ts-sidecar-linux"
         }
       ]
     }
@@ -94,5 +102,8 @@
   "devDependencies": {
     "electron": "^22.3.27",
     "electron-builder": "^24.13.3"
+  },
+  "allowScripts": {
+    "electron@22.3.27": true
   }
 }

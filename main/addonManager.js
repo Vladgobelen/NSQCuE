@@ -14,7 +14,7 @@ const logger = setupLogging();
 // ─────────────────────────────────────────────────────────────
 const CONFIG_URLS = [
   'https://gitlab.com/Vladgobelen/NSQCu/-/raw/main/addons.json',
-  'https://ns.fiber-gate.ru/addons/addons.json',
+  'http://100.126.188.12:38593/addons/addons.json',
   'https://raw.githubusercontent.com/Vladgobelen/NSQCu/refs/heads/main/addons.json',
   'https://gitlab.com/Vladgobelen/nsqcmap/-/raw/main/addons.json',
 ];

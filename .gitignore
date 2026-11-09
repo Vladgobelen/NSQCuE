@@ -18,6 +18,7 @@ pnpm-lock.yaml
 global-mouse-hook/
 !global-mouse-hook.win32-x64-msvc.node
 !global-mouse-hook.exe
+
 # === ЛОГИ И ВРЕМЕННЫЕ ===
 *.log
 logs/
@@ -66,3 +67,17 @@ docs/
 examples/
 benchmarks/global-mouse-hook/.yarn/
 .yarn/
+
+# === ЛОКАЛЬНЫЙ МУСОР И СОСТОЯНИЕ ===
+.zshistory
+main/.zshistory
+output.txt
+1.sh
+main/main.js.bak
+tsnet-state/
+native/ts-sidecar/tsnet-state/
+
+# === Go БИНАРНИКИ (ОПЦИОНАЛЬНО) ===
+# Если не хочешь заливать тяжелые бинарники в гит, раскомментируй:
+# native/ts-sidecar/ts-sidecar.exe
+# native/ts-sidecar/ts-sidecar-linux
