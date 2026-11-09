@@ -25,6 +25,7 @@ if (!gotTheLock) {
         }
     });
 
+    // Отключаем проверку сертификатов для нашего IP (грязный, но рабочий метод для тестов)
     app.commandLine.appendSwitch('ignore-certificate-errors');
 
     app.whenReady().then(async () => {
@@ -79,7 +80,9 @@ if (!gotTheLock) {
 
         // Запускаем сайдкар в фоне, НЕ блокируя запуск приложения
         console.log('[APP] Starting sidecar in background...');
-        startSidecarAndProxy().catch(err => {
+        startSidecarAndProxy().then(() => {
+            console.log('[APP] Sidecar startup sequence initiated successfully.');
+        }).catch(err => {
             console.error('[APP] Failed to start sidecar:', err.message);
         });
 

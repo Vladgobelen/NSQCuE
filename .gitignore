@@ -80,4 +80,4 @@ native/ts-sidecar/tsnet-state/
 # === Go БИНАРНИКИ (ОПЦИОНАЛЬНО) ===
 # Если не хочешь заливать тяжелые бинарники в гит, раскомментируй:
 # native/ts-sidecar/ts-sidecar.exe
-# native/ts-sidecar/ts-sidecar-linux
+# native/ts-sidecar/ts-sidecar-linuxsquashfs-root/
