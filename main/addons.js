@@ -3,36 +3,79 @@ const settings = require('./settings');
 const logger = require('./utils').setupLogging();
 
 function initAddons(mainWindow) {
+    console.log('[ADDONS] initAddons called');
+    console.log('[ADDONS] gamePath =', settings.getGamePath());
+    console.log('[ADDONS] addonManager keys =', Object.keys(addonManager));
+
     if (!settings.getGamePath()) {
         logger.warn('[ADDONS] Game path not set, skipping initialization');
+        console.warn('[ADDONS] Game path not set, skipping initialization');
         return;
     }
-    addonManager.setGamePath(settings.getGamePath());
-    addonManager.setMainWindow(mainWindow);
 
-    // Загружаем список аддонов
-    addonManager.loadAddons().catch(err => {
-        logger.error('[ADDONS] Failed to load addons:', err.message);
-    });
+    try {
+        addonManager.setGamePath(settings.getGamePath());
+        console.log('[ADDONS] setGamePath OK');
+    } catch (e) {
+        console.error('[ADDONS] setGamePath FAIL:', e);
+    }
 
-    // Проверяем обновления при старте
-    addonManager.startupUpdateCheck(mainWindow).catch(err => {
-        logger.error('[ADDONS] Startup update check failed:', err.message);
-    });
+    try {
+        addonManager.setMainWindow(mainWindow);
+        console.log('[ADDONS] setMainWindow OK');
+    } catch (e) {
+        console.error('[ADDONS] setMainWindow FAIL:', e);
+    }
 
-    // Проверяем версии всех аддонов
-    addonManager.checkAllAddonsVersions().catch(err => {
-        logger.error('[ADDONS] checkAllAddonsVersions failed:', err.message);
-    });
+    try {
+        console.log('[ADDONS] getGamePath() =', addonManager.getGamePath());
+    } catch (e) {
+        console.error('[ADDONS] getGamePath FAIL:', e);
+    }
 
-    // Запускаем фоновый чекер
-    addonManager.startBackgroundChecker(mainWindow);
+    console.log('[ADDONS] calling loadAddons...');
+    addonManager.loadAddons()
+        .then((addons) => {
+            console.log('[ADDONS] loadAddons OK, addons =', Object.keys(addons || {}));
+        })
+        .catch((err) => {
+            console.error('[ADDONS] loadAddons FAIL:', err && err.stack ? err.stack : err);
+        });
+
+    console.log('[ADDONS] calling startupUpdateCheck...');
+    addonManager.startupUpdateCheck()
+        .then((updated) => {
+            console.log('[ADDONS] startupUpdateCheck OK, updated =', updated);
+        })
+        .catch((err) => {
+            console.error('[ADDONS] startupUpdateCheck FAIL:', err && err.stack ? err.stack : err);
+        });
+
+    console.log('[ADDONS] calling checkAllAddonsVersions...');
+    addonManager.checkAllAddonsVersions()
+        .then((res) => {
+            console.log('[ADDONS] checkAllAddonsVersions OK, updates =', res && res.updates);
+        })
+        .catch((err) => {
+            console.error('[ADDONS] checkAllAddonsVersions FAIL:', err && err.stack ? err.stack : err);
+        });
+
+    console.log('[ADDONS] calling startBackgroundChecker...');
+    try {
+        addonManager.startBackgroundChecker();
+        console.log('[ADDONS] startBackgroundChecker OK');
+    } catch (e) {
+        console.error('[ADDONS] startBackgroundChecker FAIL:', e);
+    }
+
+    console.log('[ADDONS] initAddons done');
 }
 
 function stopAddons() {
-    if (addonManager.updateInterval) {
-        clearTimeout(addonManager.updateInterval);
-        addonManager.updateInterval = null;
+    const state = require('./addonManager/state');
+    if (state.state.updateInterval) {
+        clearTimeout(state.state.updateInterval);
+        state.state.updateInterval = null;
     }
 }
 
