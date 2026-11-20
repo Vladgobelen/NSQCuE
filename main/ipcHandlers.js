@@ -8,7 +8,7 @@ const soundsManager = require('./soundsManager');
 
 const { getMainWindow, getOverlayWindow, createOverlayWindow, stopOverlay } = require('./window');
 const { getTray, showCustomNotification, updateTrayBadge, closeNotificationWindow } = require('./tray');
-const { getWebviewWebContents, findSoundFile, playSoundSilent, sendToOverlay, sendToWebClient } = require('./webview');
+const { getWebviewWebContents, findSoundFile, playSoundSilent, sendToOverlay, sendToWebClient, getSoundsMap } = require('./webview');
 
 const SOUNDS_DIR = path.join(app.getPath('userData'), 'sounds');
 const ACCOUNTS_FILE = path.join(app.getPath('userData'), 'accounts.json');
@@ -151,7 +151,63 @@ function registerIpcHandlers() {
     ipcMain.handle('get-ptt-hotkey', async () => currentPTTHotkeyCodes);
     ipcMain.handle('get-platform', async () => process.platform);
 
+    ipcMain.handle('register-ptt-hotkey', async (event, hotkey) => {
+        try {
+            logger.info('[IPC] register-ptt-hotkey:', JSON.stringify(hotkey));
+            return { success: true, hotkey };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    });
+
     // ── Webview / Session ───────────────────────────────────
+    // ✅ Проксирует sendToWebClient из рендерера в webview.
+    //    renderer → preload → ipcMain.handle('send-to-web-client') → webview.
+    //    Если payload — строка (чат), идёт через webview.sendToWebClient.
+    //    Иначе (electron-config, electron-ready и т.п.) — через CustomEvent.
+    ipcMain.handle('send-to-web-client', async (event, channel, payload) => {
+        try {
+            const wc = getWebviewWebContents();
+            if (!wc || wc.isDestroyed()) return false;
+
+            if (channel === 'chat' || typeof payload === 'string') {
+                sendToWebClient(typeof payload === 'string' ? payload : String(channel));
+                return true;
+            }
+
+            const code = `
+                (function() {
+                    window.dispatchEvent(new CustomEvent('electron-message', {
+                        detail: ${JSON.stringify({ channel, payload })}
+                    }));
+                })();
+            `;
+            await wc.executeJavaScript(code);
+            return true;
+        } catch (e) {
+            logger.error('[IPC] send-to-web-client error:', e.message);
+            return false;
+        }
+    });
+
+    // ✅ Прокидывает состояние микрофона из рендерера в webview.
+    ipcMain.on('send-mic-state', (event, state) => {
+        try {
+            const wc = getWebviewWebContents();
+            if (wc && !wc.isDestroyed()) {
+                wc.executeJavaScript(`
+                    (function() {
+                        window.dispatchEvent(new CustomEvent('electron-mic-state', {
+                            detail: ${JSON.stringify(state)}
+                        }));
+                    })();
+                `).catch(() => {});
+            }
+        } catch (e) {
+            logger.error('[IPC] send-mic-state error:', e.message);
+        }
+    });
+
     ipcMain.handle('clear-session-cache', async (event, partition) => {
         const { session } = require('electron');
         const sess = session.fromPartition(partition);
@@ -238,9 +294,6 @@ function registerIpcHandlers() {
 
     ipcMain.handle('get-sounds-status', async () => {
         const status = {};
-        const webviewWebContents = getWebviewWebContents();
-        // Здесь можно использовать getSoundsMap из webview.js, но для простоты дублируем логику
-        const { getSoundsMap } = require('./webview');
         const soundMap = getSoundsMap();
         for (const [soundType, fileName] of Object.entries(soundMap)) {
             const soundPath = path.join(SOUNDS_DIR, fileName);
@@ -343,7 +396,6 @@ module.exports = {
     registerIpcHandlers,
     loadAccountsFromStorage,
     saveAccountsToStorage,
-    // Экспортируем для доступа из main.js (хоткеи)
     getPTTState: () => ({ currentPTTHotkeyCodes, captureMode, pttActive }),
     setPTTCaptureMode: (val) => { captureMode = val; },
     setPTTActive: (val) => { pttActive = val; },

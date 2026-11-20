@@ -15,14 +15,17 @@ async function loadAddons() {
     try {
       const config = await fetchConfigWithFallback();
       const gamePath = state.getGamePath();
-      const newNames = new Set(Object.keys(config.addons));
+      const configNames = Object.keys(config.addons);
 
-      for (const name of Object.keys(state.state.addons)) {
-        if (!newNames.has(name)) delete state.state.addons[name];
-      }
+      // Пересобираем объект аддонов целиком в порядке ключей из addons.json.
+      // Это гарантирует, что порядок в state.addons совпадает с порядком
+      // в конфиге при ЛЮБОМ количестве вызовов loadAddons (а не только первом).
+      const rebuilt = {};
 
-      for (const [name, cfg] of Object.entries(config.addons)) {
+      for (const name of configNames) {
+        const cfg = config.addons[name];
         const built = buildAddonFromConfig(name, cfg);
+
         built.installed = checkInstalled(
           name,
           cfg.target_path || '',
@@ -31,29 +34,23 @@ async function loadAddons() {
         );
         built.needs_update = computeNeedsUpdate(name, cfg);
 
+        // Сохраняем рантайм-флаги уже существующего аддона,
+        // чтобы не сбросить идущую установку/обновление.
         const existing = state.state.addons[name];
         if (existing) {
-          Object.assign(existing, {
-            description: built.description,
-            installed: built.installed,
-            link: built.link,
-            links: built.links,
-            target_path: built.target_path,
-            is_zip: built.is_zip,
-            wrap_in_folder: built.wrap_in_folder,
-            version: built.version,
-            local_version: built.local_version,
-            needs_update: built.needs_update,
-          });
-        } else {
-          state.state.addons[name] = built;
+          built.being_processed = !!existing.being_processed;
+          built.updating = !!existing.updating;
         }
+
+        rebuilt[name] = built;
       }
 
+      state.state.addons = rebuilt;
+      state.state.addonOrder = configNames;
+
       logger.info(
-        `[LOAD_ADDONS] Загружено аддонов: ${
-          Object.keys(state.state.addons).length
-        }`
+        `[LOAD_ADDONS] Загружено аддонов: ${configNames.length} ` +
+        `(порядок синхронизирован с конфигом)`
       );
       return state.state.addons;
     } catch (err) {

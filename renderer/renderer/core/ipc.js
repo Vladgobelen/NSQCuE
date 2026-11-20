@@ -1,0 +1,43 @@
+// Тонкая обёртка над window.electronAPI. Один метод — один вызов.
+export const ipc = {
+  loadAddons: () => window.electronAPI.loadAddons(),
+  toggleAddon: (name, install) => window.electronAPI.toggleAddon(name, install),
+  checkGame: () => window.electronAPI.checkGame(),
+  launchGame: () => window.electronAPI.launchGame(),
+  openLogsFolder: () => window.electronAPI.openLogsFolder(),
+  changeGamePath: () => window.electronAPI.changeGamePath(),
+  getPlatform: () => window.electronAPI.getPlatform(),
+  sendToWebClient: (channel, payload) => window.electronAPI.sendToWebClient(channel, payload),
+  loadCredentials: () => window.electronAPI.loadCredentials(),
+  saveCredentials: (u, p) => window.electronAPI.saveCredentials(u, p),
+  showNotification: (title, body) => window.electronAPI.showNotification(title, body),
+  updateTrayBadge: (count) => window.electronAPI.updateTrayBadge(count),
+  sendMessageToOverlay: (text) => window.electronAPI.sendMessageToOverlay(text),
+  copyToClipboard: (text) => window.electronAPI.copyToClipboard(text),
+
+  clearWebviewCache: () => window.electronAPI.clearWebviewCache(),
+  fetchSoundsConfig: () => window.electronAPI.fetchSoundsConfig(),
+  downloadSoundsSection: (name) => window.electronAPI.downloadSoundsSection(name),
+  openSoundsFolder: () => window.electronAPI.openSoundsFolder(),
+
+  getPTTHotkey: () => window.electronAPI.getPTTHotkey(),
+  setPTTHotkey: (codes) => window.electronAPI.setPTTHotkey(codes),
+  startKeyCapture: () => window.electronAPI.startKeyCapture(),
+  stopKeyCapture: () => window.electronAPI.stopKeyCapture(),
+
+  // События
+  onConfigSourceStatus: (cb) => window.electronAPI.onConfigSourceStatus(cb),
+  onDownloadAttempt: (cb) => window.electronAPI.onDownloadAttempt(cb),
+  onAddonsUpdateStatus: (cb) => window.electronAPI.onAddonsUpdateStatus(cb),
+  onBlockLaunchGame: (cb) => window.electronAPI.onBlockLaunchGame(cb),
+  onProgress: (cb) => window.electronAPI.onProgress(cb),
+  onOperationFinished: (cb) => window.electronAPI.onOperationFinished(cb),
+  onAddonUpdateAvailable: (cb) => window.electronAPI.onAddonUpdateAvailable(cb),
+  onError: (cb) => window.electronAPI.onError(cb),
+  onKeyCaptured: (cb) => window.electronAPI.onKeyCaptured(cb),
+  onPTTPressed: (cb) => window.electronAPI.onPTTPressed(cb),
+  onPTTReleased: (cb) => window.electronAPI.onPTTReleased(cb),
+  onOverlayInput: (cb) => window.electronAPI.onOverlayInput(cb),
+  onSoundsDownloadProgress: (cb) => window.electronAPI.onSoundsDownloadProgress(cb),
+  onWebClientEvent: (channel, cb) => window.electronAPI.onWebClientEvent(channel, cb),
+};

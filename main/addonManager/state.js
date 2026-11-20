@@ -1,5 +1,6 @@
 const state = {
   addons: {},
+  addonOrder: [],          // ← порядок аддонов строго как в addons.json
   gamePath: null,
   mainWindow: null,
 

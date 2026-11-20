@@ -10,6 +10,7 @@ const { createTray, updateTrayMenu } = require('./tray');
 const { initAddons, stopAddons } = require('./addons');
 const { registerIpcHandlers } = require('./ipcHandlers');
 const settings = require('./settings');
+const soundsManager = require('./soundsManager');
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -25,8 +26,25 @@ if (!gotTheLock) {
         }
     });
 
-    // Отключаем проверку сертификатов для нашего IP
+    // Отключаем проверку сертификатов для нашего IP.
+    // appendSwitch покрывает main-процесс, но НЕ покрывает
+    // cert_verify_proc_builtin в webview/рендерере — для них
+    // нужен ещё app.on('certificate-error') (см. ниже) и
+    // setCertificateVerifyProc на persist:ns в window.js.
     app.commandLine.appendSwitch('ignore-certificate-errors');
+
+    // Разрешаем самоподписанный сертификат для локального IP.
+    // Без этого webview грузит interstitial "Your connection is not private",
+    // voiceClient не инициализируется, звуки не играют.
+    app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+        if (url.startsWith('https://100.126.188.12') || url.startsWith('wss://100.126.188.12')) {
+            console.log('[CERT] Allowing self-signed for', url);
+            event.preventDefault();
+            callback(true);
+        } else {
+            callback(false);
+        }
+    });
 
     app.whenReady().then(async () => {
         // Убираем стандартное меню (Файл, Правка и т.д.) на Linux
@@ -35,7 +53,7 @@ if (!gotTheLock) {
         console.log('[APP] app.whenReady() started');
 
         fs.ensureDirSync(path.join(app.getPath('userData'), 'logs'));
-        
+
         console.log('[APP] Creating tray...');
         createTray();
 
@@ -74,10 +92,25 @@ if (!gotTheLock) {
         createWindow();
         const mainWindow = getMainWindow();
 
+        // ✅ DevTools для отладки рендерера.
+        //    Открывается в отдельном окне, чтобы не перекрывать UI.
+        //    В продакшене можно обернуть в if (!app.isPackaged) { ... }
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            console.log('[APP] DevTools opened (detached)');
+        }
+
         if (mainWindow) {
             console.log('[APP] Initializing addons...');
             initAddons(mainWindow);
         }
+
+        // ✅ Автозагрузка базовых звуков (в новом main.js этого вызова не было).
+        //    Скачивает baseSounds в userData/sounds, чтобы findSoundFile
+        //    находил файлы до того, как пользователь импортирует свои.
+        console.log('[APP] Auto-downloading base sounds...');
+        soundsManager.autoDownloadBaseSounds().catch((err) => {
+            logger.error('[SOUNDS] Auto-download failed:', err.message);
+        });
 
         console.log('[APP] Initialization complete');
 
