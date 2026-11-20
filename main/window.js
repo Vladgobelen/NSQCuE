@@ -1,8 +1,6 @@
 const { BrowserWindow, session, dialog, app } = require('electron');
 const path = require('path');
-const fs = require('fs-extra');
 const { setupWebviewHandlers } = require('./webview');
-const settings = require('./settings');
 const logger = require('./utils').setupLogging();
 
 let mainWindow = null;
@@ -66,12 +64,34 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
+  // Закрытие окна: свернуть (оверлей/трей) или выйти полностью.
   mainWindow.on('close', (event) => {
-    if (!app.isQuitting) {
-      event.preventDefault();
+    if (app.isQuitting) return; // выход через трей/меню — без вопросов
+
+    event.preventDefault();
+
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning',
+      title: 'Закрытие',
+      message: 'Что сделать с приложением?',
+      detail:
+        'Свернуть — окно скроется, но оверлей, звуки и уведомления продолжат работать.\n' +
+        'Закрыть — полный выход из приложения.',
+      buttons: ['Свернуть в оверлей', 'Закрыть приложение', 'Отмена'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    });
+
+    if (choice === 0) {
       mainWindow.hide();
+    } else if (choice === 1) {
+      app.isQuitting = true;
+      // destroy() не вызывает close повторно — выход не может быть отменён.
+      mainWindow.destroy();
+      app.quit();
     }
-    return false;
+    // choice === 2 (Отмена / Esc) — окно остаётся
   });
 
   mainWindow.on('closed', () => {
@@ -92,11 +112,9 @@ function createWindow() {
   });
 }
 
-// Окно оверлея (чат поверх игры).
-// DevTools автоматически НЕ открываем — это было регрессией новой версии.
+// Окно оверлея (чат поверх игры). DevTools автоматически НЕ открываем.
 function createOverlayWindow() {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
-    console.log('[OVERLAY_WIN] окно уже существует → show');
     overlayWindow.show();
     return;
   }
@@ -121,16 +139,14 @@ function createOverlayWindow() {
 
   overlayWindow.loadFile(path.join(__dirname, '../renderer/overlay.html'));
 
-  // Для глубокой отладки самого оверлея раскомментируйте:
+  // Для отладки самого оверлея раскомментируйте:
   // overlayWindow.webContents.openDevTools({ mode: 'detach' });
 
   overlayWindow.webContents.on('did-finish-load', () => {
-    console.log('[OVERLAY_WIN] overlay.html загружен, оверлей готов к приёму сообщений');
-    logger.info('[OVERLAY_WIN] overlay.html loaded');
+    console.log('[OVERLAY_WIN] overlay.html загружен');
   });
 
   overlayWindow.webContents.on('did-fail-load', (event, code, desc) => {
-    console.error(`[OVERLAY_WIN] ошибка загрузки overlay.html: ${code} ${desc}`);
     logger.error(`[OVERLAY_WIN] load failed: ${code} ${desc}`);
   });
 
