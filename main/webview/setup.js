@@ -13,48 +13,55 @@ const { logSoundsDir } = require('./sounds');
 const registered = new WeakSet();
 
 function setupWebviewHandlers(webContents) {
-  if (registered.has(webContents)) {
-    console.log('[WEBVIEW] обработчики уже зарегистрированы — пропуск');
-    return;
-  }
-  registered.add(webContents);
-
-  console.log('[WEBVIEW] setupWebviewHandlers: webview подключён');
-  logger.info('[WEBVIEW] handlers attached');
-
-  setWebviewWebContents(webContents);
-  logSoundsDir();
-
-  webContents.on('will-navigate', (e, url) => {
-    if (isExternalUrl(url)) {
-      e.preventDefault();
-      shell.openExternal(url);
+    if (registered.has(webContents)) {
+        console.log('[WEBVIEW] обработчики уже зарегистрированы — пропуск');
+        return;
     }
-  });
+    registered.add(webContents);
+    console.log('[WEBVIEW] setupWebviewHandlers: webview подключён');
+    logger.info('[WEBVIEW] handlers attached');
+    setWebviewWebContents(webContents);
+    logSoundsDir();
 
-  webContents.setWindowOpenHandler(({ url }) => {
-    if (isExternalUrl(url)) shell.openExternal(url);
-    return { action: 'deny' };
-  });
+    // ── Разрешаем полноэкранный режим изнутри webview ──
+    webContents.on('enter-html-full-screen', (event) => {
+        console.log('[WEBVIEW] enter-html-full-screen — полноэкранный режим разрешён');
+        // НЕ вызываем event.preventDefault() — это разрешает вход в fullscreen
+    });
+    webContents.on('leave-html-full-screen', () => {
+        console.log('[WEBVIEW] leave-html-full-screen — выход из полноэкранного режима');
+    });
 
-  webContents.on('did-fail-load', (e, code, desc) => {
-    console.error(`[WEBVIEW] did-fail-load: ${code} ${desc}`);
-    logger.error(`[WEBVIEW] Failed: ${code} - ${desc}`);
-  });
+    webContents.on('will-navigate', (e, url) => {
+        if (isExternalUrl(url)) {
+            e.preventDefault();
+            shell.openExternal(url);
+        }
+    });
 
-  webContents.on('console-message', (event, level, message) => {
-    handleConsoleMessage(message);
-  });
+    webContents.setWindowOpenHandler(({ url }) => {
+        if (isExternalUrl(url)) shell.openExternal(url);
+        return { action: 'deny' };
+    });
 
-  webContents.on('ipc-message', (event, channel, ...args) => {
-    handleIpcMessage(channel, args);
-  });
+    webContents.on('did-fail-load', (e, code, desc) => {
+        console.error(`[WEBVIEW] did-fail-load: ${code} ${desc}`);
+        logger.error(`[WEBVIEW] Failed: ${code} - ${desc}`);
+    });
 
-  webContents.on('did-finish-load', () => {
-    console.log('[WEBVIEW] did-finish-load → инъекция');
-    logger.info('[WEBVIEW] did-finish-load, injecting');
-    injectIntoWebview(webContents);
-  });
+    webContents.on('console-message', (event, level, message) => {
+        handleConsoleMessage(message);
+    });
+
+    webContents.on('ipc-message', (event, channel, ...args) => {
+        handleIpcMessage(channel, args);
+    });
+
+    webContents.on('did-finish-load', () => {
+        console.log('[WEBVIEW] did-finish-load → инъекция');
+        logger.info('[WEBVIEW] did-finish-load, injecting');
+        injectIntoWebview(webContents);
+    });
 }
 
 module.exports = { setupWebviewHandlers };
