@@ -1,6 +1,10 @@
 const path = require('path');
 const { AUTO_UPDATE_ADDONS } = require('./constants');
-const { getLocalVersion, getRemoteVersion } = require('./versions');
+const {
+  getLocalVersion,
+  getRemoteVersion,
+  readLocalVersionFile,
+} = require('./versions');
 
 function buildAddonFromConfig(name, cfg) {
   const description = cfg.description || '';
@@ -12,8 +16,8 @@ function buildAddonFromConfig(name, cfg) {
   } else if (typeof cfg.link === 'string' && cfg.link.trim()) {
     links = [cfg.link];
   }
-
   const firstLink = links[0] || '';
+
   const isZip =
     cfg.is_zip !== undefined
       ? cfg.is_zip
@@ -24,8 +28,13 @@ function buildAddonFromConfig(name, cfg) {
       ? !!cfg.wrap_in_folder
       : isZip && /(^|\/)AddOns\/?$/i.test(targetPath.replace(/\\/g, '/'));
 
+  const isAuto = !!AUTO_UPDATE_ADDONS[name];
   const remoteVersion = getRemoteVersion(cfg);
-  const localVersion = getLocalVersion(name);
+
+  // У автообновляемых аддонов реальная установленная версия лежит в файле
+  // игры, а не в зашитой таблице. Без этого на карточке при старте
+  // показывать нечего.
+  const localVersion = isAuto ? readLocalVersionFile(name) : getLocalVersion(name);
 
   return {
     name,
@@ -41,19 +50,17 @@ function buildAddonFromConfig(name, cfg) {
     wrap_in_folder: wrapInFolder,
     version: remoteVersion,
     local_version: localVersion,
+    auto_update: isAuto,
   };
 }
 
 function computeNeedsUpdate(name, cfg) {
   // Автообновляемые аддоны не участвуют в общем сравнении версий
   if (AUTO_UPDATE_ADDONS[name]) return false;
-
   const local = getLocalVersion(name);
   const remote = getRemoteVersion(cfg);
-
   if (remote === 0) return false;
   if (local === 0) return false;
-
   return remote > local;
 }
 

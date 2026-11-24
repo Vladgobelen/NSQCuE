@@ -610,6 +610,7 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  padding-right: 34px;
   position: relative;
   z-index: 2;
 }
@@ -618,6 +619,10 @@ body {
   font-weight: bold;
   font-size: 14px;
   color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .update-label {
@@ -628,6 +633,7 @@ body {
   border-radius: 3px;
   font-size: 12px;
   margin-right: 8px;
+  flex-shrink: 0;
 }
 
 .addon-description {
@@ -774,50 +780,50 @@ body {
 }
 
 .addons-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 30px 10px;
-    color: var(--text-secondary);
-    font-size: 13px;
-    text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
 }
 
 .addons-loading-spinner {
-    width: 28px;
-    height: 28px;
-    border: 3px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: addons-spin 0.9s linear infinite;
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: addons-spin 0.9s linear infinite;
 }
 
 @keyframes addons-spin {
-    to { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
 .addons-loading-source {
-    font-family: 'Consolas', 'Courier New', monospace;
-    font-size: 12px;
-    color: var(--text-secondary);
-    min-height: 16px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-height: 16px;
 }
 
 .addons-retry-btn {
-    padding: 6px 16px;
-    border-radius: 5px;
-    border: 1px solid var(--accent);
-    background: var(--accent);
-    color: #fff;
-    cursor: pointer;
-    font-size: 13px;
-    transition: background 0.2s;
+  padding: 6px 16px;
+  border-radius: 5px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
 }
 
 .addons-retry-btn:hover {
-    background: #1a6bb5;
+  background: #1a6bb5;
 }
 
 /* ✅ Счётчик попыток скачивания */
@@ -830,10 +836,77 @@ body {
   font-size: 11px;
   margin-right: 8px;
   white-space: nowrap;
+  flex-shrink: 0;
   animation: attempt-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes attempt-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
+}
+
+/* ✅ Обновление аддона: подсветка карточки + "было >> стало" */
+.addon-card.updating {
+  background-color: #332b1a;
+  box-shadow: 0 0 0 2px var(--warning), 0 0 14px rgba(243, 156, 18, 0.35);
+  animation: addon-update-glow 1.6s ease-in-out infinite;
+}
+
+.addon-card.updating:hover {
+  background-color: #3a301c;
+  transform: none;
+  box-shadow: 0 0 0 2px var(--warning), 0 0 18px rgba(243, 156, 18, 0.5);
+}
+
+.addon-card.updating .addon-name {
+  color: var(--warning);
+}
+
+@keyframes addon-update-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 2px var(--warning), 0 0 10px rgba(243, 156, 18, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--warning), 0 0 20px rgba(243, 156, 18, 0.6);
+  }
+}
+
+/* ✅ Обновление завершено: зелёная подсветка держится до наведения мыши */
+.addon-card.updated {
+  background-color: #1e2b1a;
+  box-shadow: 0 0 0 2px var(--success), 0 0 14px rgba(46, 204, 113, 0.35);
+}
+
+.addon-card.updated .addon-name {
+  color: var(--success);
+}
+
+/* ✅ Версия видна всегда: базовый вид — нейтральный (текущая версия) */
+.version-transition-label {
+  color: var(--text-secondary);
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  margin-right: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Обновление идёт: оранжевый, пульсирует */
+.version-transition-label.updating {
+  color: var(--warning);
+  background-color: rgba(243, 156, 18, 0.12);
+  border-color: rgba(243, 156, 18, 0.4);
+  animation: attempt-pulse 1.5s ease-in-out infinite;
+}
+
+/* Обновление завершено: зелёный, без пульсации, до наведения мыши */
+.version-transition-label.done {
+  color: var(--success);
+  background-color: rgba(46, 204, 113, 0.12);
+  border-color: rgba(46, 204, 113, 0.4);
+  animation: none;
 }

@@ -1,6 +1,6 @@
 {
   "name": "NSQCuE",
-  "version": "57.0.0",
+  "version": "58.0.0",
   "description": "Установщик аддонов Ночная Стража",
   "main": "main/main.js",
   "scripts": {
@@ -12,7 +12,7 @@
   "build": {
     "appId": "com.nsqcue.updater",
     "productName": "NSQCuE",
-    "executableName": "NSQCuE-57",
+    "executableName": "NSQCuE-58",
     "icon": "assets/icon.png",
     "asar": true,
     "files": [

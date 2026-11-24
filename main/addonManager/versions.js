@@ -1,5 +1,13 @@
+const fs = require('fs-extra');
+const path = require('path');
+const { app } = require('electron');
+const state = require('./state');
+const { AUTO_UPDATE_ADDONS } = require('./constants');
+
 // ─────────────────────────────────────────────────────────────
-//  Зашитые версии обычных аддонов (не автообновляемых)
+//  Базовые (зашитые) версии обычных аддонов.
+//  Это только стартовое значение: реально установленная версия
+//  хранится в userData/addonVersions.json и перекрывает таблицу.
 // ─────────────────────────────────────────────────────────────
 const LOCAL_ADDON_VERSIONS = {
   'WDM': 4,
@@ -43,7 +51,63 @@ const LOCAL_ADDON_VERSIONS = {
   'NSQC3': 1,
 };
 
+// ─────────────────────────────────────────────────────────────
+//  Реально установленные версии (персистентно)
+// ─────────────────────────────────────────────────────────────
+const installedVersions = {};
+let installedVersionsLoaded = false;
+
+function installedVersionsFile() {
+  return path.join(app.getPath('userData'), 'addonVersions.json');
+}
+
+function loadInstalledVersions() {
+  if (installedVersionsLoaded) return;
+  installedVersionsLoaded = true;
+  try {
+    const data = fs.readJsonSync(installedVersionsFile());
+    if (data && typeof data === 'object') {
+      for (const [name, v] of Object.entries(data)) {
+        if (typeof v === 'number' && isFinite(v) && v > 0) {
+          installedVersions[name] = v;
+        }
+      }
+    }
+  } catch {
+    // файла нет или он битый — работаем на базовой таблице
+  }
+}
+
+function saveInstalledVersions() {
+  try {
+    fs.outputJsonSync(installedVersionsFile(), installedVersions, { spaces: 2 });
+  } catch (e) {
+    console.warn('[VERSIONS] не удалось сохранить установленные версии:', e.message);
+  }
+}
+
+function setLocalVersion(name, version) {
+  if (!name) return;
+  if (typeof version !== 'number' || !isFinite(version) || version <= 0) return;
+  loadInstalledVersions();
+  installedVersions[name] = version;
+  saveInstalledVersions();
+  console.log(`[VERSIONS] ${name}: установленная версия зафиксирована = ${version}`);
+}
+
+function clearLocalVersion(name) {
+  if (!name) return;
+  loadInstalledVersions();
+  if (installedVersions[name] === undefined) return;
+  delete installedVersions[name];
+  saveInstalledVersions();
+  console.log(`[VERSIONS] ${name}: установленная версия сброшена`);
+}
+
 function getLocalVersion(name) {
+  loadInstalledVersions();
+  const installed = installedVersions[name];
+  if (typeof installed === 'number') return installed;
   const v = LOCAL_ADDON_VERSIONS[name];
   return typeof v === 'number' ? v : 0;
 }
@@ -84,17 +148,27 @@ function parseRayVersion(text) {
   return match[1].trim();
 }
 
+// Универсальный парсер по типу
+function parseVersion(parserType, text) {
+  switch (parserType) {
+    case 'lua-major-minor':
+      return parseVersionLuaMajorMinor(text);
+    case 'ray-string':
+      return parseRayVersion(text);
+    default:
+      throw new Error(`Неизвестный парсер версии: ${parserType}`);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Сравнение версий
 // ─────────────────────────────────────────────────────────────
 
-// NSQC4: равенство major/minor
 function versionsEqualMajorMinor(a, b) {
   if (!a || !b) return false;
   return a.major === b.major && a.minor === b.minor;
 }
 
-// RAY: строгое равенство строк
 function versionsEqualString(a, b) {
   if (a == null || b == null) return false;
   return String(a).trim() === String(b).trim();
@@ -111,22 +185,49 @@ function versionsEqual(compareType, a, b) {
   }
 }
 
-// Универсальный парсер по типу
-function parseVersion(parserType, text) {
-  switch (parserType) {
-    case 'lua-major-minor':
-      return parseVersionLuaMajorMinor(text);
-    case 'ray-string':
-      return parseRayVersion(text);
-    default:
-      throw new Error(`Неизвестный парсер версии: ${parserType}`);
+// ─────────────────────────────────────────────────────────────
+//  Локальная версия автообновляемого аддона — из файла в игре.
+//  Единая точка чтения: используется и autoUpdate, и reinstall.
+// ─────────────────────────────────────────────────────────────
+function readLocalVersionFile(name) {
+  const meta = AUTO_UPDATE_ADDONS[name];
+  if (!meta) return null;
+  try {
+    const gamePath = state.getGamePath();
+    const file = path.join(gamePath, meta.localVersionPath);
+    if (!fs.existsSync(file)) return null;
+    return parseVersion(meta.parser, fs.readFileSync(file, 'utf-8'));
+  } catch {
+    return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Версия для отображения: 4 → "4", {major,minor} → "1.7",
+//  "8.5" → "8.5", нет версии → "?"
+// ─────────────────────────────────────────────────────────────
+function formatVersion(v) {
+  if (v === null || v === undefined) return '?';
+  if (typeof v === 'number') return v > 0 ? String(v) : '?';
+  if (typeof v === 'string') return v.trim() || '?';
+  if (
+    typeof v === 'object' &&
+    typeof v.major === 'number' &&
+    typeof v.minor === 'number'
+  ) {
+    return `${v.major}.${v.minor}`;
+  }
+  return '?';
 }
 
 module.exports = {
   LOCAL_ADDON_VERSIONS,
   getLocalVersion,
+  setLocalVersion,
+  clearLocalVersion,
   getRemoteVersion,
+  readLocalVersionFile,
+  formatVersion,
   parseVersionLuaMajorMinor,
   parseRayVersion,
   parseVersion,

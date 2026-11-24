@@ -36,11 +36,124 @@ const LOCALSTORAGE_HOOK = `
 
 const ELECTRON_API = `
 (function() {
-  // ВАЖНО: свой флаг, отдельный от __nsqcueInjected.
-  // Ранний минимальный inject из renderer (webview-bridge.js, dom-ready)
-  // ставит __nsqcueInjected. Если проверять тот же флаг, этот полный
-  // inject (did-finish-load) пропускался целиком, и наблюдатели
-  // чата/уведомлений никогда не создавались — оверлей был пустым.
+  // ── Мост управления: обёртка ↔ веб-клиент ──────────────
+  // Ставится ВСЕГДА, со своим флагом. Даже если основной inject
+  // уже выполнен, канал управления обязан существовать.
+  if (!window.__nsqcueBridgeInstalled) {
+    window.__nsqcueBridgeInstalled = true;
+    console.log('[INJECT][BRIDGE] installing control bridge');
+
+    function insertIntoChatInput(text) {
+      var input = document.querySelector('textarea.message-input')
+        || document.querySelector('textarea')
+        || document.querySelector('input[type="text"]')
+        || document.querySelector('[contenteditable="true"]');
+      if (!input) {
+        console.warn('[INJECT][CHAT] input field not found');
+        return false;
+      }
+      if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
+        input.value = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        input.textContent = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      var sendBtn = document.querySelector('button.send-btn')
+        || document.querySelector('button[type="submit"]')
+        || document.querySelector('.send-button');
+      if (sendBtn) {
+        sendBtn.click();
+      } else {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+      }
+      console.log('[INJECT][CHAT] inserted and sent:', text);
+      return true;
+    }
+
+    // Приведение микрофона к желаемому состоянию.
+    // Напрямую через voiceClient: handleElectronMessage клиента умеет
+    // только pause/resume уже живого producer и не включает микрофон с нуля.
+    function applyMicDesired(active, attempt) {
+      attempt = attempt || 0;
+      var vc = window.voiceClient;
+      if (!vc || typeof vc.toggleMicrophone !== 'function') {
+        if (attempt < 10) {
+          setTimeout(function() { applyMicDesired(active, attempt + 1); }, 400);
+        } else {
+          console.warn('[INJECT][MIC] voiceClient не готов — команда отброшена');
+        }
+        return;
+      }
+      if (vc._joinRoomInProgress || vc._isMediaInitializing) {
+        if (attempt < 10) {
+          setTimeout(function() { applyMicDesired(active, attempt + 1); }, 400);
+        }
+        return;
+      }
+      var producerAlive = !!(vc.audioProducer && !vc.audioProducer.closed);
+      var isOn = producerAlive && !vc.isMicPaused;
+      console.log('[INJECT][MIC] apply: want=' + active + ', isOn=' + isOn);
+
+      if (typeof active !== 'boolean') {
+        vc.toggleMicrophone();
+      } else if (isOn !== active) {
+        vc.toggleMicrophone();
+      }
+      setTimeout(function() {
+        if (typeof vc.sendMicStateToElectron === 'function') {
+          vc.sendMicStateToElectron();
+        }
+      }, 600);
+    }
+
+    // Хост шлёт CustomEvent('electron-message', { detail: { channel, payload } }).
+    // Клиент слушает window 'message' с { source: 'electron', channel, data }.
+    window.addEventListener('electron-message', function(e) {
+      try {
+        var detail = e.detail || {};
+        console.log('[INJECT][EVENT] electron-message:', detail.channel, detail.payload);
+
+        if (detail.channel === 'chat') {
+          if (typeof detail.payload === 'string') insertIntoChatInput(detail.payload);
+          return;
+        }
+
+        if (detail.channel === 'toggle-mic') {
+          var p = detail.payload || {};
+          applyMicDesired(p.active, 0);
+          return;
+        }
+
+        // Остальное (electron-ready, electron-config, ...) отдаём клиенту
+        // в формате, который читает VoiceChatClient.handleElectronMessage.
+        window.postMessage({
+          source: 'electron',
+          channel: detail.channel,
+          data: detail.payload
+        }, '*');
+      } catch (err) {
+        console.error('[INJECT][EVENT] error:', err);
+      }
+    });
+
+    // Обратный канал mic-state.
+    // Клиент постит в window.parent, а в webview parent === window,
+    // поэтому наружу сообщение не уходит. Пробрасываем в main через console.
+    window.addEventListener('message', function(e) {
+      var d = e.data;
+      if (!d || d.source !== 'webclient') return;
+      if (d.channel === 'mic-state' && d.state) {
+        console.log('ELECTRON_MIC_STATE:' + JSON.stringify(d.state));
+      }
+    });
+
+    window.addEventListener('electron-mic-state', function(e) {
+      console.log('[INJECT][MIC] echo state:', e.detail);
+    });
+  }
+
+  // ── Основной inject ────────────────────────────────────
   if (window.__nsqcueMainInjected) {
     console.log('[INJECT] already injected (main), skip');
     return;
@@ -49,7 +162,6 @@ const ELECTRON_API = `
   console.log('[INJECT] Starting full injection...');
 
   window.ELECTRON_CUSTOM_SOUNDS_ENABLED = true;
-
   window.electronAPI = {
     playSound: function(soundType) {
       console.log('[INJECT][SOUND] playSound:', soundType);
@@ -63,6 +175,7 @@ const ELECTRON_API = `
     },
     updateTrayBadge: function(count) {
       console.log('[INJECT][TRAY] updateTrayBadge:', count);
+      console.log('ELECTRON_TRAY_BADGE:' + count);
       window.postMessage({ type: 'ELECTRON_UPDATE_TRAY_BADGE', count: count, source: 'webview' }, '*');
     },
     saveAccount: function(accountData) {
@@ -164,7 +277,6 @@ const ELECTRON_API = `
       }
     }
   });
-
   window.__notificationObserver.observe(document.body, { childList: true, subtree: true });
   console.log('[INJECT][NOTIF] notificationObserver attached');
 
@@ -228,54 +340,8 @@ const ELECTRON_API = `
       }
     }
   });
-
   window.__chatObserver.observe(document.body, { childList: true, subtree: true });
   console.log('[INJECT][CHAT] chatObserver attached, selectors:', CHAT_SELECTORS.join(', '));
-
-  // ── Обратный канал: оверлей → чат ─────────────────────
-  window.addEventListener('electron-message', function(e) {
-    try {
-      var detail = e.detail || {};
-      console.log('[INJECT][EVENT] electron-message:', detail.channel, detail.payload);
-      if (detail.channel === 'chat' && typeof detail.payload === 'string') {
-        insertIntoChatInput(detail.payload);
-      }
-    } catch (err) {
-      console.error('[INJECT][EVENT] error:', err);
-    }
-  });
-
-  window.addEventListener('electron-mic-state', function(e) {
-    console.log('[INJECT][MIC] state:', e.detail);
-  });
-
-  function insertIntoChatInput(text) {
-    var input = document.querySelector('textarea.message-input')
-      || document.querySelector('textarea')
-      || document.querySelector('input[type="text"]')
-      || document.querySelector('[contenteditable="true"]');
-    if (!input) {
-      console.warn('[INJECT][CHAT] input field not found');
-      return false;
-    }
-    if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
-      input.value = text;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    } else {
-      input.textContent = text;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    var sendBtn = document.querySelector('button.send-btn')
-      || document.querySelector('button[type="submit"]')
-      || document.querySelector('.send-button');
-    if (sendBtn) {
-      sendBtn.click();
-    } else {
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-    }
-    console.log('[INJECT][CHAT] inserted and sent:', text);
-    return true;
-  }
 
   tryHookVoiceClient();
   console.log('[INJECT] Ready!');

@@ -1,9 +1,14 @@
 import { ipc } from '../core/ipc.js';
 import { uiState } from '../core/state.js';
-import { updateAddonAttempt, applyAddonsUpdateStatus, refreshAddonStatus } from './addons.js';
+import {
+  updateAddonAttempt,
+  applyAddonsUpdateStatus,
+  applyAddonUpdateState,
+  refreshAddonStatus,
+  focusAddon,
+} from './addons.js';
 import { updateAddonProgress } from './addon-progress.js';
 import { updateLaunchButtonState } from './game.js';
-import { updateSettingsTooltip } from './ptt.js';
 import { dom } from '../core/dom.js';
 import { showError } from '../core/utils.js';
 
@@ -15,7 +20,9 @@ export function bindMainProcessEvents() {
     if (!sourceEl) return;
     const host = data.url.replace(/^https?:\/\//, '').split('/')[0];
     if (data.state === 'trying') {
-      if (textEl) textEl.textContent = `Поиск списка аддонов (источник ${data.index} из ${data.total})...`;
+      if (textEl) {
+        textEl.textContent = `Поиск списка аддонов (источник ${data.index} из ${data.total})...`;
+      }
       sourceEl.textContent = '⏳ ' + host;
     } else if (data.state === 'failed') {
       sourceEl.textContent = '❌ ' + host;
@@ -27,6 +34,12 @@ export function bindMainProcessEvents() {
   ipc.onDownloadAttempt(updateAddonAttempt);
   ipc.onAddonsUpdateStatus(applyAddonsUpdateStatus);
 
+  // Обновление аддона: подсветка + "прошлая >> текущая"
+  ipc.onAddonUpdateState(applyAddonUpdateState);
+
+  // Клик по всплывающему уведомлению об обновлении
+  ipc.onFocusAddon(focusAddon);
+
   ipc.onBlockLaunchGame((blocked) => {
     uiState.isLaunchBlocked = blocked;
     updateLaunchButtonState();
@@ -34,8 +47,9 @@ export function bindMainProcessEvents() {
 
   ipc.onProgress(updateAddonProgress);
 
-  ipc.onOperationFinished((name, success) => {
-    if (success) setTimeout(() => refreshAddonStatus(name), 500);
+  // Refresh нужен при любом исходе: установленное состояние берём из main.
+  ipc.onOperationFinished((name) => {
+    setTimeout(() => refreshAddonStatus(name), 500);
   });
 
   ipc.onAddonUpdateAvailable((name) => {
@@ -81,7 +95,8 @@ export function bindMainProcessEvents() {
 
   ipc.onSoundsDownloadProgress((progress) => {
     if (dom.soundsPanelContent && dom.soundsPanelContent.querySelector('.sounds-loading')) {
-      dom.soundsPanelContent.innerHTML = `<div class="sounds-loading">Загрузка: ${progress.current}/${progress.total} (${progress.sound})</div>`;
+      dom.soundsPanelContent.innerHTML =
+        `<div class="sounds-loading">Загрузка: ${progress.current}/${progress.total} (${progress.sound})</div>`;
     }
   });
 
@@ -90,7 +105,11 @@ export function bindMainProcessEvents() {
     if (dom.voiceBtn) {
       dom.voiceBtn.classList.toggle('speaking', state && state.speaking);
       dom.voiceBtn.classList.toggle('muted', state && state.muted);
-      dom.voiceBtn.title = (state && state.muted) ? 'Микрофон выключен' : (state && state.speaking) ? 'Говорите...' : 'Микрофон готов';
+      dom.voiceBtn.title = state && state.muted
+        ? 'Микрофон выключен'
+        : state && state.speaking
+          ? 'Говорите...'
+          : 'Микрофон готов';
     }
     if (dom.panelMicBtn) {
       const active = (state && state.active) || (state && state.speaking) || false;
@@ -99,13 +118,13 @@ export function bindMainProcessEvents() {
         dom.panelMicBtn.classList.toggle('active', active);
       }
     }
-    // ipc.sendMicState(state) — если есть в preload
     window.electronAPI?.sendMicState?.(state);
   });
 
   ipc.onWebClientEvent('request-ptt-register', (config) => {
     if (window.electronAPI?.registerPTTHotkey && config?.hotkey) {
-      window.electronAPI.registerPTTHotkey(config.hotkey)
+      window.electronAPI
+        .registerPTTHotkey(config.hotkey)
         .then((result) => ipc.sendToWebClient('ptt-register-result', result))
         .catch(() => {});
     }

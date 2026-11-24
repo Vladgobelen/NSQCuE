@@ -1,12 +1,18 @@
 const axios = require('axios');
-const fs = require('fs-extra');
-const path = require('path');
 const logger = require('./logger');
 const state = require('./state');
-const { sleep } = require('./sleep');
 const { emitBlockLaunch } = require('./events');
-const { AUTO_UPDATE_ADDONS, NET_TIMEOUT_VERSION, POST_INSTALL_DELAY } = require('./constants');
-const { parseVersion, versionsEqual } = require('./versions');
+const {
+  AUTO_UPDATE_ADDONS,
+  NET_TIMEOUT_VERSION,
+  POST_INSTALL_DELAY,
+} = require('./constants');
+const {
+  parseVersion,
+  versionsEqual,
+  readLocalVersionFile,
+  formatVersion,
+} = require('./versions');
 const { forceReinstall } = require('./reinstall');
 
 // ─────────────────────────────────────────────────────────────
@@ -44,26 +50,16 @@ async function fetchRemoteVersion(addonName) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Чтение локальной версии
+//  Чтение локальной версии (делегат в versions.js)
 // ─────────────────────────────────────────────────────────────
 function readLocalVersion(addonName) {
   const meta = AUTO_UPDATE_ADDONS[addonName];
   if (!meta) return null;
-
-  try {
-    const gamePath = state.getGamePath();
-    const versFile = path.join(gamePath, meta.localVersionPath);
-
-    if (!fs.existsSync(versFile)) return null;
-
-    const text = fs.readFileSync(versFile, 'utf-8');
-    return parseVersion(meta.parser, text);
-  } catch (e) {
-    logger.warn(
-      `[VERSION] ${addonName}: локальная версия не прочитана: ${e.message}`
-    );
-    return null;
+  const version = readLocalVersionFile(addonName);
+  if (version === null) {
+    logger.info(`[VERSION] ${addonName}: локальный файл версии не прочитан`);
   }
+  return version;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -86,18 +82,24 @@ async function checkOne(addonName) {
     return false;
   }
 
-  logger.info(`[AUTO_UPDATE] ${addonName}: локальная версия есть`);
-
   const remote = await fetchRemoteVersion(addonName);
-  logger.info(`[AUTO_UPDATE] ${addonName}: удалённая версия получена`);
+  logger.info(
+    `[AUTO_UPDATE] ${addonName}: local=${formatVersion(local)}, remote=${formatVersion(remote)}`
+  );
 
   if (!isUpdateNeeded(addonName, local, remote)) {
     logger.info(`[AUTO_UPDATE] ${addonName}: версия актуальна`);
     return false;
   }
 
-  logger.info(`[AUTO_UPDATE] ${addonName}: требуется обновление`);
-  await forceReinstall([addonName]);
+  logger.info(
+    `[AUTO_UPDATE] ${addonName}: требуется обновление ` +
+      `${formatVersion(local)} >> ${formatVersion(remote)}`
+  );
+
+  // Удалённая версия передаётся явно — reinstall не должен ходить в сеть
+  // и не должен зависеть от этого модуля (иначе цикл require).
+  await forceReinstall([addonName], { [addonName]: remote });
   return true;
 }
 
@@ -105,9 +107,7 @@ async function checkOne(addonName) {
 //  Проверка при старте — по всем автообновляемым
 // ─────────────────────────────────────────────────────────────
 async function startupUpdateCheck() {
-  const { mainWindow } = state.state;
   emitBlockLaunch(true);
-
   let anyUpdated = false;
 
   try {
@@ -119,12 +119,9 @@ async function startupUpdateCheck() {
         const updated = await checkOne(addonName);
         if (updated) anyUpdated = true;
       } catch (err) {
-        logger.error(
-          `[STARTUP] ${addonName}: ошибка проверки: ${err.message}`
-        );
+        logger.error(`[STARTUP] ${addonName}: ошибка проверки: ${err.message}`);
       }
     }
-
     return anyUpdated;
   } catch (err) {
     logger.error('[STARTUP] Ошибка проверки:', err.message);
@@ -147,16 +144,13 @@ async function checkForUpdates() {
   for (const [addonName, meta] of Object.entries(AUTO_UPDATE_ADDONS)) {
     const last = state.state._lastAutoCheck[addonName] || 0;
     if (now - last < meta.checkInterval) continue;
-
     state.state._lastAutoCheck[addonName] = now;
 
     try {
       const updated = await checkOne(addonName);
       if (updated) anyUpdated = true;
     } catch (err) {
-      logger.error(
-        `[BACKGROUND_CHECK] ${addonName}: ошибка проверки: ${err.message}`
-      );
+      logger.error(`[BACKGROUND_CHECK] ${addonName}: ошибка проверки: ${err.message}`);
     }
   }
 
